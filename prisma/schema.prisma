@@ -1,0 +1,584 @@
+// Prisma Schema (modern) - Séparation Bank \u0026 App
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CLIENT
+  AGENT
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum KycStatus {
+  PENDING
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+  SUSPENDED
+  EXPIRED
+  REQUIRES_UPDATE
+  LIMITED
+}
+
+enum AccountType {
+  CHECKING
+  SAVINGS
+  LOAN
+  CORPORATE
+}
+
+enum GLAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum BalanceType {
+  DEBIT
+  CREDIT
+}
+
+enum JournalType {
+  GENERAL
+  SALES
+  PURCHASES
+  CASH
+  BANK
+}
+
+enum JournalStatus {
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+enum TransactionType {
+  INTERNAL_TRANSFER
+  DEPOSIT
+  WITHDRAWAL
+  MERCHANT_PAYMENT
+  INTERNATIONAL_WIRE
+  FEE
+  INTEREST
+  REVERSAL
+}
+
+enum TransactionStatus {
+  PENDING
+  POSTED
+  FAILED
+  REVERSED
+  CANCELLED
+}
+
+enum Direction {
+  DEBIT
+  CREDIT
+}
+
+enum Currency {
+  XOF
+  EUR
+  USD
+  GBP
+}
+
+enum OtpType {
+  LOGIN
+  TRANSACTION
+  RESET_PASSWORD
+  PHONE_VERIFICATION
+  EMAIL_VERIFICATION
+  ACCOUNT_ACTIVATION
+}
+
+enum MfaMethod {
+  TOTP
+  SMS
+  EMAIL
+}
+
+enum UserBankConnectionRole {
+  OWNER
+  DELEGATE
+  VIEWER
+}
+
+// ============================================================
+// APP AUTHENTICATION (Complètement séparé de la banque)
+// ============================================================
+
+model User {
+  id       String  @id @default(uuid()) @db.Uuid
+  email    String  @unique
+  password String?
+
+  role Role @default(CLIENT)
+
+  mfaEnabled  Boolean @default(false)
+  mfaSecret   String?
+  backupCodes String?
+
+  sessions    Session[]
+  otpCodes    OtpCode[]
+  mfaAttempts MFAAttempt[]
+  authLogs    AuthLog[]
+
+  bankConnections UserBankConnection[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([email])
+  @@map("users")
+}
+
+model Session {
+  id     String @id @default(cuid())
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token     String   @unique
+  expiresAt DateTime
+
+  userAgent String?
+  ipAddress String?
+
+  deviceFingerprint String?
+  geoLocation       Json?
+
+  isRevoked Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model MFAAttempt {
+  id     String @id @default(cuid())
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  method  MfaMethod
+  success Boolean
+
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("mfa_attempts")
+}
+
+model OtpCode {
+  id     String @id @default(cuid())
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  code String
+  type OtpType
+
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  attempts Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, type])
+  @@map("otp_codes")
+}
+
+model AuthLog {
+  id String @id @default(cuid())
+
+  userId String? @db.Uuid
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  email   String?
+  action  String
+  success Boolean
+
+  ipAddress String?
+  userAgent String?
+
+  deviceFingerprint String?
+  geoLocation       Json?
+  riskScore         Int?
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("auth_logs")
+}
+
+model BankCustomer {
+  id String @id @default(uuid()) @db.Uuid
+
+  email     String
+  firstName String
+  lastName  String?
+  telephone String
+
+  accountNumber String @unique
+  customerCode  String @unique
+
+  kycStatus     KycStatus @default(PENDING)
+  kycVerifiedAt DateTime?
+  kycDocuments  Json?
+
+  accounts      BankAccount[]
+  beneficiaries Beneficiary[]
+
+  sentTransactions     Transaction[] @relation("SenderCustomer")
+  receivedTransactions Transaction[] @relation("ReceiverCustomer")
+
+  userConnection UserBankConnection?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([accountNumber])
+  @@index([email])
+  @@map("bank_customers")
+}
+
+model BankAccount {
+  id String @id @default(uuid()) @db.Uuid
+
+  customerId String       @db.Uuid
+  customer   BankCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  accountId String  @unique @db.Uuid
+  account   Account @relation(fields: [accountId], references: [id])
+
+  iban String? @unique
+
+  accountType AccountType @default(CHECKING)
+  currency    Currency    @default(XOF)
+
+  isActive  Boolean @default(true)
+  isBlocked Boolean @default(false)
+
+  blockedReason String?
+
+  dailyLimit   BigInt @default(500000)
+  monthlyLimit BigInt @default(5000000)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([customerId])
+  @@map("bank_accounts")
+}
+
+model Beneficiary {
+  id String @id @default(uuid()) @db.Uuid
+
+  customerId String       @db.Uuid
+  customer   BankCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  name          String
+  accountNumber String
+
+  bankName String?
+  bankCode String?
+
+  isVerified Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@map("beneficiaries")
+}
+
+model UserBankConnection {
+  id String @id @default(cuid())
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bankCustomerId String       @unique @db.Uuid
+  bankCustomer   BankCustomer @relation(fields: [bankCustomerId], references: [id], onDelete: Cascade)
+
+  role UserBankConnectionRole @default(OWNER)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, bankCustomerId])
+  @@index([userId])
+  @@index([bankCustomerId])
+  @@map("user_bank_connections")
+}
+
+model Ledger {
+  id String @id @default(uuid()) @db.Uuid
+
+  code String @unique @db.VarChar(50)
+  name String @db.VarChar(100)
+
+  description String?
+  metadata    Json?
+
+  journals     Journal[]
+  accounts     Account[]
+  transactions Transaction[]
+  entries      Entry[]
+  tranCodes    TranCode[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("ledgers")
+}
+
+model Journal {
+  id String @id @default(uuid()) @db.Uuid
+
+  code String @db.VarChar(50)
+  name String @db.VarChar(100)
+
+  description String?
+
+  status      JournalStatus @default(ACTIVE)
+  journalType JournalType
+
+  metadata Json?
+
+  ledgerId String @db.Uuid
+  ledger   Ledger @relation(fields: [ledgerId], references: [id])
+
+  transactions Transaction[]
+  entries      Entry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ledgerId])
+  @@map("journals")
+}
+
+model Account {
+  id String @id @default(uuid()) @db.Uuid
+
+  code String @db.VarChar(50)
+  name String @db.VarChar(100)
+
+  description String?
+
+  glAccountType GLAccountType
+  balanceType   BalanceType
+
+  currency Currency @default(XOF)
+
+  settledDebit  BigInt @default(0)
+  settledCredit BigInt @default(0)
+
+  pendingDebit  BigInt @default(0)
+  pendingCredit BigInt @default(0)
+
+  availableDebit  BigInt @default(0)
+  availableCredit BigInt @default(0)
+
+  metadata Json?
+
+  version Int @default(0)
+
+  ledgerId String @db.Uuid
+  ledger   Ledger @relation(fields: [ledgerId], references: [id])
+
+  bankAccount BankAccount?
+  entries     Entry[]
+  snapshots   AccountBalanceSnapshot[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([code, ledgerId])
+  @@index([ledgerId])
+  @@index([code])
+  @@map("accounts")
+}
+
+model AccountBalanceSnapshot {
+  id String @id @default(uuid()) @db.Uuid
+
+  accountId String  @db.Uuid
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  settledBalance   BigInt
+  pendingBalance   BigInt
+  availableBalance BigInt
+
+  snapshotDate DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([accountId])
+  @@index([snapshotDate])
+  @@map("account_balance_snapshots")
+}
+
+model Transaction {
+  id String @id @default(uuid()) @db.Uuid
+
+  description String?
+
+  externalTransactionId String? @db.VarChar(100)
+
+  transactionType TransactionType
+  status          TransactionStatus @default(PENDING)
+
+  amount   BigInt
+  currency Currency @default(XOF)
+
+  transactionDate DateTime  @default(now())
+  effectiveAt     DateTime?
+  postedAt        DateTime?
+
+  network           String?
+  clearingReference String?
+  settlementBatchId String?
+
+  deviceFingerprint String?
+  geoLocation       Json?
+  riskScore         Int?
+
+  reversedByTransactionId String? @unique @db.Uuid
+  reversesTransactionId   String? @db.Uuid
+
+  reversedByTransaction Transaction? @relation("Reversal", fields: [reversedByTransactionId], references: [id])
+  reversesTransaction   Transaction? @relation("Reversal")
+
+  journalId String  @db.Uuid
+  journal   Journal @relation(fields: [journalId], references: [id])
+
+  ledgerId String @db.Uuid
+  ledger   Ledger @relation(fields: [ledgerId], references: [id])
+
+  tranCodeId String?   @db.Uuid
+  tranCode   TranCode? @relation(fields: [tranCodeId], references: [id])
+
+  senderCustomerId String?       @db.Uuid
+  senderCustomer   BankCustomer? @relation("SenderCustomer", fields: [senderCustomerId], references: [id])
+
+  receiverCustomerId String?       @db.Uuid
+  receiverCustomer   BankCustomer? @relation("ReceiverCustomer", fields: [receiverCustomerId], references: [id])
+
+  metadata Json?
+
+  version Int @default(0)
+
+  entries Entry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([journalId])
+  @@index([ledgerId])
+  @@index([status])
+  @@index([transactionDate])
+  @@map("transactions")
+}
+
+model Entry {
+  id String @id @default(uuid()) @db.Uuid
+
+  direction Direction
+
+  amount   BigInt
+  currency Currency @default(XOF)
+
+  sequence Int
+
+  accountVersion Int @default(0)
+  version        Int @default(0)
+
+  metadata Json?
+
+  transactionId String      @db.Uuid
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+
+  accountId String  @db.Uuid
+  account   Account @relation(fields: [accountId], references: [id])
+
+  journalId String  @db.Uuid
+  journal   Journal @relation(fields: [journalId], references: [id])
+
+  ledgerId String @db.Uuid
+  ledger   Ledger @relation(fields: [ledgerId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([transactionId])
+  @@index([accountId])
+  @@map("entries")
+}
+
+model TranCode {
+  id String @id @default(uuid()) @db.Uuid
+
+  code        String  @db.VarChar(50)
+  description String?
+
+  details Json?
+
+  ledgerId String @db.Uuid
+  ledger   Ledger @relation(fields: [ledgerId], references: [id])
+
+  transactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ledgerId])
+  @@map("tran_codes")
+}
+
+// ============================================================
+// AUDIT
+// ============================================================
+
+model AuditLog {
+  id String @id @default(cuid())
+
+  entityType String
+  entityId   String
+
+  action String
+
+  actorId   String? @db.Uuid
+  actorRole Role?
+
+  before Json?
+  after  Json?
+
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
