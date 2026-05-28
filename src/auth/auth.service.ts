@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   Logger,
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as jwt from 'jsonwebtoken';
@@ -18,10 +19,14 @@ import {
   RegisterState,
   signToken,
   validateToken,
+  forgotPasswordOtpKey,
   logAuth,
+  forgotPasswordKey,
 } from './auth.utils';
 import { RedisService } from '../redis/redis.service';
 import { MailerService } from '@nestjs-modules/mailer';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -454,6 +459,162 @@ export class AuthService {
     this.logger.log(`Connexion réussie : ${user.email}`);
 
     return signToken({ id: user.id, email: user.email });
+  }
+
+  /**
+   * Fonction avec plusieurs étapes pour gérer le processus de récupération de mot de passe.
+   * @param dto
+   * @param req
+   * @returns
+   */
+  async forgotPassword(
+    dto: ForgotPasswordDto,
+    req?: any,
+  ): Promise<{ step: string; message: string; token?: string }> {
+    const { ipAddress, userAgent } = req
+      ? this.extractRequestInfo(req)
+      : { ipAddress: null, userAgent: null };
+
+    //verification de l'existence de l'utilisateur dans la base de données
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.contact },
+    });
+    if (!user) {
+      await logAuth(
+        this.prisma,
+        'forgot_password',
+        false,
+        dto.contact,
+        null,
+        ipAddress,
+        userAgent,
+        { reason: 'user_not_found' },
+      );
+      throw new NotFoundException('User not found');
+    }
+
+    // ÉTAPE 1  Envoyer l'OTP , ici l'otp n'est pas envoyer a l'email entrer  par l'utilisateur mais on s'assure que l'email est envoyer a celui verfier dans la base de donneés
+    if (!dto.otp && !dto.newPassword) {
+      const existingOtp = await this.redis.get(
+        forgotPasswordOtpKey(dto.contact),
+      );
+
+      if (existingOtp) {
+        throw new UnauthorizedException(
+          "Un code est déjà actif. Attendez avant d'en demander un nouveau.",
+        );
+      }
+
+      const otp = generateOtp();
+      await this.redis.set(forgotPasswordOtpKey(user.email), otp, 300);
+      await this.redis.set(
+        forgotPasswordKey(user.email),
+        JSON.stringify({
+          step: 'verify_otp',
+          userId: user.id,
+          contact: dto.contact,
+        }),
+        600,
+      );
+
+      await this.sendOtp(user.email, otp);
+      await logAuth(
+        this.prisma,
+        'forgot_password',
+        true,
+        dto.contact,
+        user.id,
+        ipAddress,
+        userAgent,
+      );
+      this.logger.log(`OTP reset password envoyé à : ${user.email}`);
+
+      return { step: 'verify_otp', message: 'Code OTP envoyé.' };
+    }
+
+    // ÉTAPE 2  Vérifier l'OTP
+    if (dto.otp && !dto.newPassword) {
+      const state = parseState(
+        await this.redis.get(forgotPasswordKey(user.email)),
+      );
+
+      const storedOtp = await this.redis.get(forgotPasswordOtpKey(user.email));
+      if (!storedOtp) {
+        throw new UnauthorizedException(
+          'Code OTP expiré. Demandez un nouveau code.',
+        );
+      }
+
+      if (storedOtp !== dto.otp) {
+        await logAuth(
+          this.prisma,
+          'forgot_password_verify_otp',
+          false,
+          user.email,
+          null,
+          ipAddress,
+          userAgent,
+          { reason: 'invalid_otp' },
+        );
+        throw new UnauthorizedException('Code OTP invalide');
+      }
+
+      await this.redis.delete(forgotPasswordOtpKey(user.email));
+      await this.redis.set(
+        forgotPasswordKey(user.email),
+        JSON.stringify({ ...state, step: 'reset_password' }),
+        600,
+      );
+
+      await logAuth(
+        this.prisma,
+        'forgot_password_verify_otp',
+        true,
+        user.email,
+        state.userId,
+        ipAddress,
+        userAgent,
+      );
+      return {
+        step: 'reset_password',
+        message: 'OTP validé. Entrez votre nouveau mot de passe.',
+      };
+    }
+
+    // ÉTAPE 3 — Réinitialiser le mot de passe
+    if (dto.newPassword) {
+      const state = parseState(
+        await this.redis.get(forgotPasswordKey(user.email)),
+      );
+
+      if (state.step !== 'reset_password') {
+        throw new UnauthorizedException('Étape invalide. Recommencez.');
+      }
+
+      await this.prisma.user.update({
+        where: { id: state.userId },
+        data: { password: await hashPassword(dto.newPassword) },
+      });
+
+      await this.redis.delete(forgotPasswordKey(user.email));
+      await logAuth(
+        this.prisma,
+        'reset_password',
+        true,
+        user.email,
+        state.userId,
+        ipAddress,
+        userAgent,
+      );
+      this.logger.log(`Mot de passe réinitialisé pour : ${user.email}`);
+
+      return {
+        step: 'complete',
+        message: 'Mot de passe réinitialisé avec succès.',
+      };
+    }
+
+    throw new UnauthorizedException('Requête invalide');
   }
 
   validateToken(token: string): jwt.JwtPayload {

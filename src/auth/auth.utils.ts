@@ -14,6 +14,7 @@ export interface RegisterState {
   customerId: string;
   contact: string;
   contactType: 'email' | 'phone';
+  userId?: string;
 }
 
 /**
@@ -78,6 +79,9 @@ export const registerKey = (accountNumber: string) =>
 export const registerOtpKey = (accountNumber: string) =>
   `register:${accountNumber}:otp`;
 
+export const forgotPasswordKey = (contact: string) => `forgot:${contact}`;
+export const forgotPasswordOtpKey = (contact: string) =>
+  `forgot:${contact}:otp`;
 /**
  * Signe un token JWT avec un payload donné
  * @param payload - Les données à inclure dans le token

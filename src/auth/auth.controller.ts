@@ -3,6 +3,8 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+
 import type { Request } from 'express';
 
 @ApiTags('Auth') // Groupe tes routes sous "Auth" dans Scalar
@@ -38,5 +40,15 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Code OTP ré-envoyé' })
   async resendOtp(@Body() registerDto: RegisterDto) {
     return this.authService.resendOtp(registerDto.accountNumber);
+  }
+
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Demander une réinitialisation de mot de passe' })
+  @ApiResponse({ status: 200, description: 'Code OTP envoyé' })
+  async forgotPassword(
+    @Body() forgotPasswordDto: ForgotPasswordDto,
+    @Req() req: Request,
+  ) {
+    return this.authService.forgotPassword(forgotPasswordDto, req);
   }
 }
