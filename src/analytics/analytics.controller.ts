@@ -1,0 +1,401 @@
+import { Controller, Get, Param, Query, Post, Body } from '@nestjs/common';
+import { OverviewService } from './overview/overview.service';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  AnalyticsQueryDto,
+  RevenueVariationQueryDto,
+} from './dto/analytics-query.dto';
+import {
+  CashFlowAnalyticsDto,
+  FullOverviewResponseDto,
+  IncomeFrequencyDto,
+  RevenueAnalyticsDto,
+  RevenueSourcesResponseDto,
+  RevenueVariationResponseDto,
+  ExpenseDto,
+  CategoryExpenseDto,
+  RecurringExpenseDto,
+  VariableExpenseAnalyticsDto,
+  ExpenseRatioDto,
+  AverageBalanceResponseDto,
+  BalanceExtremesResponseDto,
+  OverdraftAnalyticsResponseDto,
+  NegativePeriodsResponseDto,
+  BalanceVolatilityResponseDto,
+  DebtDto,
+} from './dto/score-response.dto';
+import { parseUtcDate } from './helper';
+
+@ApiTags('Analytics')
+@Controller('analytics')
+export class AnalyticsController {
+  constructor(private overviewService: OverviewService) {}
+
+  /**
+   * Vue d'ensemble complète.
+   * Si year/month non fournis, utilise la période de la dernière transaction connue.
+   */
+  @Get(':customerId/overview')
+  @ApiOperation({
+    summary: 'Obtenir une vue d’ensemble complète des analyses',
+  })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: FullOverviewResponseDto })
+  async getOverview(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getFullOverview(
+      customerId,
+      query.year,
+      query.month,
+    );
+  }
+
+  /**
+   * CashFlow analytique.
+   */
+  @Get(':customerId/revenues/cashflow')
+  @ApiOperation({ summary: 'Obtenir le flux de trésorerie (CashFlow)' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: CashFlowAnalyticsDto })
+  async getCashFlow(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    const fromDate = query.from ? parseUtcDate(query.from) : undefined;
+    const toDate = query.to ? parseUtcDate(query.to) : undefined;
+
+    return this.overviewService.getCashFlow(
+      customerId,
+      fromDate,
+      toDate,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/revenues/monthly')
+  @ApiOperation({ summary: 'Obtenir les analyses de revenus mensuels' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: RevenueAnalyticsDto })
+  async getRevenueAnalytics(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getRevenueAnalytics(
+      customerId,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/revenues/summary')
+  @ApiOperation({ summary: 'Obtenir un résumé des revenus mensuels' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: RevenueAnalyticsDto })
+  async getMonthlySummary(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getMonthlySummary(
+      customerId,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/revenues/frequency')
+  @ApiOperation({ summary: 'Obtenir la fréquence des revenus' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: IncomeFrequencyDto })
+  async getIncomeFrequency(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getIncomeFrequency(
+      customerId,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/revenues/sources')
+  @ApiOperation({ summary: 'Obtenir les sources de revenus' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: RevenueSourcesResponseDto })
+  async getRevenueSources(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    const fromDate = query.from ? parseUtcDate(query.from) : undefined;
+    const toDate = query.to ? parseUtcDate(query.to) : undefined;
+
+    return this.overviewService.getRevenueSources(
+      customerId,
+      fromDate,
+      toDate,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/revenues/variation')
+  @ApiOperation({ summary: 'Obtenir la variation des revenus sur N mois' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: RevenueVariationResponseDto })
+  async getRevenueVariation(
+    @Param('customerId') customerId: string,
+    @Query() query: RevenueVariationQueryDto,
+  ) {
+    return this.overviewService.getRevenueVariation(
+      customerId,
+      query.months ?? 6,
+      query.year,
+      query.month,
+    );
+  }
+
+  // --- ANALYSE DES DÉPENSES  ---
+
+  @Get(':customerId/expenses/detect')
+  @ApiOperation({
+    summary: 'Détecter et résumer les dépenses',
+  })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: ExpenseDto })
+  async detectExpenses(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    const fromDate = query.from ? parseUtcDate(query.from) : undefined;
+    const toDate = query.to ? parseUtcDate(query.to) : undefined;
+
+    return this.overviewService.getExpenses(
+      customerId,
+      fromDate,
+      toDate,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/expenses/categories')
+  @ApiOperation({
+    summary: 'Obtenir les dépenses par catégorie',
+  })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: CategoryExpenseDto })
+  async getExpenseCategories(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    const fromDate = query.from ? parseUtcDate(query.from) : undefined;
+    const toDate = query.to ? parseUtcDate(query.to) : undefined;
+
+    return this.overviewService.getCategoryExpenses(
+      customerId,
+      fromDate,
+      toDate,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/expenses/recurring')
+  @ApiOperation({
+    summary: 'Détecter les dépenses récurrentes ',
+  })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: RecurringExpenseDto })
+  async getRecurringExpenses(
+    @Param('customerId') customerId: string,
+    @Query('months') months?: number,
+    @Query() query?: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getRecurringExpenses(
+      customerId,
+      months,
+      query?.year,
+      query?.month,
+    );
+  }
+
+  @Get(':customerId/expenses/variable')
+  @ApiOperation({
+    summary: 'Analyser les dépenses variables vs récurrentes',
+  })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: VariableExpenseAnalyticsDto })
+  async getVariableExpenses(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    const fromDate = query.from ? parseUtcDate(query.from) : undefined;
+    const toDate = query.to ? parseUtcDate(query.to) : undefined;
+
+    return this.overviewService.getVariableExpenses(
+      customerId,
+      fromDate,
+      toDate,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/expenses/ratio')
+  @ApiOperation({
+    summary: 'Calculer le ratio dépenses / revenus ',
+  })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: ExpenseRatioDto })
+  async getExpenseRatio(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    const fromDate = query.from ? parseUtcDate(query.from) : undefined;
+    const toDate = query.to ? parseUtcDate(query.to) : undefined;
+
+    return this.overviewService.getExpenseRatio(
+      customerId,
+      fromDate,
+      toDate,
+      query.year,
+      query.month,
+    );
+  }
+
+  // --- ANALYSE DU SOLDE (US-03) ---
+
+  @Get(':customerId/balance/average')
+  @ApiOperation({ summary: 'Obtenir le solde moyen mensuel (US-03.1)' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: AverageBalanceResponseDto })
+  async getAverageBalance(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getAverageBalance(
+      customerId,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/balance/extremes')
+  @ApiOperation({ summary: 'Obtenir les soldes minimum et maximum (US-03.2)' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: BalanceExtremesResponseDto })
+  async getBalanceExtremes(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getBalanceExtremes(
+      customerId,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/balance/overdrafts')
+  @ApiOperation({
+    summary: 'Analyser la fréquence des découvertes (US-03.3)',
+  })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: OverdraftAnalyticsResponseDto })
+  async getOverdraftFrequency(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getOverdraftFrequency(
+      customerId,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/balance/negative-periods')
+  @ApiOperation({
+    summary: 'Analyser la durée des périodes négatives',
+  })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: NegativePeriodsResponseDto })
+  async getNegativePeriods(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getNegativePeriods(
+      customerId,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/balance/volatility')
+  @ApiOperation({ summary: 'Analyser la volatilité du solde' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: BalanceVolatilityResponseDto })
+  async getBalanceVolatility(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getBalanceVolatility(
+      customerId,
+      query.year,
+      query.month,
+    );
+  }
+
+  // --- ANALYSE DES DETTES (EPIC 03) ---
+
+  @Get(':customerId/debts/detect')
+  @ApiOperation({ summary: 'Détecter les dettes et remboursements (US-03.1)' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: DebtDto })
+  async detectDebts(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    const fromDate = query.from ? parseUtcDate(query.from) : undefined;
+    const toDate = query.to ? parseUtcDate(query.to) : undefined;
+
+    return this.overviewService.getDebtAnalytics(
+      customerId,
+      fromDate,
+      toDate,
+      query.year,
+      query.month,
+    );
+  }
+
+  // --- CLASSIFIER PREVIEW & FEEDBACK (Pour le Dashboard) ---
+
+  @Get('classifier/preview')
+  @ApiOperation({ summary: 'Prévisualiser la classification pour un client' })
+  async previewClassification(
+    @Query('customerId') customerId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const fromDate = from ? parseUtcDate(from) : undefined;
+    const toDate = to ? parseUtcDate(to) : undefined;
+    return this.overviewService.previewClassifier(customerId, fromDate, toDate);
+  }
+
+  @Post('classifier/feedback')
+  @ApiOperation({ summary: 'Enregistrer un feedback de classification' })
+  async saveFeedback(
+    @Body()
+    body: {
+      customerId: string;
+      description: string;
+      correctCategory: string;
+    },
+  ) {
+    return this.overviewService.recordFeedback(
+      body.customerId,
+      body.description,
+      body.correctCategory as any,
+    );
+  }
+}
