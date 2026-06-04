@@ -265,10 +265,10 @@ export class AnalyticsController {
     );
   }
 
-  // --- ANALYSE DU SOLDE (US-03) ---
+  // --- ANALYSE DU SOLDE  ---
 
   @Get(':customerId/balance/average')
-  @ApiOperation({ summary: 'Obtenir le solde moyen mensuel (US-03.1)' })
+  @ApiOperation({ summary: 'Obtenir le solde moyen mensuel' })
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: AverageBalanceResponseDto })
   async getAverageBalance(
@@ -283,7 +283,7 @@ export class AnalyticsController {
   }
 
   @Get(':customerId/balance/extremes')
-  @ApiOperation({ summary: 'Obtenir les soldes minimum et maximum (US-03.2)' })
+  @ApiOperation({ summary: 'Obtenir les soldes minimum et maximum' })
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: BalanceExtremesResponseDto })
   async getBalanceExtremes(
@@ -299,7 +299,7 @@ export class AnalyticsController {
 
   @Get(':customerId/balance/overdrafts')
   @ApiOperation({
-    summary: 'Analyser la fréquence des découvertes (US-03.3)',
+    summary: 'Analyser la fréquence des découvertes',
   })
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: OverdraftAnalyticsResponseDto })
@@ -346,10 +346,10 @@ export class AnalyticsController {
     );
   }
 
-  // --- ANALYSE DES DETTES (EPIC 03) ---
+  // --- ANALYSE DES DETTES  ---
 
   @Get(':customerId/debts/detect')
-  @ApiOperation({ summary: 'Détecter les dettes et remboursements (US-03.1)' })
+  @ApiOperation({ summary: 'Détecter les dettes et remboursements' })
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: DebtDto })
   async detectDebts(
@@ -366,6 +366,82 @@ export class AnalyticsController {
       query.year,
       query.month,
     );
+  }
+
+  @Get(':customerId/debt/total')
+  @ApiOperation({ summary: 'Estimer le montant total des dettes' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  async getTotalDebt(@Param('customerId') customerId: string) {
+    return this.overviewService.getTotalDebt(customerId);
+  }
+
+  @Get(':customerId/debt/monthly-payments')
+  @ApiOperation({ summary: 'Analyser les mensualites de dette' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  async getMonthlyPayments(@Param('customerId') customerId: string) {
+    return this.overviewService.getMonthlyPayments(customerId);
+  }
+
+  @Get(':customerId/debt/ratio')
+  @ApiOperation({ summary: "Calculer le taux d'endettement" })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  async getDebtRatio(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getDebtRatio(
+      customerId,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/debt/repayment-history')
+  @ApiOperation({
+    summary: "Analyser l'historique de remboursement",
+  })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  async getRepaymentHistory(
+    @Param('customerId') customerId: string,
+    @Query('months') months?: number,
+  ) {
+    return this.overviewService.getRepaymentHistory(customerId, months || 6);
+  }
+
+  // --- ANALYSE DE L'ÉPARGNE (EPIC 05) ---
+
+  @Get(':customerId/savings/rate')
+  @ApiOperation({ summary: "Calculer le taux d'épargne mensuel" })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  async getSavingsRate(
+    @Param('customerId') customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getSavingsRate(
+      customerId,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/savings/frequency')
+  @ApiOperation({ summary: "Analyser la fréquence des dépôts d'épargne" })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  async getSavingsFrequency(
+    @Param('customerId') customerId: string,
+    @Query('months') months?: number,
+  ) {
+    return this.overviewService.getSavingsFrequency(customerId, months || 6);
+  }
+
+  @Get(':customerId/savings/retention')
+  @ApiOperation({ summary: 'Analyser la capacité de rétention du revenu' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  async getRetentionCapacity(
+    @Param('customerId') customerId: string,
+    @Query('months') months?: number,
+  ) {
+    return this.overviewService.getRetentionCapacity(customerId, months || 3);
   }
 
   // --- CLASSIFIER PREVIEW & FEEDBACK (Pour le Dashboard) ---

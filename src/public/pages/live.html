@@ -1,0 +1,77 @@
+<!-- src/public/pages/live.html -->
+<div class="page-animate space-y-8">
+    <div>
+        <h2 class="text-[32px] font-extrabold text-on-surface tracking-tight">Flux en Direct</h2>
+        <p class="text-on-surface-variant">Surveillance en temps réel des écritures comptables et du Grand Livre.</p>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="bg-white p-6 rounded-2xl border border-mint-subtle group hover:border-primary transition-all">
+            <div class="flex justify-between items-start mb-6">
+                <div class="bg-surface-container-low p-2 rounded-lg text-primary">
+                    <span class="material-symbols-outlined">hub</span>
+                </div>
+                <span class="text-on-surface-variant uppercase tracking-widest text-[11px] font-bold">Événements Totaux</span>
+            </div>
+            <div class="mono-data text-[42px] font-bold text-primary leading-none" id="event-count">0</div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl border border-mint-subtle group hover:border-primary transition-all">
+            <div class="flex justify-between items-start mb-6">
+                <div class="bg-surface-container-low p-2 rounded-lg text-primary">
+                    <span class="material-symbols-outlined">speed</span>
+                </div>
+                <span class="text-on-surface-variant uppercase tracking-widest text-[11px] font-bold">Débit / Sec</span>
+            </div>
+            <div class="mono-data text-[42px] font-bold text-primary leading-none" id="throughput">0.0</div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl border border-mint-subtle group hover:border-primary transition-all">
+            <div class="flex justify-between items-start mb-6">
+                <div class="bg-surface-container-low p-2 rounded-lg text-primary">
+                    <span class="material-symbols-outlined">timer</span>
+                </div>
+                <span class="text-on-surface-variant uppercase tracking-widest text-[11px] font-bold">Latence Moy.</span>
+            </div>
+            <div class="flex items-baseline gap-1">
+                <div class="mono-data text-[42px] font-bold text-primary leading-none">12</div>
+                <div class="mono-data text-[18px] font-semibold text-on-surface-variant">ms</div>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl border border-mint-subtle group hover:border-primary transition-all">
+            <div class="flex justify-between items-start mb-6">
+                <div class="bg-surface-container-low p-2 rounded-lg text-primary">
+                    <span class="material-symbols-outlined">check_circle</span>
+                </div>
+                <span class="text-on-surface-variant uppercase tracking-widest text-[11px] font-bold">Santé Système</span>
+            </div>
+            <div class="mono-data text-[42px] font-bold text-primary leading-none">99.9</div>
+        </div>
+    </div>
+
+    <!-- Activity Log -->
+    <section class="bg-white rounded-2xl border border-mint-subtle flex flex-col overflow-hidden shadow-sm">
+        <div class="p-6 border-b border-mint-subtle flex justify-between items-center bg-surface-container-low/30">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-white border border-mint-subtle flex items-center justify-center text-primary">
+                    <span class="material-symbols-outlined">terminal</span>
+                </div>
+                <div>
+                    <h3 class="text-[18px] font-bold text-on-surface">Opérations en Temps Réel</h3>
+                    <p class="text-[12px] text-on-surface-variant">Journal certifié par le Grand Livre (Entries)</p>
+                </div>
+            </div>
+            <button onclick="clearLogs()" class="px-6 py-2 border border-outline rounded-full font-bold text-[13px] hover:bg-surface-container-low transition-all active:scale-95">
+                Effacer le journal
+            </button>
+        </div>
+        <div class="h-[450px] p-6 custom-scrollbar overflow-y-auto space-y-1 bg-white" id="log-container">
+            <div class="text-outline text-center py-20 opacity-50 text-[14px]">En attente de flux de données...</div>
+        </div>
+        <div class="p-3 bg-surface-container-low border-t border-mint-subtle flex justify-center items-center">
+            <span class="text-[11px] font-bold text-primary tracking-widest uppercase animate-pulse italic">● Live Streaming Active</span>
+        </div>
+    </section>
+</div>

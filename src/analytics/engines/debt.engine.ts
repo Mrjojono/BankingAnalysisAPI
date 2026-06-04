@@ -1,18 +1,26 @@
-import { Debt, Transaction } from '../types';
+import {
+  Debt,
+  Transaction,
+  TotalDebtAnalytics,
+  MonthlyPaymentsAnalytics,
+  RepaymentHistoryAnalytics,
+  DebtRatioAnalytics,
+  RepaymentHistoryItem,
+} from '../types';
 import Decimal from 'decimal.js';
 import { Classifier } from '../shared/classifier';
 import { filterTransactions } from '../helper';
 import { Injectable } from '@nestjs/common';
 
 /**
- * Moteur d'analyse des dettes (EPIC 03).
+ * Moteur d'analyse des dettes .
  */
 @Injectable()
 export class DebtEngine {
   constructor(private classifier: Classifier) {}
 
   /**
-   * US-03.1 — Détection des dettes
+   * Détection des dettes
    * Analyse les transactions pour identifier les remboursements de crédits récurrents.
    */
   async detectDebts(
@@ -111,6 +119,209 @@ export class DebtEngine {
         (sum, d) => sum + d.monthlyAmount,
         0,
       ),
+    };
+  }
+
+  /**
+   * Montant total des dettes
+   * Estime la dette restante basee sur la duree typique des prets bancaires.
+   */
+  async calculateTotalDebt(
+    transactions: Transaction[],
+    customerId: string,
+  ): Promise<TotalDebtAnalytics> {
+    const { detectedCredits } = await this.detectDebts(
+      transactions,
+      customerId,
+    );
+
+    const debts = detectedCredits.map((credit) => {
+      // Strategie d'estimation : on suppose une duree de 24 mois si peu d'occurrences,
+      // sinon on extrapole. Pour un projet academique, on peut simuler une echeance.
+      const estimatedRemainingMonths = credit.occurences > 6 ? 12 : 24;
+      const estimatedRemainingDebt =
+        credit.monthlyAmount * estimatedRemainingMonths;
+
+      return {
+        description: credit.description,
+        monthlyAmount: credit.monthlyAmount,
+        estimatedRemainingMonths,
+        estimatedRemainingDebt,
+      };
+    });
+
+    return {
+      debts,
+      totalEstimatedDebt: debts.reduce(
+        (sum, d) => sum + d.estimatedRemainingDebt,
+        0,
+      ),
+      totalMonthlyCommitments: debts.reduce(
+        (sum, d) => sum + d.monthlyAmount,
+        0,
+      ),
+    };
+  }
+
+  /**
+   * Mensualites
+   * Repartition des remboursements.
+   */
+  async calculateMonthlyPayments(
+    transactions: Transaction[],
+    customerId: string,
+  ): Promise<MonthlyPaymentsAnalytics> {
+    const { detectedCredits, totalMonthlyDebt } = await this.detectDebts(
+      transactions,
+      customerId,
+    );
+
+    const breakdown = detectedCredits.map((credit) => ({
+      description: credit.description,
+      amount: credit.monthlyAmount,
+      percent:
+        totalMonthlyDebt > 0
+          ? new Decimal(credit.monthlyAmount)
+              .div(totalMonthlyDebt)
+              .times(100)
+              .toDP(1)
+              .toNumber()
+          : 0,
+    }));
+
+    return {
+      totalMonthlyPayments: totalMonthlyDebt,
+      breakdown,
+    };
+  }
+
+  /**
+   * Taux d'endettement
+   * Compare les dettes aux revenus .
+   * Le seuil est fixe à 33% selon la norme BCEAO.
+   * @param monthlyIncome Revenu mensuel
+   * @param monthlyDebtPayments Paiements mensuels de dettes
+   * @returns Analyse du taux d'endettement
+   */
+  async calculateDebtRatio(
+    monthlyIncome: number,
+    monthlyDebtPayments: number,
+  ): Promise<DebtRatioAnalytics> {
+    const bceaoThreshold = 33;
+    const debtRatio =
+      monthlyIncome > 0
+        ? new Decimal(monthlyDebtPayments)
+            .div(monthlyIncome)
+            .times(100)
+            .toDP(1)
+            .toNumber()
+        : 0;
+
+    let label: string;
+    let score: number;
+    let interpretation: string;
+
+    if (debtRatio <= 15) {
+      label = 'EXCELLENT';
+      score = 100;
+      interpretation = "Votre taux d'endettement est tres faible.";
+    } else if (debtRatio <= 33) {
+      label = 'SAIN';
+      score = 80;
+      interpretation = 'Vous etes en dessous du seuil BCEAO de 33%.';
+    } else if (debtRatio <= 45) {
+      label = 'ATTENTION';
+      score = 40;
+      interpretation = 'Vous depassez le seuil recommande de 33%.';
+    } else {
+      label = 'CRITIQUE';
+      score = 10;
+      interpretation = 'Surendettement detecte. Danger financier.';
+    }
+
+    return {
+      monthlyIncome,
+      monthlyDebtPayments,
+      debtRatio,
+      bceaoThreshold,
+      label,
+      score,
+      margin: Math.max(0, bceaoThreshold - debtRatio),
+      interpretation,
+    };
+  }
+
+  /**
+   * Historique de remboursement
+   * Verifie la ponctualite sur les 6 derniers mois.
+   * on suppose le jour du remboursement sur le 5 du moi
+   *
+   * @param transactions Liste des transactions
+   * @param customerId ID du client
+   * @param months Nombre de mois à analyser (par défaut 6)
+   * @returns Analyse de l'historique de remboursement
+   */
+  async calculateRepaymentHistory(
+    transactions: Transaction[],
+    customerId: string,
+    months: number = 6,
+  ): Promise<RepaymentHistoryAnalytics> {
+    const debits = filterTransactions(transactions, {
+      customerId,
+      type: 'DEBIT',
+    });
+
+    // On cherche les remboursements de credit (via Classifier)
+    const creditTxs: Transaction[] = [];
+    for (const tx of debits) {
+      if (await this.classifier.isDebt(tx.description ?? '', customerId)) {
+        creditTxs.push(tx);
+      }
+    }
+
+    const history: RepaymentHistoryItem[] = [];
+    let paymentsOnTime = 0;
+    const now = new Date();
+
+    for (let i = 0; i < months; i++) {
+      const targetDate = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1),
+      );
+      const monthStr = targetDate.toISOString().slice(0, 7);
+
+      const monthTx = creditTxs.find(
+        (tx) => tx.transactionDate.toISOString().slice(0, 7) === monthStr,
+      );
+
+      if (monthTx) {
+        // Simulation du "jour attendu" : on suppose le 5 du mois
+        const day = monthTx.transactionDate.getUTCDate();
+        const diff = Math.abs(day - 5);
+        const onTime = diff <= 5;
+        if (onTime) paymentsOnTime++;
+
+        history.push({
+          month: monthStr,
+          paid: true,
+          daysFromExpected: day - 5,
+        });
+      } else {
+        history.push({
+          month: monthStr,
+          paid: false,
+          daysFromExpected: 0,
+        });
+      }
+    }
+
+    const regularityRate = Math.round((paymentsOnTime / months) * 100);
+
+    return {
+      monthsAnalyzed: months,
+      paymentsOnTime,
+      regularityRate,
+      score: regularityRate,
+      history: history.reverse(),
     };
   }
 }

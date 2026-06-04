@@ -19,8 +19,10 @@ async function bootstrap() {
   );
 
   // Configuration des fichiers statiques
+  // Sert tout le contenu du dossier public (css, js, assets, etc.)
   app.useStaticAssets(join(__dirname, '..', 'src', 'public'));
   app.useStaticAssets(join(__dirname, 'public'));
+  app.useStaticAssets(join(__dirname, '..', 'public'));
 
   // Configuration OpenAPI
   const config = new DocumentBuilder()

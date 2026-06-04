@@ -11,7 +11,7 @@ import { Server, Socket } from 'socket.io';
 
 @Injectable()
 @WebSocketGateway({
-  cors: { origin: '*' }, // Autorise toutes les origines pour le dev
+  cors: { origin: '*' },
 })
 export class DashboardGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
@@ -23,12 +23,12 @@ export class DashboardGateway
 
   afterInit() {
     this.logger.log('WebSocket Gateway initialisé');
-    
+
     // Heartbeat toutes les 10 secondes pour prouver que le flux est vivant
     setInterval(() => {
-      this.emit('heartbeat', { 
+      this.emit('heartbeat', {
         time: new Date().toLocaleTimeString('fr-FR', { hour12: false }),
-        status: 'UP'
+        status: 'UP',
       });
     }, 10000);
   }
@@ -48,7 +48,9 @@ export class DashboardGateway
     if (this.server) {
       this.server.emit(event, data);
     } else {
-      this.logger.warn(`Impossible d'émettre l'événement ${event} : Server non initialisé`);
+      this.logger.warn(
+        `Impossible d'émettre l'événement ${event} : Server non initialisé`,
+      );
     }
   }
 

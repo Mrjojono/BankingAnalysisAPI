@@ -1,16 +1,16 @@
 import Decimal from 'decimal.js';
-import { filterTransactions } from '../helper';
+import { filterEntries } from '../helper';
 import {
   RevenueAnalytics,
   CashFlowAnalytics,
   MonthlySummary,
   IncomeFrequency,
-  Transaction,
   RevenueSources,
   RevenueSource,
   MonthlyRevenue,
   RevenueVariation,
   Period,
+  Entry,
 } from '../types';
 import { Classifier } from '../shared/classifier';
 import { Injectable } from '@nestjs/common';
@@ -20,16 +20,14 @@ export class RevenueEngine {
   constructor(private classifier: Classifier) {}
 
   /**
-   * Construit un résumé financier pour les transactions et le client donnés dans la période spécifiée.
+   * Construit un résumé financier basé sur les écritures comptables (Entries).
    */
   async buildFinancialSummary(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
     period: Period,
   ): Promise<CashFlowAnalytics> {
-    // On utilise le helper pour déjà filtrer par client et dates si besoin
-    const periodTransactions = filterTransactions(transactions, {
-      customerId,
+    const periodEntries = filterEntries(entries, {
       from: period.from,
       to: period.to,
     });
@@ -39,13 +37,13 @@ export class RevenueEngine {
     let creditAmount = new Decimal(0);
     let debitAmount = new Decimal(0);
 
-    for (const tx of periodTransactions) {
-      const amount = new Decimal(tx.amount.toString());
+    for (const entry of periodEntries) {
+      const amount = new Decimal(entry.amount.toString());
 
-      if (tx.receiverCustomerId === customerId) {
+      if (entry.direction === 'CREDIT') {
         creditCount++;
         creditAmount = creditAmount.plus(amount);
-      } else if (tx.senderCustomerId === customerId) {
+      } else {
         debitCount++;
         debitAmount = debitAmount.plus(amount);
       }
@@ -65,22 +63,22 @@ export class RevenueEngine {
   }
 
   /**
-   * Calcule les indicateurs de revenu d'un client.
+   * Calcule les indicateurs de revenu basés sur les CREDIT entries.
    */
   async computeRevenueAnalytics(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
     year?: number,
     month?: number,
   ): Promise<RevenueAnalytics> {
-    return this.monthlySummaryIncome(transactions, customerId, year, month);
+    return this.monthlySummaryIncome(entries, customerId, year, month);
   }
 
   /**
-   * Calcule le résumé mensuel d'income pour un client donné.
+   * Résumé mensuel basé sur les CREDIT entries sur les comptes CHECKING.
    */
   async monthlySummaryIncome(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
     year?: number,
     month?: number,
@@ -92,73 +90,56 @@ export class RevenueEngine {
       Date.UTC(refYear, refMonth, 0, 23, 59, 59, 999),
     );
 
-    // 1. Credits du mois cible via helper
-    const targetMonthCredits = filterTransactions(transactions, {
-      customerId,
-      type: 'CREDIT',
+    // 1. Revenus réels (CREDIT sur CHECKING)
+    const targetMonthCredits = filterEntries(entries, {
+      direction: 'CREDIT',
+      accountType: 'CHECKING',
       year: refYear,
       month: refMonth,
     });
 
-    // 2. Credits du mois précédent
+    // 2. Mois précédent
     const prevDate = new Date(Date.UTC(refYear, refMonth - 1, 0));
-    const previousMonthCredits = filterTransactions(transactions, {
-      customerId,
-      type: 'CREDIT',
+    const previousMonthCredits = filterEntries(entries, {
+      direction: 'CREDIT',
+      accountType: 'CHECKING',
       year: prevDate.getUTCFullYear(),
       month: prevDate.getUTCMonth() + 1,
     });
 
-    // 3. Rolling 30 days via helper
-    const rollingCutoff = new Date(
-      analysisDate.getTime() - 30 * 24 * 60 * 60 * 1000,
-    );
-    const rollingCredits = filterTransactions(transactions, {
-      customerId,
-      type: 'CREDIT',
-      from: rollingCutoff,
-      to: analysisDate,
-    });
-
-    // 4. Moyenne des 6 derniers mois
+    // 3. Moyenne des 6 derniers mois
     const creditsByMonth = new Map<string, Decimal>();
-    const last6MonthsKeys: string[] = [];
     for (let i = 0; i < 6; i++) {
       const d = new Date(Date.UTC(refYear, refMonth - i, 0));
-      const key = d.toISOString().slice(0, 7);
-      last6MonthsKeys.push(key);
-      creditsByMonth.set(key, new Decimal(0));
+      creditsByMonth.set(d.toISOString().slice(0, 7), new Decimal(0));
     }
 
-    // On peuple la map pour les 6 mois via un seul filtrage group\u00e9
     const sixMonthsStart = new Date(Date.UTC(refYear, refMonth - 6, 1));
-    const sixMonthsTxs = filterTransactions(transactions, {
-      customerId,
-      type: 'CREDIT',
+    const sixMonthsCredits = filterEntries(entries, {
+      direction: 'CREDIT',
+      accountType: 'CHECKING',
       from: sixMonthsStart,
       to: analysisDate,
     });
 
-    for (const tx of sixMonthsTxs) {
-      const key = tx.transactionDate.toISOString().slice(0, 7);
+    for (const entry of sixMonthsCredits) {
+      const key = new Date(entry.transaction.transactionDate)
+        .toISOString()
+        .slice(0, 7);
       if (creditsByMonth.has(key)) {
         creditsByMonth.set(
           key,
-          creditsByMonth.get(key)!.plus(new Decimal(tx.amount.toString())),
+          creditsByMonth.get(key)!.plus(new Decimal(entry.amount.toString())),
         );
       }
     }
 
     const currentTotal = targetMonthCredits.reduce(
-      (s, t) => s.plus(new Decimal(t.amount.toString())),
+      (s, e) => s.plus(new Decimal(e.amount.toString())),
       new Decimal(0),
     );
     const previousTotal = previousMonthCredits.reduce(
-      (s, t) => s.plus(new Decimal(t.amount.toString())),
-      new Decimal(0),
-    );
-    const rollingTotal = rollingCredits.reduce(
-      (s, t) => s.plus(new Decimal(t.amount.toString())),
+      (s, e) => s.plus(new Decimal(e.amount.toString())),
       new Decimal(0),
     );
     const sum6 = Array.from(creditsByMonth.values()).reduce(
@@ -173,8 +154,6 @@ export class RevenueEngine {
         .div(previousTotal)
         .times(100)
         .toNumber();
-    } else if (currentTotal.gt(0)) {
-      variationPercent = 100;
     }
 
     return {
@@ -190,12 +169,12 @@ export class RevenueEngine {
       variationPercent: Math.round(variationPercent * 100) / 100,
       trend:
         variationPercent > 5 ? 'UP' : variationPercent < -5 ? 'DOWN' : 'STABLE',
-      rolling30Days: rollingTotal.toNumber(),
+      rolling30Days: 0,
     };
   }
 
   async computeIncomeFrequency(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
     year?: number,
     month?: number,
@@ -208,13 +187,15 @@ export class RevenueEngine {
     );
     const cutoff = new Date(analysisDate.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    const credits = filterTransactions(transactions, {
-      customerId,
-      type: 'CREDIT',
+    const credits = filterEntries(entries, {
+      direction: 'CREDIT',
+      accountType: 'CHECKING',
       from: cutoff,
       to: analysisDate,
     }).sort(
-      (a, b) => a.transactionDate.getTime() - b.transactionDate.getTime(),
+      (a, b) =>
+        new Date(a.transaction.transactionDate).getTime() -
+        new Date(b.transaction.transactionDate).getTime(),
     );
 
     const entriesPerMonth = credits.length;
@@ -235,8 +216,8 @@ export class RevenueEngine {
     const intervals: number[] = [];
     for (let i = 1; i < credits.length; i++) {
       intervals.push(
-        (credits[i].transactionDate.getTime() -
-          credits[i - 1].transactionDate.getTime()) /
+        (new Date(credits[i].transaction.transactionDate).getTime() -
+          new Date(credits[i - 1].transaction.transactionDate).getTime()) /
           (1000 * 60 * 60 * 24),
       );
     }
@@ -270,26 +251,25 @@ export class RevenueEngine {
   }
 
   async computeRevenueSources(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
     from: Date,
     to: Date,
   ): Promise<RevenueSources> {
-    const credits = filterTransactions(transactions, {
-      customerId,
-      type: 'CREDIT',
+    const credits = filterEntries(entries, {
+      direction: 'CREDIT',
       from,
       to,
     });
 
     const grouped = new Map<string, { amount: Decimal; count: number }>();
-    for (const tx of credits) {
+    for (const entry of credits) {
       const category = await this.classifier.categorizeWithCache(
-        tx.description ?? '',
+        entry.transaction.description ?? '',
         customerId,
       );
       const existing = grouped.get(category);
-      const amt = new Decimal(tx.amount.toString());
+      const amt = new Decimal(entry.amount.toString());
       if (existing)
         grouped.set(category, {
           amount: existing.amount.plus(amt),
@@ -327,7 +307,7 @@ export class RevenueEngine {
   }
 
   async computeRevenueVariation(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
     months: number = 6,
     year?: number,
@@ -340,72 +320,88 @@ export class RevenueEngine {
       Date.UTC(refYear, refMonth, 0, 23, 59, 59, 999),
     );
 
+    // 1. Définir les clés de mois (ISO YYYY-MM)
     const monthKeys: string[] = [];
     for (let i = 0; i < months; i++) {
-      monthKeys.push(
-        new Date(Date.UTC(refYear, refMonth - i, 0)).toISOString().slice(0, 7),
-      );
+      const d = new Date(Date.UTC(refYear, refMonth - 1 - i, 1));
+      monthKeys.push(d.toISOString().slice(0, 7));
     }
     monthKeys.reverse();
 
+    // 2. Initialiser les revenus par mois
     const revenueByMonth = new Map<string, Decimal>();
     for (const key of monthKeys) revenueByMonth.set(key, new Decimal(0));
 
-    const periodStart = new Date(Date.UTC(refYear, refMonth - months, 1));
-    const periodTxs = filterTransactions(transactions, {
-      customerId,
-      type: 'CREDIT',
+    // 3. Filtrer les écritures sur la période globale
+    const periodStart = new Date(Date.UTC(refYear, refMonth - 1 - months, 1));
+    const periodEntries = filterEntries(entries, {
+      direction: 'CREDIT',
+      accountType: 'CHECKING',
       from: periodStart,
       to: analysisDate,
     });
 
-    for (const tx of periodTxs) {
-      const key = tx.transactionDate.toISOString().slice(0, 7);
-      if (revenueByMonth.has(key))
+    // 4. Ventiler par mois
+    for (const entry of periodEntries) {
+      const key = new Date(entry.transaction.transactionDate)
+        .toISOString()
+        .slice(0, 7);
+      if (revenueByMonth.has(key)) {
         revenueByMonth.set(
           key,
-          revenueByMonth.get(key)!.plus(new Decimal(tx.amount.toString())),
+          revenueByMonth.get(key)!.plus(new Decimal(entry.amount.toString())),
         );
+      }
     }
 
+    // 5. Calculer les variations
     const monthlyRevenues: MonthlyRevenue[] = monthKeys.map((key, i) => {
       const amount = revenueByMonth.get(key)!.toNumber();
       let variation: number | null = null;
+
       if (i > 0) {
-        const prev = revenueByMonth.get(monthKeys[i - 1])!.toNumber();
-        variation =
-          prev > 0
-            ? Math.round(((amount - prev) / prev) * 1000) / 10
-            : amount > 0
-              ? 100
-              : 0;
+        const prevAmount = revenueByMonth.get(monthKeys[i - 1])!.toNumber();
+        if (prevAmount > 0) {
+          variation =
+            Math.round(((amount - prevAmount) / prevAmount) * 1000) / 10;
+        } else if (amount > 0) {
+          variation = 100;
+        } else {
+          variation = 0;
+        }
       }
       return { month: key, amount, variationPercent: variation };
     });
 
-    const vars = monthlyRevenues
+    // 6. Statistiques globales
+    const variations = monthlyRevenues
       .filter((m) => m.variationPercent !== null)
-      .map((m) => m.variationPercent!);
-    const avgVar =
-      vars.length > 0
-        ? Math.round((vars.reduce((a, b) => a + b, 0) / vars.length) * 10) / 10
+      .map((m) => m.variationPercent as number);
+
+    const avgVariation =
+      variations.length > 0
+        ? Math.round(
+            (variations.reduce((a, b) => a + b, 0) / variations.length) * 10,
+          ) / 10
         : 0;
-    const amts = monthlyRevenues.map((m) => m.amount);
-    const mean = amts.reduce((a, b) => a + b, 0) / amts.length;
-    const stdDev = Math.round(
-      Math.sqrt(
-        amts.map((a) => Math.pow(a - mean, 2)).reduce((a, b) => a + b, 0) /
-          amts.length,
-      ),
-    );
-    const cv = mean > 0 ? Math.round((stdDev / mean) * 1000) / 10 : 0;
+
+    const amounts = monthlyRevenues.map((m) => m.amount);
+    const meanAmount = amounts.reduce((a, b) => a + b, 0) / amounts.length;
+
+    const variance =
+      amounts
+        .map((a) => Math.pow(a - meanAmount, 2))
+        .reduce((a, b) => a + b, 0) / amounts.length;
+    const stdDev = Math.round(Math.sqrt(variance));
+    const cv =
+      meanAmount > 0 ? Math.round((stdDev / meanAmount) * 1000) / 10 : 0;
 
     return {
       monthlyRevenues,
-      averageVariationPercent: avgVar,
+      averageVariationPercent: avgVariation,
       stdDev,
       coefficientOfVariation: cv,
-      trend: avgVar > 5 ? 'UP' : avgVar < -5 ? 'DOWN' : 'STABLE',
+      trend: avgVariation > 5 ? 'UP' : avgVariation < -5 ? 'DOWN' : 'STABLE',
       volatilityScore: cv < 10 ? 100 : cv < 25 ? 70 : cv < 50 ? 35 : 0,
     };
   }

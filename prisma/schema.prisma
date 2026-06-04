@@ -112,10 +112,6 @@ enum UserBankConnectionRole {
   VIEWER
 }
 
-// ============================================================
-// APP AUTHENTICATION (Complètement séparé de la banque)
-// ============================================================
-
 model User {
   id       String  @id @default(uuid()) @db.Uuid
   email    String  @unique

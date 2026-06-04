@@ -9,6 +9,7 @@ import { ExpenseEngine } from './engines/expense.engine';
 import { RevenueEngine } from './engines/revenue.engine';
 import { BalanceEngine } from './engines/balance.engine';
 import { DebtEngine } from './engines/debt.engine';
+import { SavingsEngine } from './engines/savings.engine';
 import { RedisModule } from '../redis/redis.module';
 
 @Module({
@@ -24,6 +25,7 @@ import { RedisModule } from '../redis/redis.module';
     RevenueEngine,
     BalanceEngine,
     DebtEngine,
+    SavingsEngine,
   ],
 })
 export class AnalyticsModule {}

@@ -5,8 +5,10 @@ import { ExpenseEngine } from '../engines/expense.engine';
 import { RevenueEngine } from '../engines/revenue.engine';
 import { BalanceEngine } from '../engines/balance.engine';
 import { DebtEngine } from '../engines/debt.engine';
+import { SavingsEngine } from '../engines/savings.engine';
 import { DashboardGateway } from '../../gateway/dashboard.gateway';
 import { Classifier } from '../shared/classifier';
+import { Entry } from '../types';
 
 @Injectable()
 export class OverviewService {
@@ -17,6 +19,7 @@ export class OverviewService {
     private revenueEngine: RevenueEngine,
     private balanceEngine: BalanceEngine,
     private debtEngine: DebtEngine,
+    private savingsEngine: SavingsEngine,
     private gateway: DashboardGateway,
     private classifier: Classifier,
   ) {}
@@ -89,6 +92,21 @@ export class OverviewService {
     return { startDate, endDate: analysisDate, refYear, refMonth };
   }
 
+  /**
+   * Méthode pivot : Récupère les écritures comptables certifiées du client.
+   */
+  private async getCertifiedEntries(
+    customerId: string,
+    from?: Date,
+    to?: Date,
+  ): Promise<Entry[]> {
+    return await this.transactionFetcher.fetchCustomerEntries(
+      customerId,
+      from,
+      to,
+    );
+  }
+
   async getExpenses(
     customerId: string,
     from?: Date,
@@ -97,24 +115,22 @@ export class OverviewService {
     month?: number,
   ) {
     this.gateway.emit('analytics_requested', { type: 'EXPENSES', customerId });
-    const { startDate, endDate, refYear, refMonth } = await this.resolveRange(
+    const { refYear, refMonth } = await this.resolveRange(
       customerId,
       from,
       to,
       year,
       month,
     );
-    const transactions =
-      await this.transactionFetcher.fetchCustomerTransactionsBetweenDates(
-        customerId,
-        startDate,
-        endDate,
-      );
+    const entries = await this.getCertifiedEntries(customerId);
+
     return await this.expenseEngine.getExpenses(
-      transactions,
+      entries,
       customerId,
       refYear,
       refMonth,
+      from,
+      to,
     );
   }
 
@@ -129,24 +145,22 @@ export class OverviewService {
       type: 'CATEGORIES',
       customerId,
     });
-    const { startDate, endDate, refYear, refMonth } = await this.resolveRange(
+    const { refYear, refMonth } = await this.resolveRange(
       customerId,
       from,
       to,
       year,
       month,
     );
-    const transactions =
-      await this.transactionFetcher.fetchCustomerTransactionsBetweenDates(
-        customerId,
-        startDate,
-        endDate,
-      );
+    const entries = await this.getCertifiedEntries(customerId);
+
     return await this.expenseEngine.getCategoryExpenses(
-      transactions,
+      entries,
       customerId,
       refYear,
       refMonth,
+      from,
+      to,
     );
   }
 
@@ -162,10 +176,10 @@ export class OverviewService {
       year,
       month,
     );
-    const transactions =
-      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+    const entries = await this.getCertifiedEntries(customerId);
+
     return await this.expenseEngine.detectRecurringExpenses(
-      transactions,
+      entries,
       customerId,
       months,
       refYear,
@@ -188,13 +202,15 @@ export class OverviewService {
       year,
       month,
     );
-    const transactions =
-      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+    const entries = await this.getCertifiedEntries(customerId);
+
     return await this.expenseEngine.calculateVariableExpenses(
-      transactions,
+      entries,
       customerId,
       refYear,
       refMonth,
+      from,
+      to,
     );
   }
 
@@ -213,15 +229,10 @@ export class OverviewService {
       year,
       month,
     );
-    const transactions =
-      await this.transactionFetcher.fetchCustomerTransactionsBetweenDates(
-        customerId,
-        startDate,
-        endDate,
-      );
+    const entries = await this.getCertifiedEntries(customerId);
 
     const summary = await this.revenueEngine.buildFinancialSummary(
-      transactions,
+      entries,
       customerId,
       { from: startDate, to: endDate },
     );
@@ -239,7 +250,7 @@ export class OverviewService {
     month?: number,
   ) {
     this.gateway.emit('analytics_requested', { type: 'DEBTS', customerId });
-    const { startDate, endDate, refYear, refMonth } = await this.resolveRange(
+    const { refYear, refMonth, startDate, endDate } = await this.resolveRange(
       customerId,
       from,
       to,
@@ -248,6 +259,7 @@ export class OverviewService {
     );
     const transactions =
       await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+
     return await this.debtEngine.detectDebts(
       transactions,
       customerId,
@@ -258,35 +270,58 @@ export class OverviewService {
     );
   }
 
-  private async getMonthlyDailyBalances(
-    customerId: string,
-    year?: number,
-    month?: number,
-  ) {
+  async getTotalDebt(customerId: string) {
+    const transactions =
+      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+    return await this.debtEngine.calculateTotalDebt(transactions, customerId);
+  }
+
+  async getMonthlyPayments(customerId: string) {
+    const transactions =
+      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+    return await this.debtEngine.calculateMonthlyPayments(
+      transactions,
+      customerId,
+    );
+  }
+
+  async getDebtRatio(customerId: string, year?: number, month?: number) {
     const { refYear, refMonth } = await this.resolveReferenceDate(
       customerId,
       year,
       month,
     );
-    const startOfMonth = new Date(Date.UTC(refYear, refMonth - 1, 1));
-    const initialBalance = await this.balanceReconstructor.reconstructBalance(
+    const entries = await this.getCertifiedEntries(customerId);
+
+    const revenues = await this.revenueEngine.computeRevenueAnalytics(
+      entries,
       customerId,
-      startOfMonth,
+      refYear,
+      refMonth,
     );
     const transactions =
       await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
-
-    return {
-      dailyBalances: await this.balanceEngine.reconstructMonthlyDailyBalances(
-        transactions,
-        customerId,
-        initialBalance,
-        refYear,
-        refMonth,
-      ),
+    const debts = await this.debtEngine.detectDebts(
+      transactions,
+      customerId,
       refYear,
       refMonth,
-    };
+    );
+
+    return await this.debtEngine.calculateDebtRatio(
+      revenues.currentMonth.total,
+      debts.totalMonthlyDebt,
+    );
+  }
+
+  async getRepaymentHistory(customerId: string, months: number = 6) {
+    const transactions =
+      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+    return await this.debtEngine.calculateRepaymentHistory(
+      transactions,
+      customerId,
+      months,
+    );
   }
 
   async getAverageBalance(customerId: string, year?: number, month?: number) {
@@ -365,6 +400,36 @@ export class OverviewService {
     );
   }
 
+  private async getMonthlyDailyBalances(
+    customerId: string,
+    year?: number,
+    month?: number,
+  ) {
+    const { refYear, refMonth } = await this.resolveReferenceDate(
+      customerId,
+      year,
+      month,
+    );
+    const startOfMonth = new Date(Date.UTC(refYear, refMonth - 1, 1));
+    const initialBalance = await this.balanceReconstructor.reconstructBalance(
+      customerId,
+      startOfMonth,
+    );
+    const entries = await this.getCertifiedEntries(customerId);
+
+    return {
+      dailyBalances: await this.balanceEngine.reconstructMonthlyDailyBalances(
+        entries,
+        customerId,
+        initialBalance,
+        refYear,
+        refMonth,
+      ),
+      refYear,
+      refMonth,
+    };
+  }
+
   async getCashFlow(
     customerId: string,
     from?: Date,
@@ -380,20 +445,11 @@ export class OverviewService {
       year,
       month,
     );
-    const transactions =
-      await this.transactionFetcher.fetchCustomerTransactionsBetweenDates(
-        customerId,
-        startDate,
-        endDate,
-      );
-    return await this.revenueEngine.buildFinancialSummary(
-      transactions,
-      customerId,
-      {
-        from: startDate,
-        to: endDate,
-      },
-    );
+    const entries = await this.getCertifiedEntries(customerId);
+    return await this.revenueEngine.buildFinancialSummary(entries, customerId, {
+      from: startDate,
+      to: endDate,
+    });
   }
 
   async getRevenueAnalytics(customerId: string, year?: number, month?: number) {
@@ -403,10 +459,9 @@ export class OverviewService {
       year,
       month,
     );
-    const transactions =
-      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+    const entries = await this.getCertifiedEntries(customerId);
     return await this.revenueEngine.computeRevenueAnalytics(
-      transactions,
+      entries,
       customerId,
       refYear,
       refMonth,
@@ -423,10 +478,9 @@ export class OverviewService {
       year,
       month,
     );
-    const transactions =
-      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+    const entries = await this.getCertifiedEntries(customerId);
     return await this.revenueEngine.monthlySummaryIncome(
-      transactions,
+      entries,
       customerId,
       refYear,
       refMonth,
@@ -443,10 +497,9 @@ export class OverviewService {
       year,
       month,
     );
-    const transactions =
-      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+    const entries = await this.getCertifiedEntries(customerId);
     return await this.revenueEngine.computeIncomeFrequency(
-      transactions,
+      entries,
       customerId,
       refYear,
       refMonth,
@@ -470,16 +523,10 @@ export class OverviewService {
       to,
       year,
       month,
-      6,
     );
-    const transactions =
-      await this.transactionFetcher.fetchCustomerTransactionsBetweenDates(
-        customerId,
-        startDate,
-        endDate,
-      );
+    const entries = await this.getCertifiedEntries(customerId);
     return await this.revenueEngine.computeRevenueSources(
-      transactions,
+      entries,
       customerId,
       startDate,
       endDate,
@@ -501,14 +548,87 @@ export class OverviewService {
       year,
       month,
     );
-    const transactions =
-      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+    const entries = await this.getCertifiedEntries(customerId);
     return await this.revenueEngine.computeRevenueVariation(
-      transactions,
+      entries,
       customerId,
       months,
       refYear,
       refMonth,
+    );
+  }
+
+  async getSavingsRate(customerId: string, year?: number, month?: number) {
+    this.gateway.emit('analytics_requested', {
+      type: 'SAVINGS_RATE',
+      customerId,
+    });
+    const { refYear, refMonth } = await this.resolveReferenceDate(
+      customerId,
+      year,
+      month,
+    );
+    const entries = await this.getCertifiedEntries(customerId);
+    const transactions =
+      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+
+    const revenues = await this.revenueEngine.computeRevenueAnalytics(
+      entries,
+      customerId,
+      refYear,
+      refMonth,
+    );
+    const expenses = await this.expenseEngine.getExpenses(
+      entries,
+      customerId,
+      refYear,
+      refMonth,
+    );
+    const debts = await this.debtEngine.detectDebts(
+      transactions,
+      customerId,
+      refYear,
+      refMonth,
+    );
+
+    return await this.savingsEngine.calculateSavingsRate(
+      revenues.currentMonth.total,
+      expenses.totalExpenses,
+      debts.totalMonthlyDebt,
+    );
+  }
+
+  async getSavingsFrequency(customerId: string, months: number = 6) {
+    this.gateway.emit('analytics_requested', {
+      type: 'SAVINGS_FREQ',
+      customerId,
+    });
+    const entries = await this.getCertifiedEntries(customerId);
+    const savingsAccounts =
+      await this.transactionFetcher.fetchCustomerAccountsByType(
+        customerId,
+        'SAVINGS',
+      );
+
+    return await this.savingsEngine.calculateSavingsFrequency(
+      entries,
+      customerId,
+      savingsAccounts,
+      months,
+    );
+  }
+
+  async getRetentionCapacity(customerId: string, months: number = 3) {
+    this.gateway.emit('analytics_requested', { type: 'RETENTION', customerId });
+    const { dailyBalances } = await this.getMonthlyDailyBalances(customerId);
+    const transactions =
+      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+
+    return await this.savingsEngine.calculateRetentionCapacity(
+      transactions,
+      dailyBalances,
+      customerId,
+      months,
     );
   }
 
@@ -522,6 +642,7 @@ export class OverviewService {
       year,
       month,
     );
+    const entries = await this.getCertifiedEntries(customerId);
     const transactions =
       await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
 
@@ -543,36 +664,31 @@ export class OverviewService {
       revenueVariation,
       debt,
     ] = await Promise.all([
-      this.revenueEngine.buildFinancialSummary(transactions, customerId, {
+      this.revenueEngine.buildFinancialSummary(entries, customerId, {
         from,
         to,
       }),
       this.revenueEngine.computeRevenueAnalytics(
-        transactions,
+        entries,
         customerId,
         refYear,
         refMonth,
       ),
       this.revenueEngine.monthlySummaryIncome(
-        transactions,
+        entries,
         customerId,
         refYear,
         refMonth,
       ),
       this.revenueEngine.computeIncomeFrequency(
-        transactions,
+        entries,
         customerId,
         refYear,
         refMonth,
       ),
-      this.revenueEngine.computeRevenueSources(
-        transactions,
-        customerId,
-        from,
-        to,
-      ),
+      this.revenueEngine.computeRevenueSources(entries, customerId, from, to),
       this.revenueEngine.computeRevenueVariation(
-        transactions,
+        entries,
         customerId,
         6,
         refYear,
@@ -606,7 +722,6 @@ export class OverviewService {
         from ?? new Date(0),
         to ?? new Date(),
       );
-
     const results = await Promise.all(
       transactions.map(async (tx) => ({
         description: tx.description,
@@ -618,7 +733,6 @@ export class OverviewService {
         date: tx.transactionDate.toISOString().split('T')[0],
       })),
     );
-
     return { customerId, results };
   }
 

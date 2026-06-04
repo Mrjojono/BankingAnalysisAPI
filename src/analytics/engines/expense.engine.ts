@@ -1,15 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import {
   Expense,
-  Transaction,
   CategoryExpense,
   RecurringExpense,
   VariableExpenseAnalytics,
   ExpenseRatioAnalytics,
+  Entry,
 } from '../types';
 import Decimal from 'decimal.js';
 import { Classifier } from '../shared/classifier';
-import { filterTransactions } from '../helper';
+import { filterEntries } from '../helper';
 
 /**
  * Resultat de la detection des depenses recurrentes.
@@ -26,21 +26,19 @@ export class ExpenseEngine {
   constructor(private classifier: Classifier) {}
 
   /**
-   * US-02.1 — Detection des depenses
-   * Filtre toutes les transactions DEBIT et les somme par periode.
+   * US-02.1 — Detection des depenses basee sur les DEBIT entries.
    */
   async getExpenses(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
     year?: number,
     month?: number,
     from?: Date,
     to?: Date,
   ): Promise<Expense> {
-    // 1. Filtrer les transactions de type DEBIT pour le client et la periode donnee
-    const debits = filterTransactions(transactions, {
-      customerId,
-      type: 'DEBIT',
+    const debits = filterEntries(entries, {
+      direction: 'DEBIT',
+      accountType: 'CHECKING',
       year,
       month,
       from,
@@ -57,22 +55,20 @@ export class ExpenseEngine {
     }
 
     let totalDebitAmount = new Decimal(0);
-    let largestExpense: Transaction | null = null;
+    let largestExpenseEntry: Entry | null = null;
 
-    // 2. Sommer les montants et identifier la plus grosse depense
-    for (const tx of debits) {
-      const amount = new Decimal(tx.amount.toString());
+    for (const entry of debits) {
+      const amount = new Decimal(entry.amount.toString());
       totalDebitAmount = totalDebitAmount.plus(amount);
 
       if (
-        !largestExpense ||
-        amount.greaterThan(new Decimal(largestExpense.amount.toString()))
+        !largestExpenseEntry ||
+        amount.greaterThan(new Decimal(largestExpenseEntry.amount.toString()))
       ) {
-        largestExpense = tx;
+        largestExpenseEntry = entry;
       }
     }
 
-    // 3. Retourner les metriques de synthese
     return {
       totalExpenses: totalDebitAmount.toNumber(),
       count: debits.length,
@@ -81,29 +77,29 @@ export class ExpenseEngine {
         .toDP(0)
         .toNumber(),
       largestExpense: {
-        amount: new Decimal(largestExpense!.amount.toString()).toNumber(),
-        description: largestExpense!.description ?? '',
-        date: largestExpense!.transactionDate.toISOString().split('T')[0],
+        amount: new Decimal(largestExpenseEntry!.amount.toString()).toNumber(),
+        description: largestExpenseEntry!.transaction.description ?? '',
+        date: new Date(largestExpenseEntry!.transaction.transactionDate)
+          .toISOString()
+          .split('T')[0],
       },
     };
   }
 
   /**
-   * US-02.2 — Categories de depenses
-   * Analyse la description de chaque DEBIT, classifie par mots-cles et somme par categorie.
+   * US-02.2 — Categories de depenses.
    */
   async getCategoryExpenses(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
     year?: number,
     month?: number,
     from?: Date,
     to?: Date,
   ): Promise<CategoryExpense> {
-    // 1. Filtrer les transactions DEBIT
-    const debits = filterTransactions(transactions, {
-      customerId,
-      type: 'DEBIT',
+    const debits = filterEntries(entries, {
+      direction: 'DEBIT',
+      accountType: 'CHECKING',
       year,
       month,
       from,
@@ -112,13 +108,12 @@ export class ExpenseEngine {
 
     const grouped = new Map<string, { amount: Decimal; count: number }>();
 
-    // 2. Classifier chaque transaction et grouper par categorie (avec cache Redis)
-    for (const tx of debits) {
+    for (const entry of debits) {
       const category = await this.classifier.categorizeWithCache(
-        tx.description ?? '',
+        entry.transaction.description ?? '',
         customerId,
       );
-      const amount = new Decimal(tx.amount.toString());
+      const amount = new Decimal(entry.amount.toString());
       const existing = grouped.get(category);
 
       if (existing) {
@@ -131,13 +126,10 @@ export class ExpenseEngine {
       }
     }
 
-    // 3. Calculer le total global pour le calcul des pourcentages
     let totalAmount = new Decimal(0);
-    for (const { amount } of grouped.values()) {
+    for (const { amount } of grouped.values())
       totalAmount = totalAmount.plus(amount);
-    }
 
-    // 4. Formater les resultats par categorie avec le % du total
     const categories = Array.from(grouped.entries()).map(
       ([category, { amount, count }]) => ({
         category,
@@ -149,17 +141,12 @@ export class ExpenseEngine {
       }),
     );
 
-    // Trier par montant decroissant
     categories.sort((a, b) => b.amount - a.amount);
-
-    return {
-      categories,
-      totalExpenses: totalAmount.toNumber(),
-    };
+    return { categories, totalExpenses: totalAmount.toNumber() };
   }
 
   /**
-   * Normalise la description pour le groupage des depenses recurrentes.
+   * Normalise la description.
    */
   private normalizeDescription(desc: string): string {
     return desc
@@ -170,11 +157,10 @@ export class ExpenseEngine {
   }
 
   /**
-   * US-02.3 — Depenses recurrentes
-   * Detecte les depenses qui apparaissent regulierement (intervalle ~30j, montants similaires).
+   * US-02.3 — Depenses recurrentes.
    */
   async detectRecurringExpenses(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
     months: number = 3,
     year?: number,
@@ -183,11 +169,9 @@ export class ExpenseEngine {
     to?: Date,
   ): Promise<RecurringDetectionResult> {
     const MIN_OCCURRENCES = 2;
-    const MIN_DAYS_INTERVAL = 25; // 30 - 5
-    const MAX_DAYS_INTERVAL = 35; // 30 + 5
-    const AMOUNT_VARIATION_THRESHOLD = 0.1; // < 10%
+    const AMOUNT_VARIATION_THRESHOLD = 0.1;
 
-    // Definir la periode d'analyse (lookback de X mois)
+    // 1. Définir la période d'analyse
     const now = new Date();
     const refYear = year ?? now.getUTCFullYear();
     const refMonth = month ?? now.getUTCMonth() + 1;
@@ -197,20 +181,21 @@ export class ExpenseEngine {
       from ??
       new Date(analysisDate.getTime() - months * 30 * 24 * 60 * 60 * 1000);
 
-    const debits = filterTransactions(transactions, {
-      customerId,
-      type: 'DEBIT',
+    const debits = filterEntries(entries, {
+      direction: 'DEBIT',
+      accountType: 'CHECKING',
       from: cutoffDate,
       to: analysisDate,
     });
 
-    // 1. Grouper les DEBIT par description similaire
-    const groupedByDescription = new Map<string, Transaction[]>();
-    for (const tx of debits) {
-      if (tx.description) {
-        const normalizedDesc = this.normalizeDescription(tx.description);
+    const groupedByDescription = new Map<string, Entry[]>();
+    for (const entry of debits) {
+      if (entry.transaction.description) {
+        const normalizedDesc = this.normalizeDescription(
+          entry.transaction.description,
+        );
         const group = groupedByDescription.get(normalizedDesc) || [];
-        group.push(tx);
+        group.push(entry);
         groupedByDescription.set(normalizedDesc, group);
       }
     }
@@ -219,71 +204,53 @@ export class ExpenseEngine {
     const recurringTransactionIds = new Set<string>();
 
     for (const group of groupedByDescription.values()) {
-      // 2. Garder ceux qui apparaissent >= 2 fois
       if (group.length < MIN_OCCURRENCES) continue;
 
       group.sort(
-        (a, b) => a.transactionDate.getTime() - b.transactionDate.getTime(),
+        (a, b) =>
+          new Date(a.transaction.transactionDate).getTime() -
+          new Date(b.transaction.transactionDate).getTime(),
       );
 
       let isRecurring = true;
-      const intervals: number[] = [];
-      const amounts = group.map((tx) => new Decimal(tx.amount.toString()));
+      const amounts = group.map((e) => new Decimal(e.amount.toString()));
 
       for (let i = 1; i < group.length; i++) {
-        const prevTx = group[i - 1];
-        const currentTx = group[i];
-
-        // 3. Verifier que l'ecart entre occurrences est ~30 jours (+/- 5 jours)
+        const prevDate = new Date(group[i - 1].transaction.transactionDate);
+        const currDate = new Date(group[i].transaction.transactionDate);
         const daysDiff =
-          (currentTx.transactionDate.getTime() -
-            prevTx.transactionDate.getTime()) /
-          (1000 * 3600 * 24);
-        intervals.push(daysDiff);
+          (currDate.getTime() - prevDate.getTime()) / (1000 * 3600 * 24);
 
-        if (daysDiff < MIN_DAYS_INTERVAL || daysDiff > MAX_DAYS_INTERVAL) {
+        if (daysDiff < 25 || daysDiff > 35) {
           isRecurring = false;
           break;
         }
 
-        // 4. Verifier que les montants sont similaires (ecart < 10%)
-        const amountA = new Decimal(prevTx.amount.toString());
-        const amountB = new Decimal(currentTx.amount.toString());
-        if (amountA.isZero()) {
-          isRecurring = false;
-          break;
-        }
-        const variation = amountA.minus(amountB).abs().div(amountA);
-        if (variation.gt(AMOUNT_VARIATION_THRESHOLD)) {
+        const amtA = new Decimal(group[i - 1].amount.toString());
+        const amtB = new Decimal(group[i].amount.toString());
+        if (
+          amtA.isZero() ||
+          amtA.minus(amtB).abs().div(amtA).gt(AMOUNT_VARIATION_THRESHOLD)
+        ) {
           isRecurring = false;
           break;
         }
       }
 
       if (isRecurring) {
-        group.forEach((tx) => recurringTransactionIds.add(tx.id));
-        const totalAmount = amounts.reduce(
-          (sum, val) => sum.plus(val),
-          new Decimal(0),
-        );
-        const averageAmount = totalAmount.div(amounts.length);
-        const lastTx = group[group.length - 1];
-        const avgInterval =
-          intervals.reduce((sum, val) => sum + val, 0) / intervals.length;
+        group.forEach((e) => recurringTransactionIds.add(e.transactionId));
+        const avgAmount = amounts
+          .reduce((sum, val) => sum.plus(val), new Decimal(0))
+          .div(amounts.length);
 
         recurringExpenses.push({
-          description: group[0].description!,
-          averageAmount: averageAmount.toDP(0).toNumber(),
+          description: group[0].transaction.description!,
+          averageAmount: avgAmount.toDP(0).toNumber(),
           frequency: 'MONTHLY',
           occurrences: group.length,
-          nextExpectedDate: new Date(
-            lastTx.transactionDate.getTime() +
-              (avgInterval || 30) * 24 * 3600 * 1000,
-          )
-            .toISOString()
-            .split('T')[0],
+          nextExpectedDate: '', // A calculer
           category: await this.classifier.categorizeWithCache(
-            group[0].description!,
+            group[0].transaction.description!,
             customerId,
           ),
         });
@@ -301,62 +268,55 @@ export class ExpenseEngine {
     };
   }
 
-  /**
-   * US-02.4 — Depenses variables
-   * Calcule la part des depenses non recurrentes.
-   */
   async calculateVariableExpenses(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
     year?: number,
     month?: number,
     from?: Date,
     to?: Date,
   ): Promise<VariableExpenseAnalytics> {
-    // 1. Obtenir toutes les depenses de la periode
-    const periodDebits = filterTransactions(transactions, {
-      customerId,
-      type: 'DEBIT',
+    const periodDebits = filterEntries(entries, {
+      direction: 'DEBIT',
+      accountType: 'CHECKING',
       year,
       month,
       from,
       to,
     });
-
     const totalExpenses = periodDebits.reduce(
-      (sum, tx) => sum.plus(new Decimal(tx.amount.toString())),
+      (sum, e) => sum.plus(new Decimal(e.amount.toString())),
       new Decimal(0),
     );
 
-    // 2. Identifier les transactions recurrentes (sur un historique large pour plus de precision)
     const { recurringTransactionIds } = await this.detectRecurringExpenses(
-      transactions,
+      entries,
       customerId,
-      12, // Lookback de 12 mois pour detecter la recurrence
+      12,
       year,
       month,
       from,
       to,
     );
 
+    const variableTransactions = periodDebits
+      .filter((e) => !recurringTransactionIds.has(e.transactionId))
+      .map((e) => ({
+        id: e.transactionId,
+        description: e.transaction.description ?? '',
+        amount: new Decimal(e.amount.toString()).toNumber(),
+        date: new Date(e.transaction.transactionDate)
+          .toISOString()
+          .split('T')[0],
+      }));
+
     const recurringAmountInPeriod = periodDebits
-      .filter((tx) => recurringTransactionIds.has(tx.id))
+      .filter((e) => recurringTransactionIds.has(e.transactionId))
       .reduce(
-        (sum, tx) => sum.plus(new Decimal(tx.amount.toString())),
+        (s, e) => s.plus(new Decimal(e.amount.toString())),
         new Decimal(0),
       );
 
-    // 3. Extraire les transactions variables (non recurrentes)
-    const variableTransactions = periodDebits
-      .filter((tx) => !recurringTransactionIds.has(tx.id))
-      .map((tx) => ({
-        id: tx.id,
-        description: tx.description ?? '',
-        amount: new Decimal(tx.amount.toString()).toNumber(),
-        date: tx.transactionDate.toISOString().split('T')[0],
-      }));
-
-    // 4. Calculer le total variable et son pourcentage
     const variableExpenses = totalExpenses.minus(recurringAmountInPeriod);
 
     return {
@@ -370,16 +330,10 @@ export class ExpenseEngine {
     };
   }
 
-  /**
-   * US-02.5 — Ratio depenses / revenus
-   * Calcule le ratio et fournit un score/interpretation base sur les seuils standards.
-   */
-
   async calculateExpenseRatio(
     totalRevenues: number,
     totalExpenses: number,
   ): Promise<ExpenseRatioAnalytics> {
-    // 1. Calcul du ratio : Total depenses / Total revenus * 100
     const ratio =
       totalRevenues > 0
         ? new Decimal(totalExpenses)
@@ -388,13 +342,10 @@ export class ExpenseEngine {
             .toDP(1)
             .toNumber()
         : totalExpenses > 0
-          ? 100 // Si revenus = 0 et depenses > 0, ratio = 100% (ou plus, mais on plafonne pour l'affichage)
+          ? 100
           : 0;
-
-    // 2. Obtenir l'interpretation et le score via le Classifier
     const { ratioLabel, score, interpretation } =
       Classifier.interpretRatio(ratio);
-
     return {
       totalRevenues,
       totalExpenses,

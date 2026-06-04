@@ -1,69 +1,89 @@
-import { Transaction, TransactionStatus } from './types';
+import { Entry, Transaction } from './types';
 
 export function isCredit(tx: any, customerId: string) {
   return tx.receiverCustomerId === customerId;
 }
 
 export function getMonth(date: Date) {
-  return date.toISOString().slice(0, 7); // YYYY-MM
-}
-
-export function daysBetween(a: Date, b: Date) {
-  return (a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24);
+  return date.toISOString().slice(0, 7);
 }
 
 export function parseUtcDate(dateStr: string): Date {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d || 1));
 }
 
 /**
- * Filtre une liste de transactions selon plusieurs critères.
- * Si year/month/from/to ne sont pas fournis, aucune restriction temporelle n'est appliquée.
+ * Filtre les transactions selon plusieurs critères.
  */
 export function filterTransactions(
   transactions: Transaction[],
-  filters: {
-    customerId?: string;
-    type?: 'CREDIT' | 'DEBIT' | 'BOTH';
+  options: {
+    customerId: string;
+    type?: 'DEBIT' | 'CREDIT';
     year?: number;
     month?: number;
     from?: Date;
     to?: Date;
-    status?: TransactionStatus;
   },
 ): Transaction[] {
-  const {
-    customerId,
-    type = 'BOTH',
-    year,
-    month,
-    from,
-    to,
-    status = TransactionStatus.POSTED,
-  } = filters;
+  const { customerId, type, year, month, from, to } = options;
 
   return transactions.filter((tx) => {
-    // 1. Filtre par statut (POSTED par défaut)
-    if (tx.status && tx.status !== status) return false;
-
-    // 2. Filtre par client et type (CREDIT/DEBIT)
-    if (customerId) {
-      const isSender = tx.senderCustomerId === customerId;
-      const isReceiver = tx.receiverCustomerId === customerId;
-
-      if (type === 'DEBIT' && !isSender) return false;
-      if (type === 'CREDIT' && !isReceiver) return false;
-      if (type === 'BOTH' && !isSender && !isReceiver) return false;
+    // 1. Filtrage par type (si spécifié)
+    if (type) {
+      const isTxCredit = tx.receiverCustomerId === customerId;
+      if (type === 'CREDIT' && !isTxCredit) return false;
+      if (type === 'DEBIT' && isTxCredit) return false;
     }
 
-    // 3. Filtre par plage de dates (Haute priorité)
-    if (from && tx.transactionDate < from) return false;
-    if (to && tx.transactionDate > to) return false;
+    // 2. Filtrage par date (range prioritaire)
+    const txDate = tx.transactionDate;
 
-    // 4. Filtre par Année / Mois (Seulement si from/to ne sont pas là)
+    if (from && txDate < from) return false;
+    if (to && txDate > to) return false;
+
+    // 3. Filtrage par year/month (uniquement si pas de range)
     if (!from && !to) {
-      const txDate = tx.transactionDate;
+      if (year && txDate.getUTCFullYear() !== year) return false;
+      if (month && txDate.getUTCMonth() + 1 !== month) return false;
+    }
+
+    return true;
+  });
+}
+
+/**
+ * Filtre les écritures comptables (Entries) selon plusieurs critères.
+ */
+export function filterEntries(
+  entries: Entry[],
+  options: {
+    direction?: 'DEBIT' | 'CREDIT';
+    accountType?: 'CHECKING' | 'SAVINGS' | 'LOAN' | 'CORPORATE';
+    year?: number;
+    month?: number;
+    from?: Date;
+    to?: Date;
+  },
+): Entry[] {
+  const { direction, accountType, year, month, from, to } = options;
+
+  return entries.filter((entry) => {
+    // 1. Filtrage par direction
+    if (direction && entry.direction !== direction) return false;
+
+    // 2. Filtrage par type de compte
+    if (accountType && entry.account.bankAccount?.accountType !== accountType)
+      return false;
+
+    // 3. Filtrage par période
+    const txDate = new Date(entry.transaction.transactionDate);
+
+    if (from && txDate < from) return false;
+    if (to && txDate > to) return false;
+
+    if (!from && !to) {
       if (year && txDate.getUTCFullYear() !== year) return false;
       if (month && txDate.getUTCMonth() + 1 !== month) return false;
     }

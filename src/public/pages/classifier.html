@@ -1,0 +1,261 @@
+<!-- src/public/pages/classifier.html -->
+<div class="page-animate space-y-8 pb-20 px-1 sm:px-0">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+        <div>
+            <h2 class="text-[28px] sm:text-[32px] font-extrabold text-on-surface tracking-tight">Centre de Contrôle IA</h2>
+            <p class="text-on-surface-variant text-[14px] sm:text-[16px]">Audit du Grand Livre et définition des règles de classification globale.</p>
+        </div>
+        <div class="bg-primary-container/20 px-4 py-2 rounded-xl border border-primary/10 text-primary text-[11px] font-bold uppercase tracking-widest whitespace-nowrap">
+            Apprentissage Actif
+        </div>
+    </div>
+
+    <!-- Barre de recherche moderne - Responsive -->
+    <div class="bg-white p-2 rounded-2xl border border-mint-subtle shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div class="flex-grow flex items-center px-4 gap-3">
+            <span class="material-symbols-outlined text-outline">person_search</span>
+            <input type="text" id="clf-customer-id" placeholder="ID Client pour l'audit..." 
+                   class="w-full bg-transparent border-none py-3 sm:py-4 text-[15px] font-medium focus:ring-0 outline-none">
+        </div>
+        <button onclick="loadClassifierPreview()" class="bg-primary text-white px-8 py-3 sm:py-4 rounded-xl font-extrabold hover:bg-primary/90 hover:shadow-lg transition-all active:scale-[0.98]">
+            Lancer l'Audit
+        </button>
+    </div>
+
+    <!-- Filtres rapides - Scrollable sur mobile -->
+    <div class="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+        <button class="whitespace-nowrap px-5 py-2.5 rounded-full bg-white border border-mint-subtle text-[13px] font-bold text-on-surface-variant hover:border-primary hover:text-primary transition-all">Toutes</button>
+        <button class="whitespace-nowrap px-5 py-2.5 rounded-full bg-white border border-mint-subtle text-[13px] font-bold text-on-surface-variant hover:border-primary hover:text-primary transition-all flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-error animate-pulse"></span>Incertaines
+        </button>
+        <button class="whitespace-nowrap px-5 py-2.5 rounded-full bg-white border border-mint-subtle text-[13px] font-bold text-on-surface-variant hover:border-primary hover:text-primary transition-all">Virements</button>
+    </div>
+
+    <!-- Grille de résultats -->
+    <div id="classifier-results-grid" class="grid grid-cols-1 gap-4">
+        <!-- Message initial -->
+        <div class="bg-white p-12 sm:p-20 rounded-3xl border border-dashed border-outline/30 text-center space-y-4 shadow-inner">
+            <div class="w-16 h-16 bg-surface-container-low rounded-full flex items-center justify-center mx-auto">
+                <span class="material-symbols-outlined text-primary text-[32px]">psychology</span>
+            </div>
+            <div>
+                <p class="text-[16px] font-bold text-on-surface">Prêt pour l'audit</p>
+                <p class="text-on-surface-variant text-[14px]">Saisissez un identifiant pour analyser les écritures.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de correction - Optimisée -->
+<div id="modal-edit" class="fixed inset-0 bg-forest-depth/60 backdrop-blur-md hidden z-[100] items-center justify-center p-4 transition-all duration-300">
+    <div class="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl overflow-hidden page-animate flex flex-col max-h-[90vh]">
+        <!-- Modal Header -->
+        <div class="p-6 sm:p-8 border-b border-mint-subtle flex justify-between items-center bg-white shrink-0">
+            <h3 class="text-[20px] font-extrabold text-on-surface tracking-tight">Nouvelle Règle Globale</h3>
+            <button onclick="closeModal()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-all">
+                <span class="material-symbols-outlined text-outline">close</span>
+            </button>
+        </div>
+        
+        <!-- Modal Body - Scrollable -->
+        <div class="p-6 sm:p-8 space-y-8 overflow-y-auto custom-scrollbar">
+            <div class="bg-surface-container-low p-5 rounded-2xl border border-mint-subtle shadow-inner">
+                <p class="text-[10px] font-black text-outline uppercase tracking-widest mb-2">Libellé cible</p>
+                <p id="modal-desc" class="text-[16px] font-bold text-primary font-mono break-all"></p>
+            </div>
+
+            <div class="space-y-4">
+                <p class="text-[13px] font-extrabold text-on-surface-variant uppercase tracking-wider">Sélectionner la catégorie :</p>
+                <div id="category-picker" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <!-- Les boutons sont injectés par JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="p-6 bg-surface-container-low border-t border-mint-subtle flex flex-col sm:flex-row gap-3 shrink-0">
+            <button onclick="closeModal()" class="order-2 sm:order-1 px-6 py-4 font-bold text-on-surface-variant hover:bg-surface-variant rounded-2xl transition-all">
+                Annuler
+            </button>
+            <button id="btn-save-global" class="order-1 sm:order-2 flex-grow py-4 bg-primary text-white font-bold rounded-2xl shadow-xl shadow-primary/20 hover:bg-primary/90 hover:-translate-y-0.5 transition-all active:translate-y-0 active:scale-[0.98]">
+                Appliquer à tout le système
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const categories = [
+        { id: 'LOGEMENT', icon: 'home', color: 'bg-orange-100 text-orange-700' },
+        { id: 'ALIMENTATION', icon: 'restaurant', color: 'bg-green-100 text-green-700' },
+        { id: 'TRANSPORT', icon: 'directions_car', color: 'bg-blue-100 text-blue-700' },
+        { id: 'SANTE', icon: 'medical_services', color: 'bg-red-100 text-red-700' },
+        { id: 'MOBILE_MONEY', icon: 'smartphone', color: 'bg-purple-100 text-purple-700' },
+        { id: 'COMMERCE', icon: 'shopping_bag', color: 'bg-indigo-100 text-indigo-700' },
+        { id: 'FRAIS_BANCAIRES', icon: 'account_balance', color: 'bg-gray-100 text-gray-700' },
+        { id: 'VIREMENTS', icon: 'sync_alt', color: 'bg-teal-100 text-teal-700' },
+        { id: 'RETRAITS', icon: 'atm', color: 'bg-yellow-100 text-yellow-700' },
+        { id: 'CREDIT', icon: 'credit_score', color: 'bg-emerald-100 text-emerald-700' },
+        { id: 'DIVERS', icon: 'more_horiz', color: 'bg-slate-100 text-slate-700' }
+    ];
+
+    let currentEditing = { customerId: '', description: '' };
+    let selectedCat = null;
+
+    function initCategoryPicker() {
+        const picker = document.getElementById('category-picker');
+        picker.innerHTML = categories.map(cat => `
+            <button onclick="selectCategory('${cat.id}')" 
+                    class="category-btn flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-2 border-mint-subtle bg-white hover:border-primary/50 hover:bg-primary-container/5 transition-all group"
+                    data-cat="${cat.id}">
+                <span class="material-symbols-outlined text-[24px] text-outline group-hover:text-primary transition-colors">${cat.icon}</span>
+                <span class="text-[11px] font-bold text-on-surface-variant group-hover:text-primary text-center">${cat.id.replace('_', ' ')}</span>
+            </button>
+        `).join('');
+    }
+
+    async function loadClassifierPreview() {
+        const customerId = document.getElementById('clf-customer-id').value;
+        if (!customerId) return showToast("Veuillez saisir un identifiant", "error");
+
+        const grid = document.getElementById('classifier-results-grid');
+        grid.innerHTML = `
+            <div class="flex flex-col items-center justify-center py-20 gap-4">
+                <div class="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+                <p class="text-outline font-medium">L'IA analyse le Grand Livre...</p>
+            </div>
+        `;
+
+        try {
+            const response = await fetch(`/analytics/classifier/preview?customerId=${customerId}`);
+            const data = await response.json();
+
+            if (!data.results || data.results.length === 0) {
+                grid.innerHTML = '<div class="bg-white p-12 rounded-3xl text-center border border-mint-subtle">Aucune transaction trouvée.</div>';
+                return;
+            }
+
+            grid.innerHTML = '';
+            data.results.forEach(res => {
+                const catInfo = categories.find(c => c.id === res.category);
+                const card = document.createElement('div');
+                card.className = "bg-white p-4 sm:p-6 rounded-2xl border border-mint-subtle shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group hover:border-primary hover:shadow-lg hover:shadow-primary/5 transition-all page-animate";
+                
+                card.innerHTML = `
+                    <div class="flex items-center gap-4 w-full sm:w-auto">
+                        <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-surface-container-low flex items-center justify-center text-primary group-hover:bg-primary-container group-hover:text-on-primary-container transition-all shrink-0 shadow-inner">
+                            <span class="material-symbols-outlined text-[24px] sm:text-[28px]">${catInfo?.icon || 'help'}</span>
+                        </div>
+                        <div class="overflow-hidden">
+                            <p class="text-[15px] font-bold text-on-surface truncate group-hover:text-primary transition-colors">${res.description}</p>
+                            <div class="flex items-center gap-2 mt-1">
+                                <span class="text-[12px] font-mono text-outline">${res.date}</span>
+                                <span class="w-1 h-1 rounded-full bg-outline/30"></span>
+                                <span class="text-[13px] font-black text-primary">${res.amount.toLocaleString()} XOF</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-none border-mint-subtle/50">
+                        <div class="text-left sm:text-right">
+                            <p class="text-[10px] font-black text-outline uppercase tracking-widest mb-1 opacity-60">Classification</p>
+                            <span class="px-4 py-1.5 ${catInfo?.color || 'bg-surface-container text-on-surface-variant'} rounded-full text-[11px] font-black uppercase tracking-tight shadow-sm">${res.category}</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="approveCategory('${res.description}')" class="w-11 h-11 rounded-xl border-2 border-mint-subtle flex items-center justify-center text-primary hover:bg-primary hover:text-white hover:border-primary transition-all active:scale-90" title="Valider">
+                                <span class="material-symbols-outlined text-[22px]">check</span>
+                            </button>
+                            <button onclick="openEditModal('${customerId}', '${res.description}', '${res.category}')" 
+                                    class="w-11 h-11 rounded-xl bg-forest-depth text-white flex items-center justify-center hover:bg-primary hover:shadow-xl hover:shadow-primary/30 transition-all active:scale-90 shadow-md" title="Corriger Globalement">
+                                <span class="material-symbols-outlined text-[20px]">edit_note</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        } catch (err) {
+            grid.innerHTML = '<div class="p-20 text-center text-error font-bold">Échec de la connexion au moteur d\'analyse.</div>';
+        }
+    }
+
+    function openEditModal(customerId, desc, currentCat) {
+        currentEditing = { customerId, description: desc };
+        selectedCat = null;
+        document.getElementById('modal-desc').innerText = desc;
+        
+        const modal = document.getElementById('modal-edit');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        
+        // Reset selection UI
+        document.querySelectorAll('.category-btn').forEach(btn => {
+            const isActive = btn.dataset.cat === currentCat;
+            btn.className = `category-btn flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all group ${
+                isActive ? 'border-primary bg-primary-container/10' : 'border-mint-subtle bg-white'
+            }`;
+        });
+    }
+
+    function closeModal() {
+        const modal = document.getElementById('modal-edit');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    function selectCategory(catId) {
+        selectedCat = catId;
+        document.querySelectorAll('.category-btn').forEach(btn => {
+            const isSelected = btn.dataset.cat === catId;
+            btn.classList.toggle('border-primary', isSelected);
+            btn.classList.toggle('bg-primary-container/10', isSelected);
+            btn.classList.toggle('scale-95', isSelected);
+            if (!isSelected) {
+                btn.classList.add('border-mint-subtle', 'bg-white');
+                btn.classList.remove('scale-95');
+            }
+        });
+    }
+
+    document.getElementById('btn-save-global').onclick = async () => {
+        if (!selectedCat) return showToast("Sélectionnez une catégorie", "error");
+        
+        const btn = document.getElementById('btn-save-global');
+        const originalText = btn.innerText;
+        btn.innerText = "Synchronisation...";
+        btn.disabled = true;
+
+        try {
+            const response = await fetch('/analytics/classifier/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    customerId: currentEditing.customerId, 
+                    description: currentEditing.description, 
+                    correctCategory: selectedCat 
+                })
+            });
+
+            if (response.ok) {
+                closeModal();
+                loadClassifierPreview();
+            }
+        } catch (err) {
+            showToast("Erreur de synchronisation", "error");
+        } finally {
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    };
+
+    function approveCategory(desc) {
+        showToast(`Classification confirmée pour "${desc}"`, "success");
+    }
+
+    initCategoryPicker();
+</script>
+
+<style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>

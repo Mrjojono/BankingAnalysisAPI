@@ -8,322 +8,257 @@ import * as natural from 'natural';
 export class Classifier {
   private readonly logger = new Logger(Classifier.name);
 
-  //  Fuse instance (fuzzy matching)
+  // Fuse instance (fuzzy matching)
   private static fuseInstances: Map<ExpenseCategory, Fuse<string>> | null =
     null;
 
-  //  Bayes classifier (natural)
+  // Bayes classifier (natural)
   private static bayesClassifier: natural.BayesClassifier | null = null;
   private static bayesTrained = false;
 
+  // Cache des règles globales (mots-clés dynamiques)
+  private static globalRules: Record<string, ExpenseCategory> = {};
+
   constructor(private redisService: RedisService) {
-    Classifier.initFuse();
-    Classifier.initBayes();
+    this.initClassifier();
+    this.loadGlobalRules().catch((e) =>
+      this.logger.warn('Failed to load global rules', e),
+    );
   }
 
   /**
-   * Initialise un index Fuse par catégorie
-   * Une seule fois au démarrage
+   * Initialisation unique au démarrage
    */
-  private static initFuse(): void {
-    if (Classifier.fuseInstances) return;
-
-    Classifier.fuseInstances = new Map();
-
-    for (const [category, keywords] of Object.entries(EXPENSE_KEYWORDS)) {
-      if (keywords.length === 0) continue;
-
-      Classifier.fuseInstances.set(
-        category as ExpenseCategory,
-        new Fuse(keywords, {
-          threshold: 0.35, // 0 = exact, 1 = tout accepter
-          distance: 80, // distance max de recherche
-          minMatchCharLength: 3,
-          includeScore: true,
-        }),
-      );
+  private initClassifier(): void {
+    if (!Classifier.fuseInstances) {
+      Classifier.fuseInstances = new Map();
+      for (const [category, keywords] of Object.entries(EXPENSE_KEYWORDS)) {
+        if (keywords.length === 0) continue;
+        Classifier.fuseInstances.set(
+          category as ExpenseCategory,
+          new Fuse(keywords, {
+            threshold: 0.35,
+            distance: 80,
+            minMatchCharLength: 3,
+            includeScore: true,
+          }),
+        );
+      }
+      this.logger.log('Fuse instances initialized');
     }
 
-    Logger.log('Fuse instances initialized', 'Classifier');
+    if (!Classifier.bayesTrained) {
+      Classifier.bayesClassifier = new natural.BayesClassifier();
+      for (const [category, keywords] of Object.entries(EXPENSE_KEYWORDS)) {
+        for (const keyword of keywords) {
+          Classifier.bayesClassifier.addDocument(keyword, category);
+        }
+      }
+      Classifier.bayesClassifier.train();
+      Classifier.bayesTrained = true;
+      this.logger.log('Bayes classifier trained');
+    }
   }
 
   /**
-   * Entraîne le classifieur Bayes avec les keywords existants
-   * Une seule fois au démarrage
+   * Charge les règles dynamiques depuis Redis (persistance des corrections globales)
    */
-  private static initBayes(): void {
-    if (Classifier.bayesTrained) return;
-
-    Classifier.bayesClassifier = new natural.BayesClassifier();
-
-    for (const [category, keywords] of Object.entries(EXPENSE_KEYWORDS)) {
-      if (keywords.length === 0) continue;
-
-      // Chaque keyword devient un exemple d'entraînement
-      for (const keyword of keywords) {
-        Classifier.bayesClassifier.addDocument(keyword, category);
+  private async loadGlobalRules(): Promise<void> {
+    try {
+      const rules = await this.redisService.get('classifier:global_rules');
+      if (rules) {
+        Classifier.globalRules = JSON.parse(rules);
+        this.logger.log(
+          `${Object.keys(Classifier.globalRules).length} global rules loaded from Redis`,
+        );
       }
-
-      // Phrases composées pour enrichir l'entraînement
-      if (keywords.length >= 3) {
-        const combined = keywords.slice(0, 5).join(' ');
-        Classifier.bayesClassifier.addDocument(combined, category);
-      }
+    } catch (e) {
+      this.logger.warn('Failed to load global rules', e);
     }
-
-    Classifier.bayesClassifier.train();
-    Classifier.bayesTrained = true;
-
-    Logger.log('Bayes classifier trained', 'Classifier');
   }
 
   // ──────────────────────────────────────────────────────────
-  // MÉTHODE PRINCIPALE — Pipeline 3 niveaux
+  // PIPELINE DE CLASSIFICATION (ORDONNÉ PAR PRIORITÉ)
   // ──────────────────────────────────────────────────────────
 
   /**
-   * Classification statique — pipeline complet sans cache
-   * Niveau 1 → Score exact
-   * Niveau 2 → Fuzzy matching (Fuse.js)
-   * Niveau 3 → Bayes (Natural)
-   */
-  categorize(description: string): ExpenseCategory {
-    if (!description || description.trim().length === 0) {
-      return ExpenseCategory.DIVERS;
-    }
-
-    const desc = description.toUpperCase().trim();
-
-    // Niveau 1  Score exact (le plus rapide)
-    const exactResult = Classifier.matchExact(desc);
-    if (exactResult !== ExpenseCategory.DIVERS) {
-      return exactResult;
-    }
-
-    // Niveau 2  Fuzzy matching
-    const fuzzyResult = Classifier.matchFuzzy(desc);
-    if (fuzzyResult !== ExpenseCategory.DIVERS) {
-      return fuzzyResult;
-    }
-
-    // Niveau 3  Bayes classifier
-    const bayesResult = Classifier.matchBayes(desc);
-    if (bayesResult !== ExpenseCategory.DIVERS) {
-      return bayesResult;
-    }
-
-    return ExpenseCategory.DIVERS;
-  }
-
-  /**
-   * Classification avec cache Redis — pour les appels fréquents
+   * Classification avec cache et règles globales
    */
   async categorizeWithCache(
     description: string,
     customerId?: string,
   ): Promise<ExpenseCategory> {
-    if (!description || description.trim().length === 0) {
+    if (!description || description.trim().length === 0)
       return ExpenseCategory.DIVERS;
-    }
-
     const desc = description.toUpperCase().trim();
 
-    // Cache personnel Redis
+    // PRIORITÉ 1 : Règle Globale (Correction admin qui s'applique à tout le monde)
+    if (Classifier.globalRules[desc]) {
+      return Classifier.globalRules[desc];
+    }
+
+    // PRIORITÉ 2 : Cache personnel Redis (Correction spécifique à un client)
     if (customerId) {
       const cached = await this.getFromUserCache(customerId, desc);
-      if (cached) {
-        this.logger.debug(`Cache hit: "${desc}" → ${cached}`);
-        return cached;
-      }
+      if (cached) return cached;
     }
 
-    // Pipeline de classification
-    const category = this.categorize(desc);
+    // PRIORITÉ 3 : Dictionnaire Statique (Dossier config)
+    const exactResult = this.matchExact(desc);
+    if (exactResult !== ExpenseCategory.DIVERS) return exactResult;
 
-    // Sauvegarder en cache
-    if (customerId) {
-      await this.saveToUserCache(customerId, desc, category);
+    // PRIORITÉ 4 : Intelligence Artificielle (Fuzzy + Bayes)
+    const aiResult = this.matchAI(desc);
+
+    // Sauvegarder le résultat IA en cache pour la prochaine fois
+    if (customerId && aiResult !== ExpenseCategory.DIVERS) {
+      await this.saveToUserCache(customerId, desc, aiResult);
     }
 
-    return category;
+    return aiResult;
   }
 
-  private static matchExact(desc: string): ExpenseCategory {
+  private matchExact(desc: string): ExpenseCategory {
     const scores = new Map<ExpenseCategory, number>();
-
     for (const [category, keywords] of Object.entries(EXPENSE_KEYWORDS)) {
-      let score = 0;
-
       for (const keyword of keywords) {
-        if (desc.includes(keyword)) {
-          // Plus le keyword est long = plus spécifique = plus de poids
-          score += 10 + keyword.length;
+        if (desc.includes(keyword.toUpperCase())) {
+          scores.set(
+            category as ExpenseCategory,
+            (scores.get(category as ExpenseCategory) || 0) +
+              10 +
+              keyword.length,
+          );
         }
       }
-
-      if (score > 0) {
-        scores.set(category as ExpenseCategory, score);
-      }
     }
-
     if (scores.size === 0) return ExpenseCategory.DIVERS;
-
-    return Array.from(scores.entries()).reduce((prev, current) =>
-      current[1] > prev[1] ? current : prev,
+    return Array.from(scores.entries()).reduce((p, c) =>
+      c[1] > p[1] ? c : p,
     )[0];
   }
 
-  // ──────────────────────────────────────────────────────────
-  // NIVEAU 2 — Fuzzy matching avec Fuse.js
-  // ──────────────────────────────────────────────────────────
-
-  /**
-   * Découpe la description en mots et cherche chaque mot
-   * dans les index Fuse de chaque catégorie
-   */
-  private static matchFuzzy(desc: string): ExpenseCategory {
-    if (!Classifier.fuseInstances) return ExpenseCategory.DIVERS;
-
-    // Découper en mots (chaque mot cherché séparément)
-    const words = desc.split(/\s+/).filter((w) => w.length >= 3);
-
-    const scores = new Map<ExpenseCategory, number>();
-
-    for (const [category, fuse] of Classifier.fuseInstances.entries()) {
-      let totalScore = 0;
-
-      for (const word of words) {
-        const results = fuse.search(word);
-
-        if (results.length > 0 && results[0].score !== undefined) {
-          // Fuse score : 0 = parfait, 1 = mauvais
-          // On inverse : 1 = parfait, 0 = mauvais
-          const quality = 1 - results[0].score;
-
-          // On ne garde que les matches de qualité suffisante
-          if (quality > 0.65) {
-            totalScore += quality * 10;
+  private matchAI(desc: string): ExpenseCategory {
+    // 1. Fuzzy Matching
+    if (Classifier.fuseInstances) {
+      const words = desc.split(/\s+/).filter((w) => w.length >= 3);
+      const scores = new Map<ExpenseCategory, number>();
+      for (const [category, fuse] of Classifier.fuseInstances.entries()) {
+        for (const word of words) {
+          const results = fuse.search(word);
+          if (results.length > 0 && 1 - results[0].score! > 0.65) {
+            scores.set(
+              category,
+              (scores.get(category) || 0) + (1 - results[0].score!) * 10,
+            );
           }
         }
       }
-
-      if (totalScore > 0) {
-        scores.set(category, totalScore);
+      if (scores.size > 0) {
+        const winner = Array.from(scores.entries()).reduce((p, c) =>
+          c[1] > p[1] ? c : p,
+        );
+        if (winner[1] >= 4) return winner[0];
       }
     }
 
-    if (scores.size === 0) return ExpenseCategory.DIVERS;
+    // 2. Bayes
+    if (Classifier.bayesTrained && Classifier.bayesClassifier) {
+      try {
+        return (
+          (Classifier.bayesClassifier.classify(desc) as ExpenseCategory) ??
+          ExpenseCategory.DIVERS
+        );
+      } catch {
+        return ExpenseCategory.DIVERS;
+      }
+    }
 
-    const winner = Array.from(scores.entries()).reduce((prev, current) =>
-      current[1] > prev[1] ? current : prev,
-    );
-
-    // Seuil minimum de confiance
-    if (winner[1] < 4) return ExpenseCategory.DIVERS;
-
-    return winner[0];
+    return ExpenseCategory.DIVERS;
   }
+
+  // ──────────────────────────────────────────────────────────
+  // GESTION DU FEEDBACK (OPTIMISÉ)
+  // ──────────────────────────────────────────────────────────
 
   /**
-   * Utilise le classifieur Bayes entraîné sur les keywords
+   * Enregistre une correction.
+   * Elle devient une RÈGLE GLOBALE pour tout le système.
    */
-  private static matchBayes(desc: string): ExpenseCategory {
-    if (!Classifier.bayesClassifier || !Classifier.bayesTrained) {
-      return ExpenseCategory.DIVERS;
-    }
-
-    try {
-      const result = Classifier.bayesClassifier.classify(desc);
-      return (result as ExpenseCategory) ?? ExpenseCategory.DIVERS;
-    } catch {
-      return ExpenseCategory.DIVERS;
-    }
-  }
-
-  // ──────────────────────────────────────────────────────────
-  // UTILITAIRES EXISTANTS
-  // ──────────────────────────────────────────────────────────
-
-  async isDebt(description: string, customerId?: string): Promise<boolean> {
-    if (!description) return false;
-    const category = await this.categorizeWithCache(description, customerId);
-    if (category === ExpenseCategory.CREDIT) return true;
-
-    const desc = description.toUpperCase();
-    return (
-      desc.includes('PRET') ||
-      desc.includes('PRÊT') ||
-      desc.includes('REMBOURSEMENT') ||
-      desc.includes('ECHEANCE') ||
-      desc.includes('ÉCHÉANCE')
-    );
-  }
-
-  static interpretRatio(ratio: number) {
-    let ratioLabel: string;
-    let score: number;
-    let interpretation: string;
-
-    if (ratio < 50) {
-      ratioLabel = 'EXCELLENT';
-      score = 100;
-      interpretation = `Excellent ! Vous ne dépensez que ${ratio}% de vos revenus.`;
-    } else if (ratio < 75) {
-      ratioLabel = 'SAIN';
-      score = 75;
-      interpretation = `Votre budget est équilibré, vous dépensez ${ratio}% de vos revenus.`;
-    } else if (ratio < 90) {
-      ratioLabel = 'ATTENTION';
-      score = 50;
-      interpretation = `Vous dépensez ${ratio}% de vos revenus ce mois. Pensez à réduire vos dépenses variables.`;
-    } else if (ratio <= 100) {
-      ratioLabel = 'PRUDENCE';
-      score = 25;
-      interpretation = `Attention, vos dépenses (${ratio}%) absorbent la quasi-totalité de vos revenus.`;
-    } else {
-      ratioLabel = 'CRITIQUE';
-      score = 0;
-      interpretation = `Critique : Vos dépenses (${ratio}%) dépassent vos revenus. Vous êtes en situation de surendettement.`;
-    }
-
-    return { ratioLabel, score, interpretation };
-  }
-
   async recordFeedback(
     customerId: string,
     description: string,
     actualCategory: ExpenseCategory,
   ): Promise<void> {
-    const hash = this.hashString(description);
-    const key = `classifier:${customerId}:${hash}`;
+    const desc = description.toUpperCase().trim();
 
-    await this.redisService.set(key, actualCategory, 30 * 24 * 60 * 60);
+    Classifier.globalRules[desc] = actualCategory;
+    await this.redisService.set(
+      'classifier:global_rules',
+      JSON.stringify(Classifier.globalRules),
+      3600,
+    );
 
-    // Bonus — réentraîner Bayes avec ce feedback
+    // 2. Supprimer les anciens caches contradictoires pour ce client
+    const hash = this.hashString(desc);
+    await this.redisService.delete(`classifier:${customerId}:${hash}`);
+
+    // 3. Apprentissage Bayes (Global)
     if (Classifier.bayesClassifier) {
-      Classifier.bayesClassifier.addDocument(
-        description.toUpperCase(),
-        actualCategory,
-      );
+      Classifier.bayesClassifier.addDocument(desc, actualCategory);
       Classifier.bayesClassifier.train();
     }
 
-    this.logger.log(`Feedback recorded: "${description}" → ${actualCategory}`);
+    this.logger.log(
+      `Feedback GLOBAL enregistré : "${desc}" → ${actualCategory}`,
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // UTILITAIRES
+  // ──────────────────────────────────────────────────────────
+
+  async isDebt(description: string, customerId?: string): Promise<boolean> {
+    if (!description) return false;
+    const category = await this.categorizeWithCache(description, customerId);
+    return category === ExpenseCategory.CREDIT;
+  }
+
+  static interpretRatio(ratio: number) {
+    if (ratio < 50)
+      return {
+        ratioLabel: 'EXCELLENT',
+        score: 100,
+        interpretation: `Excellent ! (${ratio}%)`,
+      };
+    if (ratio < 75)
+      return {
+        ratioLabel: 'SAIN',
+        score: 75,
+        interpretation: `Budget équilibré (${ratio}%)`,
+      };
+    if (ratio < 90)
+      return {
+        ratioLabel: 'ATTENTION',
+        score: 50,
+        interpretation: `Prudence recommandée (${ratio}%)`,
+      };
+    return {
+      ratioLabel: 'CRITIQUE',
+      score: 10,
+      interpretation: `Surendettement (${ratio}%)`,
+    };
   }
 
   private async getFromUserCache(
     customerId: string,
     desc: string,
   ): Promise<ExpenseCategory | null> {
-    try {
-      const hash = this.hashString(desc);
-      const key = `classifier:${customerId}:${hash}`;
-      const cached = await this.redisService.get(key);
-      return cached as ExpenseCategory | null;
-    } catch (error) {
-      this.logger.warn(`Redis get failed: ${error.message}`);
-      return null;
-    }
+    const hash = this.hashString(desc);
+    const cached = await this.redisService.get(
+      `classifier:${customerId}:${hash}`,
+    );
+    return cached as ExpenseCategory | null;
   }
 
   private async saveToUserCache(
@@ -331,20 +266,18 @@ export class Classifier {
     desc: string,
     category: ExpenseCategory,
   ): Promise<void> {
-    try {
-      const hash = this.hashString(desc);
-      const key = `classifier:${customerId}:${hash}`;
-      await this.redisService.set(key, category, 30 * 24 * 60 * 60);
-    } catch (error) {
-      this.logger.warn(`Redis set failed: ${error.message}`);
-    }
+    const hash = this.hashString(desc);
+    await this.redisService.set(
+      `classifier:${customerId}:${hash}`,
+      category,
+      30 * 24 * 60 * 60,
+    );
   }
 
   private hashString(str: string): string {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
+      hash = (hash << 5) - hash + str.charCodeAt(i);
       hash = hash & hash;
     }
     return Math.abs(hash).toString(16);

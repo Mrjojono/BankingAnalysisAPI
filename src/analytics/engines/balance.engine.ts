@@ -1,25 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import {
   DailyBalance,
-  Transaction,
   AverageBalanceResponse,
   BalanceExtremesResponse,
   OverdraftAnalyticsResponse,
   NegativePeriodsResponse,
   NegativePeriod,
   BalanceVolatilityResponse,
+  Entry,
 } from '../types';
 import Decimal from 'decimal.js';
-import { filterTransactions } from '../helper';
+import { filterEntries } from '../helper';
 
 @Injectable()
 export class BalanceEngine {
   /**
-   * Reconstruit le solde quotidien pour chaque jour d'un mois sp\u00e9cifique.
-   * Propage le solde de la veille pour les jours sans transactions.
+   * Reconstruit le solde quotidien à partir des ÉCRITURES (Entries).
    */
   async reconstructMonthlyDailyBalances(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
     initialBalance: Decimal,
     year: number,
@@ -31,33 +30,34 @@ export class BalanceEngine {
     const dailyBalances: DailyBalance[] = [];
     let currentBalance = initialBalance;
 
-    // 1. Obtenir les transactions du mois via le helper
-    const monthTxs = filterTransactions(transactions, {
-      customerId,
+    // 1. Filtrer les écritures du mois
+    const monthEntries = filterEntries(entries, {
       year,
       month,
     }).sort(
-      (a, b) => a.transactionDate.getTime() - b.transactionDate.getTime(),
+      (a, b) =>
+        new Date(a.transaction.transactionDate).getTime() -
+        new Date(b.transaction.transactionDate).getTime(),
     );
 
-    // 2. Grouper par jour r\u00e9el
-    const txByDay = new Map<number, Transaction[]>();
-    for (const tx of monthTxs) {
-      const day = tx.transactionDate.getUTCDate();
-      const list = txByDay.get(day) || [];
-      list.push(tx);
-      txByDay.set(day, list);
+    // 2. Grouper par jour
+    const entriesByDay = new Map<number, Entry[]>();
+    for (const entry of monthEntries) {
+      const day = new Date(entry.transaction.transactionDate).getUTCDate();
+      const list = entriesByDay.get(day) || [];
+      list.push(entry);
+      entriesByDay.set(day, list);
     }
 
-    // 3. Parcourir chaque jour du mois
+    // 3. Parcourir chaque jour
     for (let day = 1; day <= totalDays; day++) {
-      const dayTxs = txByDay.get(day) || [];
+      const dayEntries = entriesByDay.get(day) || [];
 
-      for (const tx of dayTxs) {
-        const amount = new Decimal(tx.amount.toString());
-        if (tx.senderCustomerId === customerId) {
+      for (const entry of dayEntries) {
+        const amount = new Decimal(entry.amount.toString());
+        if (entry.direction === 'DEBIT') {
           currentBalance = currentBalance.minus(amount);
-        } else if (tx.receiverCustomerId === customerId) {
+        } else if (entry.direction === 'CREDIT') {
           currentBalance = currentBalance.plus(amount);
         }
       }

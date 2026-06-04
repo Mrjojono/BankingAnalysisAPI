@@ -387,3 +387,80 @@ export class DebtDto {
   @ApiProperty({ example: 45000 })
   totalMonthlyDebt: number;
 }
+
+export class TotalDebtItemDto {
+  @ApiProperty({ example: 'REMBOURSEMENT CREDIT HABITAT' })
+  description: string;
+  @ApiProperty({ example: 45000 })
+  monthlyAmount: number;
+  @ApiProperty({ example: 18 })
+  estimatedRemainingMonths: number;
+  @ApiProperty({ example: 810000 })
+  estimatedRemainingDebt: number;
+}
+
+export class TotalDebtResponseDto {
+  @ApiProperty({ type: [TotalDebtItemDto] })
+  debts: TotalDebtItemDto[];
+  @ApiProperty({ example: 810000 })
+  totalEstimatedDebt: number;
+  @ApiProperty({ example: 45000 })
+  totalMonthlyCommitments: number;
+}
+
+export class MonthlyPaymentsBreakdownDto {
+  @ApiProperty({ example: 'CREDIT HABITAT' })
+  description: string;
+  @ApiProperty({ example: 45000 })
+  amount: number;
+  @ApiProperty({ example: 100 })
+  percent: number;
+}
+
+export class MonthlyPaymentsResponseDto {
+  @ApiProperty({ example: 45000 })
+  totalMonthlyPayments: number;
+  @ApiProperty({ type: [MonthlyPaymentsBreakdownDto] })
+  breakdown: MonthlyPaymentsBreakdownDto[];
+}
+
+export class DebtRatioResponseDto {
+  @ApiProperty({ example: 250000 })
+  monthlyIncome: number;
+  @ApiProperty({ example: 45000 })
+  monthlyDebtPayments: number;
+  @ApiProperty({ example: 18 })
+  debtRatio: number;
+  @ApiProperty({ example: 33 })
+  bceaoThreshold: number;
+  @ApiProperty({ example: 'SAIN' })
+  label: string;
+  @ApiProperty({ example: 100 })
+  score: number;
+  @ApiProperty({ example: 15 })
+  margin: number;
+  @ApiProperty({ example: 'Vous etes en dessous du seuil BCEAO de 33%' })
+  interpretation: string;
+}
+
+export class RepaymentHistoryItemDto {
+  @ApiProperty({ example: '2024-01' })
+  month: string;
+  @ApiProperty({ example: true })
+  paid: boolean;
+  @ApiProperty({ example: 0 })
+  daysFromExpected: number;
+}
+
+export class RepaymentHistoryResponseDto {
+  @ApiProperty({ example: 6 })
+  monthsAnalyzed: number;
+  @ApiProperty({ example: 6 })
+  paymentsOnTime: number;
+  @ApiProperty({ example: 100 })
+  regularityRate: number;
+  @ApiProperty({ example: 100 })
+  score: number;
+  @ApiProperty({ type: [RepaymentHistoryItemDto] })
+  history: RepaymentHistoryItemDto[];
+}
