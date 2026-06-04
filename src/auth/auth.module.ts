@@ -9,5 +9,6 @@ import { RedisService } from '../redis/redis.service';
   imports: [ConfigModule],
   providers: [AuthService, PrismaService, RedisService],
   controllers: [AuthController],
+  exports: [AuthService],
 })
 export class AuthModule {}

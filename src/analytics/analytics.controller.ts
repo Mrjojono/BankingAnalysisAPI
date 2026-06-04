@@ -1,9 +1,26 @@
-import { Controller, Get, Param, Query, Post, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  Post,
+  Body,
+  UseGuards,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import { OverviewService } from './overview/overview.service';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import {
   AnalyticsQueryDto,
   RevenueVariationQueryDto,
+  ClassifierFeedbackDto,
 } from './dto/analytics-query.dto';
 import {
   CashFlowAnalyticsDto,
@@ -27,6 +44,8 @@ import {
 import { parseUtcDate } from './helper';
 
 @ApiTags('Analytics')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('analytics')
 export class AnalyticsController {
   constructor(private overviewService: OverviewService) {}
@@ -42,7 +61,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: FullOverviewResponseDto })
   async getOverview(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     return this.overviewService.getFullOverview(
@@ -60,7 +79,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: CashFlowAnalyticsDto })
   async getCashFlow(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     const fromDate = query.from ? parseUtcDate(query.from) : undefined;
@@ -80,7 +99,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: RevenueAnalyticsDto })
   async getRevenueAnalytics(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     return this.overviewService.getRevenueAnalytics(
@@ -95,7 +114,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: RevenueAnalyticsDto })
   async getMonthlySummary(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     return this.overviewService.getMonthlySummary(
@@ -110,7 +129,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: IncomeFrequencyDto })
   async getIncomeFrequency(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     return this.overviewService.getIncomeFrequency(
@@ -125,7 +144,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: RevenueSourcesResponseDto })
   async getRevenueSources(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     const fromDate = query.from ? parseUtcDate(query.from) : undefined;
@@ -145,7 +164,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: RevenueVariationResponseDto })
   async getRevenueVariation(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: RevenueVariationQueryDto,
   ) {
     return this.overviewService.getRevenueVariation(
@@ -165,7 +184,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: ExpenseDto })
   async detectExpenses(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     const fromDate = query.from ? parseUtcDate(query.from) : undefined;
@@ -187,7 +206,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: CategoryExpenseDto })
   async getExpenseCategories(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     const fromDate = query.from ? parseUtcDate(query.from) : undefined;
@@ -209,7 +228,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: RecurringExpenseDto })
   async getRecurringExpenses(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query('months') months?: number,
     @Query() query?: AnalyticsQueryDto,
   ) {
@@ -228,7 +247,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: VariableExpenseAnalyticsDto })
   async getVariableExpenses(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     const fromDate = query.from ? parseUtcDate(query.from) : undefined;
@@ -250,7 +269,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: ExpenseRatioDto })
   async getExpenseRatio(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     const fromDate = query.from ? parseUtcDate(query.from) : undefined;
@@ -272,7 +291,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: AverageBalanceResponseDto })
   async getAverageBalance(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     return this.overviewService.getAverageBalance(
@@ -287,7 +306,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: BalanceExtremesResponseDto })
   async getBalanceExtremes(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     return this.overviewService.getBalanceExtremes(
@@ -304,7 +323,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: OverdraftAnalyticsResponseDto })
   async getOverdraftFrequency(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     return this.overviewService.getOverdraftFrequency(
@@ -321,7 +340,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: NegativePeriodsResponseDto })
   async getNegativePeriods(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     return this.overviewService.getNegativePeriods(
@@ -336,7 +355,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: BalanceVolatilityResponseDto })
   async getBalanceVolatility(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     return this.overviewService.getBalanceVolatility(
@@ -353,7 +372,7 @@ export class AnalyticsController {
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   @ApiResponse({ status: 200, type: DebtDto })
   async detectDebts(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     const fromDate = query.from ? parseUtcDate(query.from) : undefined;
@@ -371,14 +390,16 @@ export class AnalyticsController {
   @Get(':customerId/debt/total')
   @ApiOperation({ summary: 'Estimer le montant total des dettes' })
   @ApiParam({ name: 'customerId', description: 'ID du client' })
-  async getTotalDebt(@Param('customerId') customerId: string) {
+  async getTotalDebt(@Param('customerId', ParseUUIDPipe) customerId: string) {
     return this.overviewService.getTotalDebt(customerId);
   }
 
   @Get(':customerId/debt/monthly-payments')
   @ApiOperation({ summary: 'Analyser les mensualites de dette' })
   @ApiParam({ name: 'customerId', description: 'ID du client' })
-  async getMonthlyPayments(@Param('customerId') customerId: string) {
+  async getMonthlyPayments(
+    @Param('customerId', ParseUUIDPipe) customerId: string,
+  ) {
     return this.overviewService.getMonthlyPayments(customerId);
   }
 
@@ -386,7 +407,7 @@ export class AnalyticsController {
   @ApiOperation({ summary: "Calculer le taux d'endettement" })
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   async getDebtRatio(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     return this.overviewService.getDebtRatio(
@@ -402,10 +423,64 @@ export class AnalyticsController {
   })
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   async getRepaymentHistory(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query('months') months?: number,
   ) {
     return this.overviewService.getRepaymentHistory(customerId, months || 6);
+  }
+
+  // --- GLOBAL SCORE (EPIC 06) ---
+
+  @Get(':customerId/score')
+  @ApiOperation({ summary: 'Obtenir le score financier global' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  async getGlobalScore(
+    @Param('customerId', ParseUUIDPipe) customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getGlobalScore(
+      customerId,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/score/explanation')
+  @ApiOperation({ summary: 'Obtenir l’explication du score financier' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  async getScoreExplanation(
+    @Param('customerId', ParseUUIDPipe) customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getScoreExplanation(
+      customerId,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/score/history')
+  @ApiOperation({ summary: 'Obtenir l’historique du score financier' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  async getScoreHistory(
+    @Param('customerId', ParseUUIDPipe) customerId: string,
+    @Query('months') months?: number,
+  ) {
+    return this.overviewService.getScoreHistory(customerId, months || 6);
+  }
+
+  @Get(':customerId/score/recommendations')
+  @ApiOperation({ summary: 'Obtenir les recommandations automatiques' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  async getRecommendations(
+    @Param('customerId', ParseUUIDPipe) customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    return this.overviewService.getRecommendations(
+      customerId,
+      query.year,
+      query.month,
+    );
   }
 
   // --- ANALYSE DE L'ÉPARGNE (EPIC 05) ---
@@ -414,7 +489,7 @@ export class AnalyticsController {
   @ApiOperation({ summary: "Calculer le taux d'épargne mensuel" })
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   async getSavingsRate(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query() query: AnalyticsQueryDto,
   ) {
     return this.overviewService.getSavingsRate(
@@ -428,7 +503,7 @@ export class AnalyticsController {
   @ApiOperation({ summary: "Analyser la fréquence des dépôts d'épargne" })
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   async getSavingsFrequency(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query('months') months?: number,
   ) {
     return this.overviewService.getSavingsFrequency(customerId, months || 6);
@@ -438,7 +513,7 @@ export class AnalyticsController {
   @ApiOperation({ summary: 'Analyser la capacité de rétention du revenu' })
   @ApiParam({ name: 'customerId', description: 'ID du client' })
   async getRetentionCapacity(
-    @Param('customerId') customerId: string,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
     @Query('months') months?: number,
   ) {
     return this.overviewService.getRetentionCapacity(customerId, months || 3);
@@ -460,18 +535,11 @@ export class AnalyticsController {
 
   @Post('classifier/feedback')
   @ApiOperation({ summary: 'Enregistrer un feedback de classification' })
-  async saveFeedback(
-    @Body()
-    body: {
-      customerId: string;
-      description: string;
-      correctCategory: string;
-    },
-  ) {
+  async saveFeedback(@Body() body: ClassifierFeedbackDto) {
     return this.overviewService.recordFeedback(
       body.customerId,
       body.description,
-      body.correctCategory as any,
+      body.correctCategory,
     );
   }
 }

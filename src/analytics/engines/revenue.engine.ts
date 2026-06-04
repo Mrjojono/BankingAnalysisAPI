@@ -169,7 +169,21 @@ export class RevenueEngine {
       variationPercent: Math.round(variationPercent * 100) / 100,
       trend:
         variationPercent > 5 ? 'UP' : variationPercent < -5 ? 'DOWN' : 'STABLE',
-      rolling30Days: 0,
+      rolling30Days: (() => {
+        const rollingStart = new Date(analysisDate.getTime() - 30 * 86400000);
+        const rollingCredits = filterEntries(entries, {
+          direction: 'CREDIT',
+          accountType: 'CHECKING',
+          from: rollingStart,
+          to: analysisDate,
+        });
+        return rollingCredits
+          .reduce(
+            (s, e) => s.plus(new Decimal(e.amount.toString())),
+            new Decimal(0),
+          )
+          .toNumber();
+      })(),
     };
   }
 
@@ -185,7 +199,7 @@ export class RevenueEngine {
     const analysisDate = new Date(
       Date.UTC(refYear, refMonth, 0, 23, 59, 59, 999),
     );
-    const cutoff = new Date(analysisDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const cutoff = new Date(Date.UTC(refYear, refMonth - 1, 1));
 
     const credits = filterEntries(entries, {
       direction: 'CREDIT',

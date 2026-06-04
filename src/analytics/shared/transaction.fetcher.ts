@@ -131,6 +131,34 @@ export class TransactionFetcher {
     });
   }
 
+  async fetchCustomerTransactionsFiltered(
+    customerId: string,
+    from?: Date,
+    to?: Date,
+  ): Promise<Transaction[]> {
+    const where: any = {
+      OR: [
+        { senderCustomerId: customerId },
+        { receiverCustomerId: customerId },
+      ],
+      status: 'POSTED',
+    };
+
+    if (from || to) {
+      where.transactionDate = {};
+      if (from) where.transactionDate.gte = from;
+      if (to) where.transactionDate.lte = to;
+    }
+
+    const txs = await this.prisma.transaction.findMany({
+      where,
+      orderBy: {
+        transactionDate: 'desc',
+      },
+    });
+    return txs.map(this.mapTransaction);
+  }
+
   async fetchCustomerAccountsByType(
     customerId: string,
     type: 'CHECKING' | 'SAVINGS' | 'LOAN' | 'CORPORATE',

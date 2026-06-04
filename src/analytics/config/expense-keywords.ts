@@ -17,10 +17,31 @@ export enum ExpenseCategory {
   DEPOTS = 'DEPOTS',
   INTERETS = 'INTERETS',
   CREDIT = 'CREDIT',
+  SALAIRE = 'SALAIRE',
   DIVERS = 'DIVERS',
 }
 
 export const EXPENSE_KEYWORDS: Record<ExpenseCategory, string[]> = {
+  [ExpenseCategory.SALAIRE]: [
+    'SALAIRE',
+    'VRT SALAIRE',
+    'VIREMENT SALAIRE',
+    'VERSEMENT SALAIRE',
+    'TRAITEMENT',
+    'HONORAIRES',
+    'PENSION',
+    'ALLOCATION',
+    'REVENU',
+    'PAYE',
+    'PAIE',
+    'REMUNERATION',
+    'RÉMUNÉRATION',
+    'PRIME',
+    'GRATIFICATION',
+    'BONUS',
+    'INDEMNITE',
+    'INDEMNITÉ',
+  ],
   [ExpenseCategory.CREDIT]: [
     // Termes génériques
     'PRET',

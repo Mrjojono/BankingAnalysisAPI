@@ -11,12 +11,14 @@ import Decimal from 'decimal.js';
 import { filterEntries } from '../helper';
 import { Classifier } from '../shared/classifier';
 
+import { ANALYTICS_CONSTANTS } from '../config/constants';
+
 @Injectable()
 export class SavingsEngine {
   constructor(private classifier: Classifier) {}
 
   /**
-   * US-05.1 — Taux d'épargne
+   * Taux d'épargne
    * Épargne nette = Revenus - Dépenses - Remboursements
    */
   async calculateSavingsRate(
@@ -33,7 +35,8 @@ export class SavingsEngine {
         ? netSavings.div(monthlyIncome).times(100).toDP(1).toNumber()
         : 0;
 
-    const garmanForgueThreshold = 10;
+    const garmanForgueThreshold =
+      ANALYTICS_CONSTANTS.GARMAN_FORGUE_SAVINGS_RATE_THRESHOLD;
     let label: string;
     let score: number;
 
@@ -67,7 +70,7 @@ export class SavingsEngine {
   }
 
   /**
-   * US-05.2 — Fréquence des dépôts d'épargne (Hybride)
+   * Fréquence des dépôts d'épargne (Hybride)
    */
   async calculateSavingsFrequency(
     entries: Entry[],
@@ -156,7 +159,7 @@ export class SavingsEngine {
   }
 
   /**
-   * — Capacité de rétention
+   * Capacité de rétention
    */
   async calculateRetentionCapacity(
     transactions: Transaction[],

@@ -1,5 +1,14 @@
-import { IsOptional, IsDateString, IsInt, Min, Max } from 'class-validator';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsOptional,
+  IsDateString,
+  IsInt,
+  Min,
+  Max,
+  IsNotEmpty,
+  IsString,
+  IsIn,
+} from 'class-validator';
+import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export class AnalyticsQueryDto {
@@ -69,7 +78,7 @@ export class RevenueVariationQueryDto {
   months?: number;
 
   @ApiPropertyOptional({
-    description: 'Année de référence pour l’analyse',
+    description: "Année de référence pour l'analyse",
     example: 2024,
   })
   @IsOptional()
@@ -78,7 +87,7 @@ export class RevenueVariationQueryDto {
   year?: number;
 
   @ApiPropertyOptional({
-    description: 'Mois de référence pour l’analyse',
+    description: "Mois de référence pour l'analyse",
     example: 6,
   })
   @IsOptional()
@@ -87,4 +96,64 @@ export class RevenueVariationQueryDto {
   @Min(1)
   @Max(12)
   month?: number;
+}
+
+export class ClassifierFeedbackDto {
+  @ApiProperty({
+    description: 'ID du client',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @IsNotEmpty()
+  @IsString()
+  customerId: string;
+
+  @ApiProperty({
+    description: 'Description de la transaction',
+    example: 'VIR SALAIRE MARS 2024',
+  })
+  @IsNotEmpty()
+  @IsString()
+  description: string;
+
+  @ApiProperty({
+    description: 'Catégorie correcte',
+    enum: [
+      'LOGEMENT',
+      'ALIMENTATION',
+      'TRANSPORT',
+      'SANTE',
+      'MOBILE_MONEY',
+      'CARBURANT',
+      'COMMERCE',
+      'FRAIS_BANCAIRES',
+      'VIREMENTS',
+      'RETRAITS',
+      'DEPOTS',
+      'INTERETS',
+      'CREDIT',
+      'SALAIRE',
+      'DIVERS',
+    ],
+    example: 'SALAIRE',
+  })
+  @IsNotEmpty()
+  @IsString()
+  @IsIn([
+    'LOGEMENT',
+    'ALIMENTATION',
+    'TRANSPORT',
+    'SANTE',
+    'MOBILE_MONEY',
+    'CARBURANT',
+    'COMMERCE',
+    'FRAIS_BANCAIRES',
+    'VIREMENTS',
+    'RETRAITS',
+    'DEPOTS',
+    'INTERETS',
+    'CREDIT',
+    'SALAIRE',
+    'DIVERS',
+  ])
+  correctCategory: string;
 }

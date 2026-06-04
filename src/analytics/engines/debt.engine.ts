@@ -1,6 +1,6 @@
 import {
   Debt,
-  Transaction,
+  Entry,
   TotalDebtAnalytics,
   MonthlyPaymentsAnalytics,
   RepaymentHistoryAnalytics,
@@ -9,8 +9,10 @@ import {
 } from '../types';
 import Decimal from 'decimal.js';
 import { Classifier } from '../shared/classifier';
-import { filterTransactions } from '../helper';
+import { filterEntries } from '../helper';
 import { Injectable } from '@nestjs/common';
+
+import { ANALYTICS_CONSTANTS } from '../config/constants';
 
 /**
  * Moteur d'analyse des dettes .
@@ -21,38 +23,38 @@ export class DebtEngine {
 
   /**
    * Détection des dettes
-   * Analyse les transactions pour identifier les remboursements de crédits récurrents.
+   * Analyse les entrées comptables pour identifier les remboursements de crédits récurrents.
    */
   async detectDebts(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
     year?: number,
     month?: number,
     from?: Date,
     to?: Date,
   ): Promise<Debt> {
-    //  On s'appuie sur la détection des dépenses récurrentes
-    // Dans un contexte de dette, on cherche spécifiquement les catégories 'CREDIT' ou les descriptions liées
-    const MIN_OCCURRENCES = 2;
-    const AMOUNT_VARIATION_THRESHOLD = 0.1; // < 10%
-    const DAYS_INTERVAL_MIN = 25;
-    const DAYS_INTERVAL_MAX = 35;
+    const MIN_OCCURRENCES = ANALYTICS_CONSTANTS.MIN_RECURRING_OCCURRENCES;
+    const AMOUNT_VARIATION_THRESHOLD =
+      ANALYTICS_CONSTANTS.AMOUNT_VARIATION_THRESHOLD;
+    const DAYS_INTERVAL_MIN = ANALYTICS_CONSTANTS.DAYS_INTERVAL_MIN;
+    const DAYS_INTERVAL_MAX = ANALYTICS_CONSTANTS.DAYS_INTERVAL_MAX;
 
-    const debits = filterTransactions(transactions, {
-      customerId,
-      type: 'DEBIT',
+    const debits = filterEntries(entries, {
+      direction: 'DEBIT',
+      accountType: 'CHECKING',
       year,
       month,
       from,
       to,
     });
 
-    const groupedByDescription = new Map<string, Transaction[]>();
-    for (const tx of debits) {
-      if (tx.description) {
-        const normalizedDesc = tx.description.toLowerCase().trim();
+    const groupedByDescription = new Map<string, Entry[]>();
+    for (const entry of debits) {
+      const desc = entry.transaction.description;
+      if (desc) {
+        const normalizedDesc = desc.toLowerCase().trim();
         const group = groupedByDescription.get(normalizedDesc) || [];
-        group.push(tx);
+        group.push(entry);
         groupedByDescription.set(normalizedDesc, group);
       }
     }
@@ -62,12 +64,12 @@ export class DebtEngine {
     for (const [desc, group] of groupedByDescription.entries()) {
       if (group.length < MIN_OCCURRENCES) continue;
 
-      // Utilisation du Classifier injecté pour vérifier si c'est une dette (avec cache Redis)
-      // Le Classifier s'appuie sur les EXPENSE_KEYWORDS enrichis
       if (!(await this.classifier.isDebt(desc, customerId))) continue;
 
       group.sort(
-        (a, b) => a.transactionDate.getTime() - b.transactionDate.getTime(),
+        (a, b) =>
+          new Date(a.transaction.transactionDate).getTime() -
+          new Date(b.transaction.transactionDate).getTime(),
       );
 
       let isStable = true;
@@ -77,16 +79,15 @@ export class DebtEngine {
         const prev = group[i - 1];
         const current = group[i];
 
-        // Vérification de l'intervalle
+        const prevDate = new Date(prev.transaction.transactionDate);
+        const currDate = new Date(current.transaction.transactionDate);
         const days =
-          (current.transactionDate.getTime() - prev.transactionDate.getTime()) /
-          (1000 * 3600 * 24);
+          (currDate.getTime() - prevDate.getTime()) / (1000 * 3600 * 24);
         if (days < DAYS_INTERVAL_MIN || days > DAYS_INTERVAL_MAX) {
           isStable = false;
           break;
         }
 
-        // Vérification du montant
         const amtPrev = new Decimal(prev.amount.toString());
         const amtCurr = new Decimal(current.amount.toString());
         const variation = amtPrev.minus(amtCurr).abs().div(amtPrev);
@@ -98,15 +99,19 @@ export class DebtEngine {
 
       if (isStable) {
         group.forEach(
-          (tx) =>
-            (totalAmount = totalAmount.plus(new Decimal(tx.amount.toString()))),
+          (entry) =>
+            (totalAmount = totalAmount.plus(
+              new Decimal(entry.amount.toString()),
+            )),
         );
         const avgAmount = totalAmount.div(group.length).toDP(0).toNumber();
 
         detectedCredits.push({
-          description: group[0].description!,
+          description: group[0].transaction.description!,
           monthlyAmount: avgAmount,
-          firstDetected: group[0].transactionDate.toISOString().split('T')[0],
+          firstDetected: new Date(group[0].transaction.transactionDate)
+            .toISOString()
+            .split('T')[0],
           occurences: group.length,
           confidence: group.length > 3 ? 'HIGH' : 'MEDIUM',
         });
@@ -127,13 +132,10 @@ export class DebtEngine {
    * Estime la dette restante basee sur la duree typique des prets bancaires.
    */
   async calculateTotalDebt(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
   ): Promise<TotalDebtAnalytics> {
-    const { detectedCredits } = await this.detectDebts(
-      transactions,
-      customerId,
-    );
+    const { detectedCredits } = await this.detectDebts(entries, customerId);
 
     const debts = detectedCredits.map((credit) => {
       // Strategie d'estimation : on suppose une duree de 24 mois si peu d'occurrences,
@@ -168,11 +170,11 @@ export class DebtEngine {
    * Repartition des remboursements.
    */
   async calculateMonthlyPayments(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
   ): Promise<MonthlyPaymentsAnalytics> {
     const { detectedCredits, totalMonthlyDebt } = await this.detectDebts(
-      transactions,
+      entries,
       customerId,
     );
 
@@ -207,7 +209,7 @@ export class DebtEngine {
     monthlyIncome: number,
     monthlyDebtPayments: number,
   ): Promise<DebtRatioAnalytics> {
-    const bceaoThreshold = 33;
+    const bceaoThreshold = ANALYTICS_CONSTANTS.BCEAO_DEBT_RATIO_THRESHOLD;
     const debtRatio =
       monthlyIncome > 0
         ? new Decimal(monthlyDebtPayments)
@@ -225,14 +227,14 @@ export class DebtEngine {
       label = 'EXCELLENT';
       score = 100;
       interpretation = "Votre taux d'endettement est tres faible.";
-    } else if (debtRatio <= 33) {
+    } else if (debtRatio <= bceaoThreshold) {
       label = 'SAIN';
       score = 80;
-      interpretation = 'Vous etes en dessous du seuil BCEAO de 33%.';
+      interpretation = `Vous etes en dessous du seuil BCEAO de ${bceaoThreshold}%.`;
     } else if (debtRatio <= 45) {
       label = 'ATTENTION';
       score = 40;
-      interpretation = 'Vous depassez le seuil recommande de 33%.';
+      interpretation = `Vous depassez le seuil recommande de ${bceaoThreshold}%.`;
     } else {
       label = 'CRITIQUE';
       score = 10;
@@ -262,20 +264,24 @@ export class DebtEngine {
    * @returns Analyse de l'historique de remboursement
    */
   async calculateRepaymentHistory(
-    transactions: Transaction[],
+    entries: Entry[],
     customerId: string,
     months: number = 6,
   ): Promise<RepaymentHistoryAnalytics> {
-    const debits = filterTransactions(transactions, {
-      customerId,
-      type: 'DEBIT',
+    const debits = filterEntries(entries, {
+      direction: 'DEBIT',
+      accountType: 'CHECKING',
     });
 
-    // On cherche les remboursements de credit (via Classifier)
-    const creditTxs: Transaction[] = [];
-    for (const tx of debits) {
-      if (await this.classifier.isDebt(tx.description ?? '', customerId)) {
-        creditTxs.push(tx);
+    const creditEntries: Entry[] = [];
+    for (const entry of debits) {
+      if (
+        await this.classifier.isDebt(
+          entry.transaction.description ?? '',
+          customerId,
+        )
+      ) {
+        creditEntries.push(entry);
       }
     }
 
@@ -289,13 +295,16 @@ export class DebtEngine {
       );
       const monthStr = targetDate.toISOString().slice(0, 7);
 
-      const monthTx = creditTxs.find(
-        (tx) => tx.transactionDate.toISOString().slice(0, 7) === monthStr,
+      const monthEntry = creditEntries.find(
+        (entry) =>
+          new Date(entry.transaction.transactionDate)
+            .toISOString()
+            .slice(0, 7) === monthStr,
       );
 
-      if (monthTx) {
-        // Simulation du "jour attendu" : on suppose le 5 du mois
-        const day = monthTx.transactionDate.getUTCDate();
+      if (monthEntry) {
+        const txDate = new Date(monthEntry.transaction.transactionDate);
+        const day = txDate.getUTCDate();
         const diff = Math.abs(day - 5);
         const onTime = diff <= 5;
         if (onTime) paymentsOnTime++;

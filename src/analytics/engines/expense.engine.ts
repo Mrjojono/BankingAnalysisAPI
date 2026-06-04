@@ -11,6 +11,8 @@ import Decimal from 'decimal.js';
 import { Classifier } from '../shared/classifier';
 import { filterEntries } from '../helper';
 
+import { ANALYTICS_CONSTANTS } from '../config/constants';
+
 /**
  * Resultat de la detection des depenses recurrentes.
  */
@@ -26,7 +28,7 @@ export class ExpenseEngine {
   constructor(private classifier: Classifier) {}
 
   /**
-   * US-02.1 — Detection des depenses basee sur les DEBIT entries.
+   * Detection des depenses basee sur les DEBIT entries.
    */
   async getExpenses(
     entries: Entry[],
@@ -87,7 +89,7 @@ export class ExpenseEngine {
   }
 
   /**
-   * US-02.2 — Categories de depenses.
+   * Categories de depenses.
    */
   async getCategoryExpenses(
     entries: Entry[],
@@ -157,7 +159,7 @@ export class ExpenseEngine {
   }
 
   /**
-   * US-02.3 — Depenses recurrentes.
+   * Depenses recurrentes.
    */
   async detectRecurringExpenses(
     entries: Entry[],
@@ -168,8 +170,9 @@ export class ExpenseEngine {
     from?: Date,
     to?: Date,
   ): Promise<RecurringDetectionResult> {
-    const MIN_OCCURRENCES = 2;
-    const AMOUNT_VARIATION_THRESHOLD = 0.1;
+    const MIN_OCCURRENCES = ANALYTICS_CONSTANTS.MIN_RECURRING_OCCURRENCES;
+    const AMOUNT_VARIATION_THRESHOLD =
+      ANALYTICS_CONSTANTS.AMOUNT_VARIATION_THRESHOLD;
 
     // 1. Définir la période d'analyse
     const now = new Date();
@@ -179,7 +182,12 @@ export class ExpenseEngine {
       to ?? new Date(Date.UTC(refYear, refMonth, 0, 23, 59, 59, 999));
     const cutoffDate =
       from ??
-      new Date(analysisDate.getTime() - months * 30 * 24 * 60 * 60 * 1000);
+      new Date(
+        analysisDate.getTime() -
+          months *
+            ANALYTICS_CONSTANTS.DAYS_IN_MONTH *
+            ANALYTICS_CONSTANTS.MS_IN_DAY,
+      );
 
     const debits = filterEntries(entries, {
       direction: 'DEBIT',
@@ -219,9 +227,13 @@ export class ExpenseEngine {
         const prevDate = new Date(group[i - 1].transaction.transactionDate);
         const currDate = new Date(group[i].transaction.transactionDate);
         const daysDiff =
-          (currDate.getTime() - prevDate.getTime()) / (1000 * 3600 * 24);
+          (currDate.getTime() - prevDate.getTime()) /
+          ANALYTICS_CONSTANTS.MS_IN_DAY;
 
-        if (daysDiff < 25 || daysDiff > 35) {
+        if (
+          daysDiff < ANALYTICS_CONSTANTS.DAYS_INTERVAL_MIN ||
+          daysDiff > ANALYTICS_CONSTANTS.DAYS_INTERVAL_MAX
+        ) {
           isRecurring = false;
           break;
         }
@@ -248,7 +260,20 @@ export class ExpenseEngine {
           averageAmount: avgAmount.toDP(0).toNumber(),
           frequency: 'MONTHLY',
           occurrences: group.length,
-          nextExpectedDate: '', // A calculer
+          nextExpectedDate: (() => {
+            const lastDate =
+              group[group.length - 1].transaction.transactionDate;
+            const avgInterval =
+              group.length > 1
+                ? (lastDate.getTime() -
+                    new Date(group[0].transaction.transactionDate).getTime()) /
+                  (group.length - 1)
+                : ANALYTICS_CONSTANTS.DAYS_IN_MONTH *
+                  ANALYTICS_CONSTANTS.MS_IN_DAY;
+            return new Date(lastDate.getTime() + avgInterval)
+              .toISOString()
+              .split('T')[0];
+          })(),
           category: await this.classifier.categorizeWithCache(
             group[0].transaction.description!,
             customerId,

@@ -1,11 +1,11 @@
-import { Logger, Injectable } from '@nestjs/common';
+import { Logger, Injectable, OnModuleInit } from '@nestjs/common';
 import { RedisService } from '../../redis/redis.service';
 import { EXPENSE_KEYWORDS, ExpenseCategory } from '../config/expense-keywords';
 import Fuse from 'fuse.js';
 import * as natural from 'natural';
 
 @Injectable()
-export class Classifier {
+export class Classifier implements OnModuleInit {
   private readonly logger = new Logger(Classifier.name);
 
   // Fuse instance (fuzzy matching)
@@ -19,11 +19,11 @@ export class Classifier {
   // Cache des règles globales (mots-clés dynamiques)
   private static globalRules: Record<string, ExpenseCategory> = {};
 
-  constructor(private redisService: RedisService) {
+  constructor(private redisService: RedisService) {}
+
+  async onModuleInit() {
     this.initClassifier();
-    this.loadGlobalRules().catch((e) =>
-      this.logger.warn('Failed to load global rules', e),
-    );
+    await this.loadGlobalRules();
   }
 
   /**
@@ -76,10 +76,6 @@ export class Classifier {
       this.logger.warn('Failed to load global rules', e);
     }
   }
-
-  // ──────────────────────────────────────────────────────────
-  // PIPELINE DE CLASSIFICATION (ORDONNÉ PAR PRIORITÉ)
-  // ──────────────────────────────────────────────────────────
 
   /**
    * Classification avec cache et règles globales
@@ -177,10 +173,6 @@ export class Classifier {
     return ExpenseCategory.DIVERS;
   }
 
-  // ──────────────────────────────────────────────────────────
-  // GESTION DU FEEDBACK (OPTIMISÉ)
-  // ──────────────────────────────────────────────────────────
-
   /**
    * Enregistre une correction.
    * Elle devient une RÈGLE GLOBALE pour tout le système.
@@ -188,11 +180,12 @@ export class Classifier {
   async recordFeedback(
     customerId: string,
     description: string,
-    actualCategory: ExpenseCategory,
+    actualCategory: string,
   ): Promise<void> {
     const desc = description.toUpperCase().trim();
+    const category = actualCategory as ExpenseCategory;
 
-    Classifier.globalRules[desc] = actualCategory;
+    Classifier.globalRules[desc] = category;
     await this.redisService.set(
       'classifier:global_rules',
       JSON.stringify(Classifier.globalRules),
@@ -205,7 +198,7 @@ export class Classifier {
 
     // 3. Apprentissage Bayes (Global)
     if (Classifier.bayesClassifier) {
-      Classifier.bayesClassifier.addDocument(desc, actualCategory);
+      Classifier.bayesClassifier.addDocument(desc, category);
       Classifier.bayesClassifier.train();
     }
 
@@ -213,10 +206,6 @@ export class Classifier {
       `Feedback GLOBAL enregistré : "${desc}" → ${actualCategory}`,
     );
   }
-
-  // ──────────────────────────────────────────────────────────
-  // UTILITAIRES
-  // ──────────────────────────────────────────────────────────
 
   async isDebt(description: string, customerId?: string): Promise<boolean> {
     if (!description) return false;

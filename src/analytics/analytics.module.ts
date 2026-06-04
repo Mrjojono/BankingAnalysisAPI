@@ -10,10 +10,13 @@ import { RevenueEngine } from './engines/revenue.engine';
 import { BalanceEngine } from './engines/balance.engine';
 import { DebtEngine } from './engines/debt.engine';
 import { SavingsEngine } from './engines/savings.engine';
+import { ScoreEngine } from './engines/score.engine';
+import { RecommendationEngine } from './engines/recommendation.engine';
 import { RedisModule } from '../redis/redis.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [RedisModule],
+  imports: [RedisModule, AuthModule],
   controllers: [AnalyticsController],
   providers: [
     TransactionFetcher,
@@ -26,6 +29,8 @@ import { RedisModule } from '../redis/redis.module';
     BalanceEngine,
     DebtEngine,
     SavingsEngine,
+    ScoreEngine,
+    RecommendationEngine,
   ],
 })
 export class AnalyticsModule {}

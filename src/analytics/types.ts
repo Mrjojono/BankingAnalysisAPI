@@ -371,3 +371,86 @@ export type SavingsRetentionAnalytics = {
   }[];
   interpretation: string;
 };
+
+export type ScoreComponent = {
+  score: number;
+  weight: number;
+  contribution: number;
+};
+
+export type GlobalScoreResponse = {
+  globalScore: number;
+  label: string;
+  components: {
+    C1_expenses: ScoreComponent;
+    C2_debt: ScoreComponent;
+    C3_savings: ScoreComponent;
+    C4_stability: ScoreComponent;
+  };
+  methodology: string;
+};
+
+export type ScoreIndicator = {
+  name: string;
+  value: string;
+  score: number;
+  impact: 'POSITIF' | 'NEGATIF' | 'NEUTRE';
+};
+
+export type ScoreExplanationResponse = {
+  globalScore: number;
+  strengths: string[];
+  weaknesses: string[];
+  indicators: ScoreIndicator[];
+};
+
+export type ScoreHistoryItem = {
+  month: string;
+  score: number;
+  label: string;
+};
+
+export type ScoreHistoryResponse = {
+  history: ScoreHistoryItem[];
+  trend: 'UP' | 'DOWN' | 'STABLE';
+  improvement: string;
+};
+
+export type Recommendation = {
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  component: string;
+  trigger: string;
+  title: string;
+  message: string;
+  actionAmount?: number;
+  source: string;
+};
+
+export type RecommendationResponse = {
+  recommendations: Recommendation[];
+};
+
+export type ScoreMetrics = {
+  expenseRatioScore: number;
+  paymentRegularityScore: number;
+  debtRatioScore: number;
+  repaymentRegularityScore: number;
+  creditUtilizationScore: number;
+  savingsRateScore: number;
+  emergencyFundScore: number;
+  savingsRegularityScore: number;
+  overdraftScore: number;
+  revenueVolatilityScore: number;
+  balanceVolatilityScore: number;
+};
+
+export type RecommendationMetrics = {
+  debtRatio: number;
+  savingsRate: number;
+  overdraftDays: number;
+  expenseRatio: number;
+  revenueVolatility: number;
+  repaymentRegularity: number;
+  monthlyIncome: number;
+  monthlyExpenses: number;
+};

@@ -6,9 +6,12 @@ import { RevenueEngine } from '../engines/revenue.engine';
 import { BalanceEngine } from '../engines/balance.engine';
 import { DebtEngine } from '../engines/debt.engine';
 import { SavingsEngine } from '../engines/savings.engine';
+import { ScoreEngine } from '../engines/score.engine';
+import { RecommendationEngine } from '../engines/recommendation.engine';
 import { DashboardGateway } from '../../gateway/dashboard.gateway';
 import { Classifier } from '../shared/classifier';
 import { Entry } from '../types';
+import { ANALYTICS_CONSTANTS } from '../config/constants';
 
 @Injectable()
 export class OverviewService {
@@ -20,6 +23,8 @@ export class OverviewService {
     private balanceEngine: BalanceEngine,
     private debtEngine: DebtEngine,
     private savingsEngine: SavingsEngine,
+    private scoreEngine: ScoreEngine,
+    private recommendationEngine: RecommendationEngine,
     private gateway: DashboardGateway,
     private classifier: Classifier,
   ) {}
@@ -115,22 +120,26 @@ export class OverviewService {
     month?: number,
   ) {
     this.gateway.emit('analytics_requested', { type: 'EXPENSES', customerId });
-    const { refYear, refMonth } = await this.resolveRange(
+    const { startDate, endDate, refYear, refMonth } = await this.resolveRange(
       customerId,
       from,
       to,
       year,
       month,
     );
-    const entries = await this.getCertifiedEntries(customerId);
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      startDate,
+      endDate,
+    );
 
     return await this.expenseEngine.getExpenses(
       entries,
       customerId,
       refYear,
       refMonth,
-      from,
-      to,
+      startDate,
+      endDate,
     );
   }
 
@@ -145,22 +154,26 @@ export class OverviewService {
       type: 'CATEGORIES',
       customerId,
     });
-    const { refYear, refMonth } = await this.resolveRange(
+    const { startDate, endDate, refYear, refMonth } = await this.resolveRange(
       customerId,
       from,
       to,
       year,
       month,
     );
-    const entries = await this.getCertifiedEntries(customerId);
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      startDate,
+      endDate,
+    );
 
     return await this.expenseEngine.getCategoryExpenses(
       entries,
       customerId,
       refYear,
       refMonth,
-      from,
-      to,
+      startDate,
+      endDate,
     );
   }
 
@@ -171,12 +184,22 @@ export class OverviewService {
     month?: number,
   ) {
     this.gateway.emit('analytics_requested', { type: 'RECURRING', customerId });
-    const { refYear, refMonth } = await this.resolveReferenceDate(
+    const { refYear, refMonth, analysisDate } = await this.resolveReferenceDate(
       customerId,
       year,
       month,
     );
-    const entries = await this.getCertifiedEntries(customerId);
+    const lookbackStart = new Date(
+      analysisDate.getTime() -
+        months *
+          ANALYTICS_CONSTANTS.DAYS_IN_MONTH *
+          ANALYTICS_CONSTANTS.MS_IN_DAY,
+    );
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      lookbackStart,
+      analysisDate,
+    );
 
     return await this.expenseEngine.detectRecurringExpenses(
       entries,
@@ -195,22 +218,26 @@ export class OverviewService {
     month?: number,
   ) {
     this.gateway.emit('analytics_requested', { type: 'VARIABLE', customerId });
-    const { refYear, refMonth } = await this.resolveRange(
+    const { startDate, endDate, refYear, refMonth } = await this.resolveRange(
       customerId,
       from,
       to,
       year,
       month,
     );
-    const entries = await this.getCertifiedEntries(customerId);
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      startDate,
+      endDate,
+    );
 
     return await this.expenseEngine.calculateVariableExpenses(
       entries,
       customerId,
       refYear,
       refMonth,
-      from,
-      to,
+      startDate,
+      endDate,
     );
   }
 
@@ -229,7 +256,11 @@ export class OverviewService {
       year,
       month,
     );
-    const entries = await this.getCertifiedEntries(customerId);
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      startDate,
+      endDate,
+    );
 
     const summary = await this.revenueEngine.buildFinancialSummary(
       entries,
@@ -250,18 +281,21 @@ export class OverviewService {
     month?: number,
   ) {
     this.gateway.emit('analytics_requested', { type: 'DEBTS', customerId });
-    const { refYear, refMonth, startDate, endDate } = await this.resolveRange(
+    const { startDate, endDate, refYear, refMonth } = await this.resolveRange(
       customerId,
       from,
       to,
       year,
       month,
     );
-    const transactions =
-      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      startDate,
+      endDate,
+    );
 
     return await this.debtEngine.detectDebts(
-      transactions,
+      entries,
       customerId,
       refYear,
       refMonth,
@@ -271,27 +305,27 @@ export class OverviewService {
   }
 
   async getTotalDebt(customerId: string) {
-    const transactions =
-      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
-    return await this.debtEngine.calculateTotalDebt(transactions, customerId);
+    const entries = await this.getCertifiedEntries(customerId);
+    return await this.debtEngine.calculateTotalDebt(entries, customerId);
   }
 
   async getMonthlyPayments(customerId: string) {
-    const transactions =
-      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
-    return await this.debtEngine.calculateMonthlyPayments(
-      transactions,
-      customerId,
-    );
+    const entries = await this.getCertifiedEntries(customerId);
+    return await this.debtEngine.calculateMonthlyPayments(entries, customerId);
   }
 
   async getDebtRatio(customerId: string, year?: number, month?: number) {
-    const { refYear, refMonth } = await this.resolveReferenceDate(
+    const { refYear, refMonth, analysisDate } = await this.resolveReferenceDate(
       customerId,
       year,
       month,
     );
-    const entries = await this.getCertifiedEntries(customerId);
+    const lookbackStart = new Date(Date.UTC(refYear, refMonth - 6, 1));
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      lookbackStart,
+      analysisDate,
+    );
 
     const revenues = await this.revenueEngine.computeRevenueAnalytics(
       entries,
@@ -299,10 +333,8 @@ export class OverviewService {
       refYear,
       refMonth,
     );
-    const transactions =
-      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
     const debts = await this.debtEngine.detectDebts(
-      transactions,
+      entries,
       customerId,
       refYear,
       refMonth,
@@ -315,10 +347,9 @@ export class OverviewService {
   }
 
   async getRepaymentHistory(customerId: string, months: number = 6) {
-    const transactions =
-      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+    const entries = await this.getCertifiedEntries(customerId);
     return await this.debtEngine.calculateRepaymentHistory(
-      transactions,
+      entries,
       customerId,
       months,
     );
@@ -411,11 +442,18 @@ export class OverviewService {
       month,
     );
     const startOfMonth = new Date(Date.UTC(refYear, refMonth - 1, 1));
+    const endOfMonth = new Date(
+      Date.UTC(refYear, refMonth, 0, 23, 59, 59, 999),
+    );
     const initialBalance = await this.balanceReconstructor.reconstructBalance(
       customerId,
       startOfMonth,
     );
-    const entries = await this.getCertifiedEntries(customerId);
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      startOfMonth,
+      endOfMonth,
+    );
 
     return {
       dailyBalances: await this.balanceEngine.reconstructMonthlyDailyBalances(
@@ -445,7 +483,11 @@ export class OverviewService {
       year,
       month,
     );
-    const entries = await this.getCertifiedEntries(customerId);
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      startDate,
+      endDate,
+    );
     return await this.revenueEngine.buildFinancialSummary(entries, customerId, {
       from: startDate,
       to: endDate,
@@ -454,12 +496,17 @@ export class OverviewService {
 
   async getRevenueAnalytics(customerId: string, year?: number, month?: number) {
     this.gateway.emit('analytics_requested', { type: 'REVENUES', customerId });
-    const { refYear, refMonth } = await this.resolveReferenceDate(
+    const { refYear, refMonth, analysisDate } = await this.resolveReferenceDate(
       customerId,
       year,
       month,
     );
-    const entries = await this.getCertifiedEntries(customerId);
+    const lookbackStart = new Date(Date.UTC(refYear, refMonth - 6, 1));
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      lookbackStart,
+      analysisDate,
+    );
     return await this.revenueEngine.computeRevenueAnalytics(
       entries,
       customerId,
@@ -473,12 +520,17 @@ export class OverviewService {
       type: 'MONTHLY_SUMMARY',
       customerId,
     });
-    const { refYear, refMonth } = await this.resolveReferenceDate(
+    const { refYear, refMonth, analysisDate } = await this.resolveReferenceDate(
       customerId,
       year,
       month,
     );
-    const entries = await this.getCertifiedEntries(customerId);
+    const lookbackStart = new Date(Date.UTC(refYear, refMonth - 6, 1));
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      lookbackStart,
+      analysisDate,
+    );
     return await this.revenueEngine.monthlySummaryIncome(
       entries,
       customerId,
@@ -492,12 +544,17 @@ export class OverviewService {
       type: 'INCOME_FREQ',
       customerId,
     });
-    const { refYear, refMonth } = await this.resolveReferenceDate(
+    const { refYear, refMonth, analysisDate } = await this.resolveReferenceDate(
       customerId,
       year,
       month,
     );
-    const entries = await this.getCertifiedEntries(customerId);
+    const lookbackStart = new Date(Date.UTC(refYear, refMonth - 1, 1));
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      lookbackStart,
+      analysisDate,
+    );
     return await this.revenueEngine.computeIncomeFrequency(
       entries,
       customerId,
@@ -543,12 +600,17 @@ export class OverviewService {
       type: 'REVENUE_VARIATION',
       customerId,
     });
-    const { refYear, refMonth } = await this.resolveReferenceDate(
+    const { refYear, refMonth, analysisDate } = await this.resolveReferenceDate(
       customerId,
       year,
       month,
     );
-    const entries = await this.getCertifiedEntries(customerId);
+    const lookbackStart = new Date(Date.UTC(refYear, refMonth - months, 1));
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      lookbackStart,
+      analysisDate,
+    );
     return await this.revenueEngine.computeRevenueVariation(
       entries,
       customerId,
@@ -563,14 +625,17 @@ export class OverviewService {
       type: 'SAVINGS_RATE',
       customerId,
     });
-    const { refYear, refMonth } = await this.resolveReferenceDate(
+    const { refYear, refMonth, analysisDate } = await this.resolveReferenceDate(
       customerId,
       year,
       month,
     );
-    const entries = await this.getCertifiedEntries(customerId);
-    const transactions =
-      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+    const lookbackStart = new Date(Date.UTC(refYear, refMonth - 6, 1));
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      lookbackStart,
+      analysisDate,
+    );
 
     const revenues = await this.revenueEngine.computeRevenueAnalytics(
       entries,
@@ -585,7 +650,7 @@ export class OverviewService {
       refMonth,
     );
     const debts = await this.debtEngine.detectDebts(
-      transactions,
+      entries,
       customerId,
       refYear,
       refMonth,
@@ -603,7 +668,11 @@ export class OverviewService {
       type: 'SAVINGS_FREQ',
       customerId,
     });
-    const entries = await this.getCertifiedEntries(customerId);
+    const now = new Date();
+    const lookbackStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months, 1),
+    );
+    const entries = await this.getCertifiedEntries(customerId, lookbackStart);
     const savingsAccounts =
       await this.transactionFetcher.fetchCustomerAccountsByType(
         customerId,
@@ -642,9 +711,6 @@ export class OverviewService {
       year,
       month,
     );
-    const entries = await this.getCertifiedEntries(customerId);
-    const transactions =
-      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
 
     const to = analysisDate;
     const from = new Date(
@@ -654,6 +720,7 @@ export class OverviewService {
         1,
       ),
     );
+    const entries = await this.getCertifiedEntries(customerId, from, to);
 
     const [
       cashFlow,
@@ -695,7 +762,7 @@ export class OverviewService {
         refMonth,
       ),
       this.debtEngine.detectDebts(
-        transactions,
+        entries,
         customerId,
         refYear,
         refMonth,
@@ -739,7 +806,7 @@ export class OverviewService {
   async recordFeedback(
     customerId: string,
     description: string,
-    correctCategory: any,
+    correctCategory: string,
   ) {
     await this.classifier.recordFeedback(
       customerId,
@@ -752,5 +819,239 @@ export class OverviewService {
       correctCategory,
     });
     return { success: true };
+  }
+
+  // --- GLOBAL FINANCIAL SCORE ---
+
+  async getGlobalScore(
+    customerId: string,
+    year?: number,
+    month?: number,
+  ): Promise<any> {
+    const metrics = await this.gatherMetrics(customerId, year, month);
+    return this.scoreEngine.calculateGlobalScore(metrics);
+  }
+
+  async getScoreExplanation(
+    customerId: string,
+    year?: number,
+    month?: number,
+  ): Promise<any> {
+    const metrics = await this.gatherMetrics(customerId, year, month);
+    const scoreRes = await this.scoreEngine.calculateGlobalScore(metrics);
+
+    const indicators: any[] = [
+      {
+        name: 'Ratio dépenses/revenus',
+        value: `${metrics.expenseRatio}%`,
+        score: metrics.expenseRatioScore,
+        impact:
+          metrics.expenseRatioScore >= 80
+            ? 'POSITIF'
+            : metrics.expenseRatioScore >= 40
+              ? 'NEUTRE'
+              : 'NEGATIF',
+      },
+      {
+        name: "Taux d'endettement",
+        value: `${metrics.debtRatio}%`,
+        score: metrics.debtRatioScore,
+        impact:
+          metrics.debtRatioScore >= 80
+            ? 'POSITIF'
+            : metrics.debtRatioScore >= 40
+              ? 'NEUTRE'
+              : 'NEGATIF',
+      },
+      {
+        name: "Taux d'épargne",
+        value: `${metrics.savingsRate}%`,
+        score: metrics.savingsRateScore,
+        impact:
+          metrics.savingsRateScore >= 75
+            ? 'POSITIF'
+            : metrics.savingsRateScore >= 45
+              ? 'NEUTRE'
+              : 'NEGATIF',
+      },
+      {
+        name: 'Jours à découvert',
+        value: `${metrics.overdraftDays} jours`,
+        score: metrics.overdraftScore,
+        impact: metrics.overdraftScore >= 85 ? 'POSITIF' : 'NEGATIF',
+      },
+    ];
+
+    return this.scoreEngine.explainScore(scoreRes.globalScore, indicators);
+  }
+
+  async getScoreHistory(customerId: string, months: number = 6): Promise<any> {
+    const history: any[] = [];
+    const now = new Date();
+
+    for (let i = 0; i < months; i++) {
+      const targetDate = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1),
+      );
+      const y = targetDate.getUTCFullYear();
+      const m = targetDate.getUTCMonth() + 1;
+      const metrics = await this.gatherMetrics(customerId, y, m);
+      const scoreRes = await this.scoreEngine.calculateGlobalScore(metrics);
+
+      history.push({
+        month: targetDate.toISOString().slice(0, 7),
+        score: scoreRes.globalScore,
+        label: this.scoreEngine.getScoreLabel(scoreRes.globalScore),
+      });
+    }
+
+    return this.scoreEngine.calculateHistory(history.reverse());
+  }
+
+  async getRecommendations(
+    customerId: string,
+    year?: number,
+    month?: number,
+  ): Promise<any> {
+    const metrics = await this.gatherMetrics(customerId, year, month);
+    const recommendations = this.recommendationEngine.generate({
+      debtRatio: metrics.debtRatio,
+      savingsRate: metrics.savingsRate,
+      overdraftDays: metrics.overdraftDays,
+      expenseRatio: metrics.expenseRatio,
+      revenueVolatility: metrics.revenueVolatilityScore,
+      repaymentRegularity: metrics.repaymentRegularityScore,
+      monthlyIncome: metrics.monthlyIncome,
+      monthlyExpenses: metrics.monthlyExpenses,
+    });
+    return { recommendations };
+  }
+
+  private async gatherMetrics(
+    customerId: string,
+    year?: number,
+    month?: number,
+  ): Promise<any> {
+    const { refYear, refMonth, analysisDate } = await this.resolveReferenceDate(
+      customerId,
+      year,
+      month,
+    );
+    const lookbackStart = new Date(Date.UTC(refYear, refMonth - 6, 1));
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      lookbackStart,
+      analysisDate,
+    );
+    const { dailyBalances } = await this.getMonthlyDailyBalances(
+      customerId,
+      refYear,
+      refMonth,
+    );
+    const savingsAccounts =
+      await this.transactionFetcher.fetchCustomerAccountsByType(
+        customerId,
+        'SAVINGS',
+      );
+
+    const [
+      revenues,
+      expenses,
+      debtAnalytics,
+      repaymentHistory,
+      savingsFrequency,
+      overdraftFrequency,
+      revenueVariation,
+    ] = await Promise.all([
+      this.revenueEngine.computeRevenueAnalytics(
+        entries,
+        customerId,
+        refYear,
+        refMonth,
+      ),
+      this.expenseEngine.getExpenses(entries, customerId, refYear, refMonth),
+      this.debtEngine.detectDebts(entries, customerId, refYear, refMonth),
+      this.debtEngine.calculateRepaymentHistory(entries, customerId, 6),
+      this.savingsEngine.calculateSavingsFrequency(
+        entries,
+        customerId,
+        savingsAccounts,
+        6,
+      ),
+      this.balanceEngine.calculateOverdraftFrequency(dailyBalances),
+      this.revenueEngine.computeRevenueVariation(
+        entries,
+        customerId,
+        6,
+        refYear,
+        refMonth,
+      ),
+    ]);
+
+    // Re-calcul des scores avec les bonnes dépendances
+    const actualExpenseRatio = await this.expenseEngine.calculateExpenseRatio(
+      revenues.currentMonth.total,
+      expenses.totalExpenses,
+    );
+    const actualDebtRatio = await this.debtEngine.calculateDebtRatio(
+      revenues.currentMonth.total,
+      debtAnalytics.totalMonthlyDebt,
+    );
+    const actualSavingsRate = await this.savingsEngine.calculateSavingsRate(
+      revenues.currentMonth.total,
+      expenses.totalExpenses,
+      debtAnalytics.totalMonthlyDebt,
+    );
+
+    const avgBalanceRes = await this.balanceEngine.calculateAverageBalance(
+      dailyBalances,
+      refYear,
+      refMonth,
+    );
+    const actualBalanceVolatility =
+      await this.balanceEngine.calculateVolatility(
+        dailyBalances,
+        avgBalanceRes.averageBalance,
+      );
+
+    // Emergency Fund Score
+    const monthsCovered =
+      expenses.totalExpenses > 0
+        ? avgBalanceRes.averageBalance / expenses.totalExpenses
+        : avgBalanceRes.averageBalance > 0
+          ? 6
+          : 0;
+    const emergencyFundScore =
+      monthsCovered >= 3 ? 100 : monthsCovered >= 1 ? 50 : 20;
+
+    return {
+      monthlyIncome: revenues.currentMonth.total,
+      monthlyExpenses: expenses.totalExpenses,
+      expenseRatioScore: actualExpenseRatio.score,
+      expenseRatio: actualExpenseRatio.ratio,
+      paymentRegularityScore: repaymentHistory.score,
+      debtRatioScore: actualDebtRatio.score,
+      debtRatio: actualDebtRatio.debtRatio,
+      repaymentRegularityScore: repaymentHistory.score,
+      creditUtilizationScore:
+        actualDebtRatio.debtRatio === 0
+          ? 100
+          : actualDebtRatio.debtRatio <= 15
+            ? 80
+            : actualDebtRatio.debtRatio <=
+                ANALYTICS_CONSTANTS.BCEAO_DEBT_RATIO_THRESHOLD
+              ? 60
+              : actualDebtRatio.debtRatio <= 45
+                ? 30
+                : 10,
+      savingsRateScore: actualSavingsRate.score,
+      savingsRate: actualSavingsRate.savingsRate,
+      emergencyFundScore,
+      savingsRegularityScore: savingsFrequency.score,
+      overdraftScore: overdraftFrequency.score,
+      overdraftDays: overdraftFrequency.overdraftDays,
+      revenueVolatilityScore: revenueVariation.volatilityScore,
+      balanceVolatilityScore: actualBalanceVolatility.score,
+    };
   }
 }
