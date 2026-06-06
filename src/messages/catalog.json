@@ -1,0 +1,412 @@
+{
+  "eligibility": {
+    "RATE_MAX": {
+      "label": "taux d'endettement",
+      "unit": "%",
+      "pass": [
+        "Votre {label} de {value}{unit} respecte la limite autorisée de {threshold}{unit}.",
+        "Bon point : votre {label} ({value}{unit}) reste sous le plafond réglementaire de {threshold}{unit}.",
+        "{label} conforme : {value}{unit} (maximum autorisé : {threshold}{unit})."
+      ],
+      "fail": [
+        "Votre {label} de {value}{unit} dépasse le maximum autorisé de {threshold}{unit}.",
+        "Attention : votre {label} de {value}{unit} est trop élevé (plafond : {threshold}{unit})."
+      ],
+      "partial": [
+        "Votre {label} de {value}{unit} approche le plafond de {threshold}{unit}. Un examen complémentaire est possible.",
+        "Votre {label} ({value}{unit}) est proche de la limite ({threshold}{unit})."
+      ],
+      "advice": [
+        "Pour être éligible, réduisez votre {label} de {gap}{unit} pour atteindre {threshold}{unit} maximum. Remboursez une partie de vos dettes pour y parvenir.",
+        "Ciblez un {label} de {threshold}{unit} au lieu de {value}{unit}. Un remboursement anticipé peut vous aider."
+      ]
+    },
+    "RATE_MIN": {
+      "label": "taux d'épargne",
+      "unit": "%",
+      "pass": [
+        "Votre {label} de {value}{unit} est satisfaisant (minimum recommandé : {threshold}{unit}).",
+        "Critère rempli : {value}{unit} pour un seuil minimum de {threshold}{unit}.",
+        "Bon réflexe : votre {label} de {value}{unit} dépasse le minimum requis de {threshold}{unit}."
+      ],
+      "fail": [
+        "Votre {label} de {value}{unit} est insuffisant (minimum : {threshold}{unit}).",
+        "Il vous manque du {label} : {value}{unit} au lieu de {threshold}{unit} minimum."
+      ],
+      "partial": [
+        "Votre {label} de {value}{unit} est proche du minimum de {threshold}{unit}. Un petit effort supplémentaire suffira.",
+        "Presque : votre {label} est à {value}{unit}, le seuil est de {threshold}{unit}."
+      ],
+      "advice": [
+        "Augmentez votre {label} de {gap}{unit} pour atteindre les {threshold}{unit} recommandés. Mettez en place un virement automatique chaque mois.",
+        "Essayez d'atteindre {threshold}{unit} d'épargne (actuellement {value}{unit}). Chaque mois compte."
+      ]
+    },
+    "AMOUNT_MIN": {
+      "label": "revenus mensuels",
+      "unit": " FCFA",
+      "pass": [
+        "Vos revenus mensuels de {value}{unit} sont suffisants (minimum requis : {threshold}{unit}).",
+        "Avec {value}{unit} de revenus, vous remplissez ce critère (seuil : {threshold}{unit}).",
+        "Revenus conformes : {value}{unit} (minimum : {threshold}{unit})."
+      ],
+      "fail": [
+        "Vos revenus de {value}{unit} sont insuffisants (minimum : {threshold}{unit}).",
+        "Revenus trop faibles : {value}{unit} au lieu de {threshold}{unit} minimum."
+      ],
+      "partial": [
+        "Vos revenus de {value}{unit} sont légèrement en dessous du seuil de {threshold}{unit}. Un apport complémentaire peut suffire.",
+        "Presque : vos revenus ({value}{unit}) approchent le minimum de {threshold}{unit}."
+      ],
+      "advice": [
+        "Il vous manque {gap}{unit} pour atteindre le minimum de {threshold}{unit}. Un co-emprunteur ou un apport personnel peut combler cet écart.",
+        "Vous êtes à {value}{unit} mais il faut {threshold}{unit} minimum. Cumulez avec un co-emprunteur."
+      ]
+    },
+    "AMOUNT_MAX": {
+      "label": "découvert",
+      "unit": " FCFA",
+      "pass": [
+        "Votre découvert de {value}{unit} reste dans la limite autorisée de {threshold}{unit}.",
+        "Découvert maîtrisé : {value}{unit} (maximum : {threshold}{unit})."
+      ],
+      "fail": [
+        "Votre découvert de {value}{unit} dépasse la limite autorisée de {threshold}{unit}.",
+        "Découvert excessif : {value}{unit} au lieu de {threshold}{unit} maximum."
+      ],
+      "partial": [
+        "Votre découvert ({value}{unit}) approche la limite de {threshold}{unit}. Surveillez vos dépenses."
+      ],
+      "advice": [
+        "Réduisez votre découvert de {gap}{unit} pour rester sous la limite de {threshold}{unit}. Approvisionnez votre compte régulièrement."
+      ]
+    },
+    "RANGE": {
+      "label": "valeur",
+      "unit": "",
+      "pass": [
+        "Votre score de {value}{unit} se situe dans la fourchette autorisée ({min} – {max}).",
+        "Critère respecté : {value}{unit} est dans l'intervalle requis ({min} – {max})."
+      ],
+      "fail": [
+        "Votre score de {value}{unit} est en dehors de la fourchette autorisée ({min} – {max})."
+      ],
+      "partial": [
+        "Votre score ({value}{unit}) est proche de la fourchette ({min} – {max}). Un petit ajustement suffira."
+      ],
+      "advice": [
+        "Votre score doit se situer entre {min} et {max}. Actuellement {value}{unit}, un ajustement est nécessaire."
+      ]
+    },
+    "BOOLEAN_TRUE": {
+      "label": "statut",
+      "unit": "",
+      "pass": ["Le statut est conforme : {value}.", "Critère OK : {value}."],
+      "fail": [
+        "Le statut \"{value}\" doit être activé.",
+        "Critère non rempli : le statut doit être validé."
+      ],
+      "partial": [],
+      "advice": [
+        "Activez ce statut pour être éligible. Contactez votre conseiller."
+      ]
+    },
+    "EQUALS": {
+      "label": "valeur",
+      "unit": "",
+      "pass": [
+        "La valeur \"{value}\" correspond au critère.",
+        "Conforme : {value}."
+      ],
+      "fail": [
+        "La valeur \"{value}\" ne correspond pas au critère attendu ({threshold})."
+      ],
+      "partial": [],
+      "advice": [
+        "Ce critère exige une valeur précise. \"{value}\" au lieu de {threshold}."
+      ]
+    },
+    "GENERIC_MIN": {
+      "label": "valeur",
+      "unit": "",
+      "pass": [
+        "Votre apport de {value}{unit} atteint le minimum requis de {threshold}{unit}.",
+        "Critère rempli : {value}{unit} (seuil minimum : {threshold}{unit})."
+      ],
+      "fail": [
+        "Votre apport de {value}{unit} est insuffisant (minimum : {threshold}{unit}).",
+        "Seuil non atteint : {value}{unit} au lieu de {threshold}{unit}."
+      ],
+      "partial": [
+        "Votre valeur ({value}{unit}) approche le minimum requis ({threshold}{unit})."
+      ],
+      "advice": [
+        "Vous devez atteindre {threshold}{unit} (actuellement {value}{unit}). Un effort de {gap}{unit} est nécessaire."
+      ]
+    },
+    "GENERIC_MAX": {
+      "label": "valeur",
+      "unit": "",
+      "pass": [
+        "Votre valeur de {value}{unit} respecte le plafond de {threshold}{unit}.",
+        "Conforme : {value}{unit} (maximum : {threshold}{unit})."
+      ],
+      "fail": [
+        "Votre valeur de {value}{unit} dépasse le plafond de {threshold}{unit}.",
+        "Limite dépassée : {value}{unit} au lieu de {threshold}{unit} maximum."
+      ],
+      "partial": [
+        "Votre valeur ({value}{unit}) approche le plafond ({threshold}{unit}). Surveillez ce point."
+      ],
+      "advice": [
+        "Ne dépassez pas {threshold}{unit} (actuellement {value}{unit}). Réduisez de {gap}{unit}."
+      ]
+    },
+    "UNKNOWN": {
+      "label": "valeur",
+      "unit": "",
+      "pass": ["{label} : {value} — condition remplie."],
+      "fail": ["{label} : {value} — seuil requis : {threshold}{unit}."],
+      "partial": [
+        "{label} : {value} — proche du seuil requis {threshold}{unit}."
+      ],
+      "advice": [
+        "Ce critère nécessite {threshold}{unit} (actuellement {value}{unit})."
+      ]
+    }
+  },
+  "advice_templates": {
+    "SPENDING_SPIKE": [
+      "Vos dépenses en {category} ont augmenté de {percent}% ce mois-ci ({surplus} FCFA de plus). Identifiez les achats ponctuels pour économiser {target} FCFA.",
+      "Attention : vos dépenses dans {category} bondissent de {percent}% ! Passez en revue vos achats."
+    ],
+    "TOP_CATEGORY": [
+      "{category_article} représente {percent}% de vos dépenses ce mois-ci, soit {amount} FCFA.",
+      "Votre plus gros poste de dépense est {category_article} ({amount} FCFA, soit {percent}% du total)."
+    ],
+    "INCOME_DROP": [
+      "Vos revenus ont baissé de {percent}% ce mois-ci ({current} FCFA contre {previous} FCFA le mois dernier). Réduisez vos dépenses variables.",
+      "Baisse de revenus de {percent}%. Évitez tout nouvel engagement et réduisez vos dépenses courantes."
+    ],
+    "HIGH_EXPENSE_RATIO": [
+      "Vous dépensez {percent}% de vos revenus. Objectif recommandé : 75%. Priorisez vos plus gros postes variables.",
+      "{percent}% de vos revenus partent en dépenses. L'objectif est 75%. Réduisez certains postes."
+    ],
+    "OVERDRAFT": [
+      "Frais de découvert détectés ({count} fois ce mois). Une réserve de {reserve} FCFA vous protégerait.",
+      "Agios prélevés {count} fois ce mois. Constituez une réserve de {reserve} FCFA."
+    ],
+    "SUBSCRIPTION_BLOAT": [
+      "Vos charges fixes représentent {percent}% de vos revenus. Un abonnement en moins = {saving} FCFA libérés.",
+      "Abonnements et charges trop élevés ({percent}% des revenus). Faites le tri."
+    ],
+    "GOOD_HABIT": [
+      "Vous ne dépensez que {percent}% de vos revenus. Visez maintenant {target} FCFA d'épargne mensuelle.",
+      "Excellent contrôle : seuls {percent}% des revenus sont dépensés. Augmentez votre épargne."
+    ]
+  },
+  "interpreter": {
+    "LOGEMENT_HIGH": {
+      "severity": "WARNING",
+      "title": "Logement : {percent}% de vos dépenses",
+      "templates": [
+        "Votre logement représente {percent}% de vos dépenses ({amount} FCFA). La recommandation est de ne pas dépasser {threshold}%. Au-delà, le risque de découvert augmente significativement.",
+        "Loyer ou logement : {percent}% du budget ({amount} FCFA) pour {threshold}% recommandé. Surveillez ce poste."
+      ],
+      "actions": [
+        "Négociez votre loyer ou envisagez une colocation pour passer sous les {threshold}%."
+      ]
+    },
+    "LOGEMENT_CRITICAL": {
+      "severity": "WARNING",
+      "title": "Logement : {percent}% — budget déséquilibré",
+      "templates": [
+        "Votre logement vous coûte {amount} FCFA, soit {percent}% de vos dépenses. Au-delà de 50%, votre budget est déséquilibré : le moindre imprévu peut vous mettre en difficulté. Envisagez de négocier votre loyer ou de chercher un logement moins cher.",
+        "Alerte logement : {percent}% du budget ({amount} FCFA). Un niveau dangereux qui expose au découvert."
+      ],
+      "actions": [
+        "Négociez votre loyer ou cherchez un logement moins cher en urgence."
+      ]
+    },
+    "LOGEMENT_OK": {
+      "severity": "INFO",
+      "title": "Logement maîtrisé ({percent}%)",
+      "templates": [
+        "Votre logement représente {percent}% de vos dépenses, soit {amount} FCFA. C'est dans la norme (moins de {threshold}%). Votre budget logement est équilibré.",
+        "Bon point : le logement ne pèse que {percent}% du budget ({amount} FCFA). La norme est {threshold}%."
+      ],
+      "actions": [""]
+    },
+    "CREDIT_HIGH": {
+      "severity": "WARNING",
+      "title": "Crédit : {percent}% des dépenses",
+      "templates": [
+        "Vos remboursements de crédit s'élèvent à {amount} FCFA ce mois, soit {percent}% de vos dépenses. Le seuil BCEAO de {threshold}% est dépassé. Tout nouveau crédit augmenterait votre risque d'endettement.",
+        "Endettement crédit : {percent}% du budget ({amount} FCFA). La limite BCEAO ({threshold}%) est dépassée. Restez prudent."
+      ],
+      "actions": [
+        "Évitez tout nouveau crédit. Remboursez plus vite vos dettes existantes si possible."
+      ]
+    },
+    "CREDIT_NEAR_LIMIT": {
+      "severity": "INFO",
+      "title": "Crédit : {percent}% — proche du seuil BCEAO",
+      "templates": [
+        "Vos remboursements de crédit sont de {amount} FCFA ({percent}% de vos dépenses). Le seuil BCEAO est {threshold}%. Restez vigilant : ne souscrivez pas de nouveau crédit sans renégocier.",
+        "Crédit : {percent}% ({amount} FCFA) pour une limite de {threshold}%. Une marge étroite."
+      ],
+      "actions": [
+        "Restez vigilant : ne souscrivez pas de nouveau crédit sans renégocier les anciens."
+      ]
+    },
+    "CREDIT_INCREASE": {
+      "severity": "WARNING",
+      "title": "Hausse des remboursements de crédit",
+      "templates": [
+        "Vos remboursements de crédit ont augmenté de {change}% ce mois ({amount} FCFA). Avez-vous souscrit un nouveau prêt ou une mensualité a-t-elle été révisée ?",
+        "Crédit en hausse de {change}% ({amount} FCFA). Vérifiez vos échéanciers."
+      ],
+      "actions": [
+        "Vérifiez vos échéanciers de crédit. Contactez votre banque si une mensualité semble anormale."
+      ]
+    },
+    "ALIMENTATION_SPIKE": {
+      "severity": "WARNING",
+      "title": "Forte hausse des courses alimentaires",
+      "templates": [
+        "Vos dépenses alimentaires ont augmenté de {change}% ce mois ({amount} FCFA contre {prev_amount} le mois dernier). Cela peut être dû à un achat en gros ou à des invités. Si la hausse se répète, votre budget sera impacté.",
+        "Alimentation : +{change}% ce mois ({amount} FCFA). Surveillez si la tendance se confirme."
+      ],
+      "actions": [
+        "Comparez avec {prev_amount} FCFA, votre dépense habituelle. Identifiez ce qui a changé."
+      ]
+    },
+    "ALIMENTATION_HIGH": {
+      "severity": "INFO",
+      "title": "Alimentation : {percent}% des dépenses",
+      "templates": [
+        "Vous dépensez {amount} FCFA en alimentation, soit {percent}% de vos dépenses. C'est dans la moyenne ({threshold}% est la norme).",
+        "Alimentation : {percent}% ({amount} FCFA). Dans la moyenne ({threshold}%)."
+      ],
+      "actions": [
+        "Pour réduire, privilégiez les marchés plutôt que les supermarchés. Une économie de 10% est facilement réalisable."
+      ]
+    },
+    "TRANSPORT_SPIKE": {
+      "severity": "WARNING",
+      "title": "Hausse des transports",
+      "templates": [
+        "Vos dépenses de transport ont grimpé de {change}% ({amount} FCFA). Voyage exceptionnel ? Panne de véhicule ? Si le motif est ponctuel, pas d'inquiétude.",
+        "Transport : +{change}% ({amount} FCFA). Raison ponctuelle ou nouvelle habitude ?"
+      ],
+      "actions": [
+        "Envisagez le covoiturage ou les transports en commun pour réduire cette charge."
+      ]
+    },
+    "TRANSPORT_HIGH": {
+      "severity": "WARNING",
+      "title": "Transport : {percent}% des dépenses",
+      "templates": [
+        "Le transport représente {percent}% de vos dépenses ({amount} FCFA), ce qui est élevé. La norme est de {threshold}%.",
+        "Transport trop élevé : {percent}% du budget ({amount} FCFA) pour {threshold}% recommandé."
+      ],
+      "actions": [
+        "Pensez au covoiturage ou aux abonnements de transport pour réduire la facture."
+      ]
+    },
+    "COMMERCE_SPIKE": {
+      "severity": "WARNING",
+      "title": "Achats en hausse",
+      "templates": [
+        "Vos achats ({label}) ont augmenté de {change}% ce mois : {amount} FCFA. Était-ce un achat ponctuel ou une nouvelle habitude ?",
+        "{label} : +{change}% ({amount} FCFA). Achat coup de cœur ou tendance ?"
+      ],
+      "actions": [
+        "Attendez 48h avant tout achat non essentiel pour éviter les dépenses impulsives."
+      ]
+    },
+    "CARBURANT_SPIKE": {
+      "severity": "WARNING",
+      "title": "Hausse du carburant",
+      "templates": [
+        "Vos dépenses de carburant ont augmenté de {change}% ({amount} FCFA). Cela peut être dû à une hausse des prix ou à plus de déplacements.",
+        "Carburant : +{change}% ({amount} FCFA). Optez pour les stations les moins chères."
+      ],
+      "actions": [
+        "Optez pour les stations les moins chères et regroupez vos trajets."
+      ]
+    },
+    "SANTE_HIGH": {
+      "severity": "INFO",
+      "title": "Dépenses de santé élevées",
+      "templates": [
+        "Vous avez dépensé {amount} FCFA en santé ce mois ({change}%). Espérons que c'est ponctuel. Une mutuelle peut couvrir ces frais à l'avenir.",
+        "Santé : {amount} FCFA ce mois ({change}% vs mois dernier). Pensez à une mutuelle."
+      ],
+      "actions": [
+        "Vérifiez si vous avez une mutuelle santé. Si non, comparez les offres : une cotisation mensuelle vous protège des gros imprévus médicaux."
+      ]
+    },
+    "MOBILE_MONEY_HIGH": {
+      "severity": "INFO",
+      "title": "Utilisation intense du mobile money",
+      "templates": [
+        "Vos transactions mobile money ont augmenté de {change}% ce mois. Vérifiez que vous n'accumulez pas trop de frais sur ces transferts.",
+        "Mobile money : +{change}% ce mois. Regroupez vos transferts pour réduire les frais."
+      ],
+      "actions": ["Regroupez vos transferts pour réduire les frais unitaires."]
+    },
+    "FEES_HIGH": {
+      "severity": "WARNING",
+      "title": "Frais bancaires : {amount} FCFA",
+      "templates": [
+        "Vous avez payé {amount} FCFA en frais bancaires ce mois. Ces frais sont souvent évitables : tenez un solde minimum pour éviter les agios et plafonnez vos retraits.",
+        "Frais bancaires : {amount} FCFA ce mois. Évitez les découverts pour réduire cette facture."
+      ],
+      "actions": [
+        "Évitez les découverts : activez une alerte SMS quand votre solde passe sous 50 000 FCFA.",
+        "Contactez votre conseiller pour renégocier vos frais ou changer de formule."
+      ]
+    },
+    "INCOME_DROP": {
+      "severity": "CRITICAL",
+      "title": "Baisse de revenus : {percent}%",
+      "templates": [
+        "Vos revenus ont baissé de {percent}% ce mois ({amount} FCFA contre {prev_amount} FCFA). En cas de baisse durable, revoyez votre budget et contactez votre banque pour un réaménagement de vos crédits.",
+        "Revenus en baisse de {percent}% ({amount} FCFA). Réduisez vos dépenses et évitez tout nouveau crédit."
+      ],
+      "actions": [
+        "Réduisez vos dépenses variables de 20% dès maintenant. Évitez tout nouveau crédit."
+      ]
+    },
+    "GOOD_HABIT": {
+      "severity": "INFO",
+      "title": "Budget maîtrisé",
+      "templates": [
+        "Vous ne dépensez que {percent}% de votre budget en {label}. C'est un bon équilibre.",
+        "Bon point : {label} ne représente que {percent}% du budget. Continuez ainsi."
+      ],
+      "actions": [""]
+    }
+  },
+  "labels": {
+    "LOGEMENT": { "label": "logement", "article": "le" },
+    "ALIMENTATION": { "label": "alimentation", "article": "l'" },
+    "TRANSPORT": { "label": "transport", "article": "le" },
+    "SANTE": { "label": "santé", "article": "la" },
+    "SANTÉ": { "label": "santé", "article": "la" },
+    "MOBILE_MONEY": { "label": "mobile money", "article": "le" },
+    "CARBURANT": { "label": "carburant", "article": "le" },
+    "COMMERCE": { "label": "achats", "article": "les" },
+    "FRAIS_BANCAIRES": { "label": "frais bancaires", "article": "les" },
+    "VIREMENTS": { "label": "virements", "article": "les" },
+    "RETRAITS": { "label": "retraits", "article": "les" },
+    "CREDIT": { "label": "crédit", "article": "le" },
+    "CREDITS": { "label": "crédits", "article": "les" },
+    "CRÉDIT": { "label": "crédit", "article": "le" },
+    "CRÉDITS": { "label": "crédits", "article": "les" },
+    "DIVERS": { "label": "divers", "article": "les" },
+    "SALAIRE": { "label": "salaire", "article": "le" },
+    "LOISIRS": { "label": "loisirs", "article": "les" }
+  }
+}

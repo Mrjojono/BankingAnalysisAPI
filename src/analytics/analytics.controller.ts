@@ -483,6 +483,17 @@ export class AnalyticsController {
     );
   }
 
+  // --- CONSEILS PERSONNALISÉS (PERSONAL ADVICE) ---
+
+  @Get(':customerId/advice')
+  @ApiOperation({ summary: 'Obtenir des conseils financiers personnalisés' })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  async getPersonalAdvice(
+    @Param('customerId', ParseUUIDPipe) customerId: string,
+  ) {
+    return this.overviewService.getPersonalAdvice(customerId);
+  }
+
   // --- ANALYSE DE L'ÉPARGNE (EPIC 05) ---
 
   @Get(':customerId/savings/rate')

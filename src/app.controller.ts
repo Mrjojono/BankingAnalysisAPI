@@ -8,11 +8,8 @@ export class AppController {
   @Get('dashboard')
   getDashboard(@Res() res: Response) {
     const paths = [
-      // En production (dist/public/dashboard.html)
       join(__dirname, '..', 'public', 'dashboard.html'),
-      // En développement (src/public/dashboard.html)
       join(__dirname, '..', 'src', 'public', 'dashboard.html'),
-      // Cas spécifique Nest build (dist/src/public/dashboard.html)
       join(__dirname, 'public', 'dashboard.html'),
     ];
 
@@ -27,5 +24,24 @@ export class AppController {
       .send(
         'Dashboard file not found. Please run "npm run build" to ensure assets are copied.',
       );
+  }
+
+  @Get('admin/*path')
+  getAdmin(@Res() res: Response) {
+    const paths = [
+      join(__dirname, '..', 'public', 'admin', 'index.html'),
+      join(__dirname, '..', 'src', 'public', 'admin', 'index.html'),
+      join(__dirname, 'public', 'admin', 'index.html'),
+    ];
+
+    for (const filePath of paths) {
+      if (existsSync(filePath)) {
+        return res.sendFile(filePath);
+      }
+    }
+
+    return res
+      .status(404)
+      .send('Admin build not found. Run "cd admin && npm run build".');
   }
 }

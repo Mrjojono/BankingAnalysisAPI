@@ -12,6 +12,8 @@ import { DebtEngine } from './engines/debt.engine';
 import { SavingsEngine } from './engines/savings.engine';
 import { ScoreEngine } from './engines/score.engine';
 import { RecommendationEngine } from './engines/recommendation.engine';
+import { AdviceEngine } from './engines/advice.engine';
+import { InterpreterEngine } from './engines/interpreter.engine';
 import { RedisModule } from '../redis/redis.module';
 import { AuthModule } from '../auth/auth.module';
 
@@ -31,6 +33,9 @@ import { AuthModule } from '../auth/auth.module';
     SavingsEngine,
     ScoreEngine,
     RecommendationEngine,
+    AdviceEngine,
+    InterpreterEngine,
   ],
+  exports: [OverviewService],
 })
 export class AnalyticsModule {}

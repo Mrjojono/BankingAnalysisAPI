@@ -8,6 +8,7 @@ import { DebtEngine } from '../engines/debt.engine';
 import { SavingsEngine } from '../engines/savings.engine';
 import { ScoreEngine } from '../engines/score.engine';
 import { RecommendationEngine } from '../engines/recommendation.engine';
+import { AdviceEngine } from '../engines/advice.engine';
 import { DashboardGateway } from '../../gateway/dashboard.gateway';
 import { Classifier } from '../shared/classifier';
 import { Entry } from '../types';
@@ -25,6 +26,7 @@ export class OverviewService {
     private savingsEngine: SavingsEngine,
     private scoreEngine: ScoreEngine,
     private recommendationEngine: RecommendationEngine,
+    private adviceEngine: AdviceEngine,
     private gateway: DashboardGateway,
     private classifier: Classifier,
   ) {}
@@ -927,7 +929,12 @@ export class OverviewService {
     return { recommendations };
   }
 
-  private async gatherMetrics(
+  async getPersonalAdvice(customerId: string): Promise<any> {
+    const advice = await this.adviceEngine.generate(customerId);
+    return { advice };
+  }
+
+  async gatherMetrics(
     customerId: string,
     year?: number,
     month?: number,

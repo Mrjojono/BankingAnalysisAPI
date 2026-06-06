@@ -577,3 +577,97 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+//produit bancaire et regles metier
+
+model BankProduct {
+  id          String  @id @default(uuid()) @db.Uuid
+  code        String  @unique
+  name        String
+  description String?
+  reference   String?
+
+  category String? // ex: ACCOUNT, CARD, LOAN
+
+  isActive Boolean @default(true)
+
+  rules Rule[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("bank_products")
+}
+
+model Rule {
+  id String @id @default(uuid()) @db.Uuid
+
+  productId String?      @db.Uuid
+  product   BankProduct? @relation(fields: [productId], references: [id])
+
+  code        String
+  label       String
+  description String?
+
+  type RuleType
+
+  field String
+
+  operator RuleOperator?
+
+  value    Float?
+  valueMin Float?
+  valueMax Float?
+
+  percentage Float?
+  flatAmount Float?
+  minAmount  Float?
+  maxAmount  Float?
+
+  currency Currency?
+
+  period RulePeriod?
+
+  conditions Json?
+
+  weight   Int @default(0)
+  priority Int @default(0)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, code])
+  @@index([productId])
+  @@index([type])
+  @@map("rules")
+}
+
+enum RuleType {
+  ELIGIBILITY
+  LIMIT
+  FEE
+  VALUE_DATE
+  INTEREST
+}
+
+enum RulePeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+  PER_TRANSACTION
+}
+
+enum RuleOperator {
+  GREATER_THAN
+  LESS_THAN
+  EQUALS
+  GREATER_OR_EQUAL
+  LESS_OR_EQUAL
+  BETWEEN
+  NOT_EQUALS
+  IN
+  NOT_IN
+}
