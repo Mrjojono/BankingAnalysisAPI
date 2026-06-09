@@ -1,5 +1,4 @@
 /**
- * articles.ts — Articles français pour les noms de catégories
  *
  * Permet de générer automatiquement "le logement", "la santé",
  * "l'alimentation", "les crédits" selon le genre du mot.

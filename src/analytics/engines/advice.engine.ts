@@ -47,6 +47,7 @@ export class AdviceEngine {
       await this.transactionFetcher.fetchCustomerEntries(customerId);
     if (allEntries.length === 0) return allAdvice;
 
+    // recuperation des transactions actuelles et precedentes en les filtrant pour chaque categories
     const currentDebits = filterEntries(allEntries, {
       direction: 'DEBIT',
       accountType: 'CHECKING',

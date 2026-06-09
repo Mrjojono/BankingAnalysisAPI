@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { Info, Plus, Trash2 } from '@lucide/svelte';
+  import { Info, Plus, Trash2, Loader } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
   import Drawer from '../lib/components/Drawer.svelte';
+    import App from '../App.svelte';
 
   let catalog = $state<Record<string, any>>({});
   let sections = $derived(Object.entries(catalog));
@@ -11,7 +12,7 @@
   let editingPattern = $state<string | null>(null);
   let drawerOpen = $state(false);
   let helpOpen = $state(false);
-
+  let loading = $state(false);
   let patternForm = $state<{ label: string; unit: string; pass: string[]; fail: string[]; partial: string[]; advice: string[] } | null>(null);
 
   type SectionLabel = { label: string; unit: string };
@@ -84,6 +85,7 @@
   }
 
   async function saveForm() {
+    loading = true;
     if (!editingSection || !editingPattern || !patternForm) return;
     const patten = editingPattern;
     const section = editingSection;
@@ -115,7 +117,9 @@
 
     await api.updateCatalog(catalog);
     catalog = await api.getCatalog();
-    drawerOpen = false;
+    if (loading) loading = false && drawerOpen;
+    if (drawerOpen) drawerOpen = false;
+
     editingSection = null;
     editingPattern = null;
     patternForm = null;
@@ -293,8 +297,8 @@
           Annuler
         </button>
         <button onclick={saveForm}
-          class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-[#2d5200] transition-all cursor-pointer border-none">
-          Enregistrer
+          class="px-5 py-2.5 rounded-xl flex flex-row items-center gap-1 text-sm font-semibold bg-primary text-white hover:bg-[#2d5200] transition-all cursor-pointer border-none">
+          Enregistrer {#if loading}<Loader size={16} />{/if}
         </button>
       </div>
     </div>

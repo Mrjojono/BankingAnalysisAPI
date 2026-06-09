@@ -101,7 +101,10 @@
     "BOOLEAN_TRUE": {
       "label": "statut",
       "unit": "",
-      "pass": ["Le statut est conforme : {value}.", "Critère OK : {value}."],
+      "pass": [
+        "Le statut est conforme : {value}.",
+        "Critère OK : {value}."
+      ],
       "fail": [
         "Le statut \"{value}\" doit être activé.",
         "Critère non rempli : le statut doit être validé."
@@ -165,8 +168,12 @@
     "UNKNOWN": {
       "label": "valeur",
       "unit": "",
-      "pass": ["{label} : {value} — condition remplie."],
-      "fail": ["{label} : {value} — seuil requis : {threshold}{unit}."],
+      "pass": [
+        "{label} : {value} — condition remplie."
+      ],
+      "fail": [
+        "{label} : {value} — seuil requis : {threshold}{unit}."
+      ],
       "partial": [
         "{label} : {value} — proche du seuil requis {threshold}{unit}."
       ],
@@ -221,7 +228,7 @@
       "severity": "WARNING",
       "title": "Logement : {percent}% — budget déséquilibré",
       "templates": [
-        "Votre logement vous coûte {amount} FCFA, soit {percent}% de vos dépenses. Au-delà de 50%, votre budget est déséquilibré : le moindre imprévu peut vous mettre en difficulté. Envisagez de négocier votre loyer ou de chercher un logement moins cher.",
+        "Votre logement vous coûte {amount} FCFA, soit {percent}% de vos dépenses. Au-delà de 50%, votre budget est déséquilibré : le moindre imprévu peut vous mettre en difficulté. Envisagez de négocier votre loyer ou de chercher un logement moins cher prochainement.",
         "Alerte logement : {percent}% du budget ({amount} FCFA). Un niveau dangereux qui expose au découvert."
       ],
       "actions": [
@@ -235,7 +242,9 @@
         "Votre logement représente {percent}% de vos dépenses, soit {amount} FCFA. C'est dans la norme (moins de {threshold}%). Votre budget logement est équilibré.",
         "Bon point : le logement ne pèse que {percent}% du budget ({amount} FCFA). La norme est {threshold}%."
       ],
-      "actions": [""]
+      "actions": [
+        ""
+      ]
     },
     "CREDIT_HIGH": {
       "severity": "WARNING",
@@ -354,7 +363,9 @@
         "Vos transactions mobile money ont augmenté de {change}% ce mois. Vérifiez que vous n'accumulez pas trop de frais sur ces transferts.",
         "Mobile money : +{change}% ce mois. Regroupez vos transferts pour réduire les frais."
       ],
-      "actions": ["Regroupez vos transferts pour réduire les frais unitaires."]
+      "actions": [
+        "Regroupez vos transferts pour réduire les frais unitaires."
+      ]
     },
     "FEES_HIGH": {
       "severity": "WARNING",
@@ -386,27 +397,83 @@
         "Vous ne dépensez que {percent}% de votre budget en {label}. C'est un bon équilibre.",
         "Bon point : {label} ne représente que {percent}% du budget. Continuez ainsi."
       ],
-      "actions": [""]
+      "actions": [
+        ""
+      ]
     }
   },
   "labels": {
-    "LOGEMENT": { "label": "logement", "article": "le" },
-    "ALIMENTATION": { "label": "alimentation", "article": "l'" },
-    "TRANSPORT": { "label": "transport", "article": "le" },
-    "SANTE": { "label": "santé", "article": "la" },
-    "SANTÉ": { "label": "santé", "article": "la" },
-    "MOBILE_MONEY": { "label": "mobile money", "article": "le" },
-    "CARBURANT": { "label": "carburant", "article": "le" },
-    "COMMERCE": { "label": "achats", "article": "les" },
-    "FRAIS_BANCAIRES": { "label": "frais bancaires", "article": "les" },
-    "VIREMENTS": { "label": "virements", "article": "les" },
-    "RETRAITS": { "label": "retraits", "article": "les" },
-    "CREDIT": { "label": "crédit", "article": "le" },
-    "CREDITS": { "label": "crédits", "article": "les" },
-    "CRÉDIT": { "label": "crédit", "article": "le" },
-    "CRÉDITS": { "label": "crédits", "article": "les" },
-    "DIVERS": { "label": "divers", "article": "les" },
-    "SALAIRE": { "label": "salaire", "article": "le" },
-    "LOISIRS": { "label": "loisirs", "article": "les" }
+    "LOGEMENT": {
+      "label": "logement",
+      "article": "le"
+    },
+    "ALIMENTATION": {
+      "label": "alimentation",
+      "article": "l'"
+    },
+    "TRANSPORT": {
+      "label": "transport",
+      "article": "le"
+    },
+    "SANTE": {
+      "label": "santé",
+      "article": "la"
+    },
+    "SANTÉ": {
+      "label": "santé",
+      "article": "la"
+    },
+    "MOBILE_MONEY": {
+      "label": "mobile money",
+      "article": "le"
+    },
+    "CARBURANT": {
+      "label": "carburant",
+      "article": "le"
+    },
+    "COMMERCE": {
+      "label": "achats",
+      "article": "les"
+    },
+    "FRAIS_BANCAIRES": {
+      "label": "frais bancaires",
+      "article": "les"
+    },
+    "VIREMENTS": {
+      "label": "virements",
+      "article": "les"
+    },
+    "RETRAITS": {
+      "label": "retraits",
+      "article": "les"
+    },
+    "CREDIT": {
+      "label": "crédit",
+      "article": "le"
+    },
+    "CREDITS": {
+      "label": "crédits",
+      "article": "les"
+    },
+    "CRÉDIT": {
+      "label": "crédit",
+      "article": "le"
+    },
+    "CRÉDITS": {
+      "label": "crédits",
+      "article": "les"
+    },
+    "DIVERS": {
+      "label": "divers",
+      "article": "les"
+    },
+    "SALAIRE": {
+      "label": "salaire",
+      "article": "le"
+    },
+    "LOISIRS": {
+      "label": "loisirs",
+      "article": "les"
+    }
   }
 }

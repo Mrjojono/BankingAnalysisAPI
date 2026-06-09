@@ -18,16 +18,25 @@
     { value: 'FEE', label: 'Frais', desc: 'Frais fixes ou proportionnels' },
     { value: 'LIMIT', label: 'Limite', desc: 'Plafond opérationnel' },
     { value: 'INTEREST', label: 'Intérêt', desc: "Taux d'intérêt" },
-    { value: 'VALUE_DATE', label: 'Date valeur', desc: 'Date de valeur des opérations' },
   ];
 
   const TYPE_STYLES: Record<string, string> = {
-    ELIGIBILITY: 'bg-blue-50 text-blue-700',
-    FEE: 'bg-red-50 text-red-700',
-    LIMIT: 'bg-amber-50 text-amber-700',
-    INTEREST: 'bg-purple-50 text-purple-700',
-    VALUE_DATE: 'bg-cyan-50 text-cyan-700',
+    ELIGIBILITY: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
+    FEE: 'bg-red-50 text-red-700 ring-1 ring-red-200',
+    LIMIT: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+    INTEREST: 'bg-purple-50 text-purple-700 ring-1 ring-purple-200',
   };
+
+  let stats = $derived.by(() => {
+    const total = rules.length;
+    const active = rules.filter(r => r.isActive).length;
+    const byType: Record<string, number> = {};
+    for (const r of rules) {
+      byType[r.type] = (byType[r.type] ?? 0) + 1;
+    }
+    const productsCount = new Set(rules.map(r => r.productId).filter(Boolean)).size;
+    return { total, active, byType, productsCount };
+  });
 
   const FIELDS = [
     { value: 'monthlyIncome', label: 'Revenus mensuels (monthlyIncome)' },
@@ -72,10 +81,40 @@
   const OPERATOR_LABELS = Object.fromEntries(OPERATORS.map(o => [o.value, o.label]));
   const TYPE_LABELS = Object.fromEntries(RULE_TYPES.map(t => [t.value, t.label]));
 
+  const PERIOD_LABELS: Record<string, string> = {
+    DAILY: 'Quotidien',
+    WEEKLY: 'Hebdomadaire',
+    MONTHLY: 'Mensuel',
+    YEARLY: 'Annuel',
+    PER_TRANSACTION: 'Par opération',
+  };
+
+  const OP_SYMBOLS: Record<string, string> = {
+    GREATER_THAN: '>',
+    LESS_THAN: '<',
+    GREATER_OR_EQUAL: '≥',
+    LESS_OR_EQUAL: '≤',
+    EQUALS: '=',
+    NOT_EQUALS: '≠',
+    IN: '∈',
+    NOT_IN: '∉',
+    BETWEEN: '↔',
+  };
+
+  function formatValue(val: number, operator?: string, currency?: string) {
+    const sym = operator ? OP_SYMBOLS[operator] ?? '' : '';
+    const cur = currency ?? 'XOF';
+    return `${sym} ${val.toLocaleString('fr-FR')} ${cur}`;
+  }
+
   onMount(async () => {
     try { [rules, products] = await Promise.all([api.listRules(), api.listProducts()]); }
     catch { error = 'Erreur chargement des règles'; }
   });
+
+
+  let page = $state(1);
+  const PER_PAGE = 15;
 
   let filtered = $derived.by(() => {
     if (!search) return rules;
@@ -88,6 +127,22 @@
       r.operator?.toLowerCase().includes(q)
     );
   });
+
+  let totalPages = $derived(Math.max(1, Math.ceil(filtered.length / PER_PAGE)));
+  let paged = $derived(filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE));
+
+  let pages = $derived.by(() => {
+    const maxVisible = 5;
+    if (totalPages <= maxVisible) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const half = Math.floor(maxVisible / 2);
+    let start = page - half;
+    let end = page + half;
+    if (start < 1) { start = 1; end = maxVisible; }
+    if (end > totalPages) { end = totalPages; start = totalPages - maxVisible + 1; }
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  });
+
+  $effect(() => { if (page > totalPages) page = totalPages; });
 
   let isBetween = $derived(editing?.operator === 'BETWEEN');
   let isScoreType = $derived(editing?.type === 'ELIGIBILITY');
@@ -359,49 +414,88 @@
   <div class="bg-red-50 text-error px-4 py-3 rounded-xl text-sm font-medium mb-4">{error}</div>
 {/if}
 
-<button onclick={() => openForm()} class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-[#2d5200] transition-all cursor-pointer border-none mb-4">
-  <Plus size={18} />
-  Nouvelle règle
-</button>
-
-<div class="relative mb-4">
-  <Search size={18} class="absolute left-3.5 top-1/2 -translate-y-1/2 text-outline" />
-  <input bind:value={search} placeholder="Rechercher une règle (type, code, label, champ, opérateur)…"
-    class="w-full pl-10 pr-4 py-2.5 border border-mint-subtle rounded-xl text-sm bg-white focus:border-primary focus:outline-none transition-all" />
+<div class="grid grid-cols-4 gap-4 mb-6">
+  <div class="bg-surface rounded-2xl border border-mint-subtle p-5 flex flex-col gap-1">
+    <span class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Total règles</span>
+    <span class="text-3xl font-bold">{stats.total}</span>
+  </div>
+  <div class="bg-surface rounded-2xl border border-mint-subtle p-5 flex flex-col gap-1">
+    <span class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Actives</span>
+    <span class="text-3xl font-bold text-primary">{stats.active}</span>
+  </div>
+  <div class="bg-surface rounded-2xl border border-mint-subtle p-5 flex flex-col gap-1">
+    <span class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Éligibilité</span>
+    <span class="text-3xl font-bold">{stats.byType['ELIGIBILITY'] ?? 0}</span>
+  </div>
+  <div class="bg-surface rounded-2xl border border-mint-subtle p-5 flex flex-col gap-1">
+    <span class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Frais</span>
+    <span class="text-3xl font-bold">{stats.byType['FEE'] ?? 0}</span>
+  </div>
 </div>
 
-<div class="bg-surface rounded-2xl overflow-auto border border-mint-subtle">
-  <table class="w-full border-collapse">
+<div class="flex items-center gap-3 mb-4">
+  <button onclick={() => openForm()} class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-[#2d5200] transition-all cursor-pointer border-none">
+    <Plus size={18} />
+    Nouvelle règle
+  </button>
+  <div class="relative flex-1">
+    <Search size={18} class="absolute left-3.5 top-1/2 -translate-y-1/2 text-outline" />
+    <input bind:value={search} placeholder="Rechercher une règle (type, code, label, champ, opérateur)…"
+      class="w-full pl-10 pr-4 py-2.5 border border-mint-subtle rounded-xl text-sm bg-white focus:border-primary focus:outline-none transition-all" />
+  </div>
+</div>
+
+<div class="bg-surface rounded-2xl overflow-x-auto border border-mint-subtle">
+  <table class="w-full border-collapse min-w-[900px]">
     <thead>
       <tr class="bg-background">
-        <th class="text-left px-5 py-3 text-sm font-semibold text-on-surface-variant">Type</th>
-        <th class="text-left px-5 py-3 text-sm font-semibold text-on-surface-variant">Produit</th>
-        <th class="text-left px-5 py-3 text-sm font-semibold text-on-surface-variant">Code</th>
-        <th class="text-left px-5 py-3 text-sm font-semibold text-on-surface-variant">Label</th>
-        <th class="text-left px-5 py-3 text-sm font-semibold text-on-surface-variant">Champ</th>
-        <th class="text-left px-5 py-3 text-sm font-semibold text-on-surface-variant">Opérateur</th>
-        <th class="text-left px-5 py-3 text-sm font-semibold text-on-surface-variant">Valeur</th>
-        <th class="text-left px-5 py-3 text-sm font-semibold text-on-surface-variant">Poids</th>
-        <th class="text-left px-5 py-3 text-sm font-semibold text-on-surface-variant">Statut</th>
-        <th class="text-left px-5 py-3 text-sm font-semibold text-on-surface-variant"></th>
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Type</th>
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Produit</th>
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Code</th>
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Label</th>
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Valeur</th>
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Poids</th>
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Statut</th>
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant"></th>
       </tr>
     </thead>
     <tbody>
-      {#each filtered as r}
-        <tr class="hover:bg-[#fafcfa] transition-all">
-          <td class="px-5 py-3">
+      {#each paged as r}
+        <tr class="hover:bg-[#fafcfa] transition-all border-t border-mint-subtle/50">
+          <td class="px-4 py-3">
             <span class="inline-block px-2 py-1 rounded-md text-xs font-semibold {TYPE_STYLES[r.type] ?? 'bg-surface-container text-on-surface-variant'}">
               {TYPE_LABELS[r.type] ?? r.type}
             </span>
           </td>
-          <td class="px-5 py-3 text-sm font-semibold">{r.product?.code ?? productName(r.productId)}</td>
-          <td class="px-5 py-3 text-sm"><code class="bg-surface-container px-2 py-1 rounded-md text-xs font-mono">{r.code}</code></td>
-          <td class="px-5 py-3 text-sm">{r.label}</td>
-          <td class="px-5 py-3 text-sm font-mono text-xs">{r.field}</td>
-          <td class="px-5 py-3 text-xs font-mono">{OPERATOR_LABELS[r.operator] ?? r.operator}</td>
-          <td class="px-5 py-3 text-sm">{r.value ?? (r.valueMin != null ? `${r.valueMin} – ${r.valueMax}` : '—')}</td>
-          <td class="px-5 py-3 text-sm">{r.type === 'ELIGIBILITY' ? r.weight : '—'}</td>
-          <td class="px-5 py-3">
+          <td class="px-4 py-3 text-sm font-semibold">{r.product?.code ?? productName(r.productId)}</td>
+          <td class="px-4 py-3 text-sm"><code class="bg-surface-container px-1.5 py-0.5 rounded text-xs font-mono font-semibold">{r.code}</code></td>
+          <td class="px-4 py-3 text-sm max-w-[220px] truncate" title={r.description ?? r.label}>{r.label}</td>
+          <td class="px-4 py-3 text-sm leading-relaxed">
+            {#if r.value != null}
+              <span class="font-semibold">{formatValue(r.value, r.operator, r.currency)}</span>
+            {:else if r.valueMin != null && r.valueMax != null}
+              <span class="font-semibold">{r.valueMin} – {r.valueMax}</span>
+            {:else if r.percentage != null}
+              <span class="font-semibold">{r.percentage}%</span>
+            {:else if r.flatAmount != null}
+              <span class="font-semibold">{r.flatAmount.toLocaleString('fr-FR')} {r.currency ?? 'XOF'}</span>
+            {:else}
+              <span class="text-outline">—</span>
+            {/if}
+            {#if r.period || r.minAmount != null || r.maxAmount != null}
+              <span class="block text-xs text-on-surface-variant mt-0.5">
+                {r.period ? PERIOD_LABELS[r.period] ?? r.period : ''}
+                {#if r.minAmount != null || r.maxAmount != null}
+                  {#if r.period}—{/if}
+                  {#if r.minAmount != null}min {r.minAmount.toLocaleString('fr-FR')}{/if}
+                  {#if r.minAmount != null && r.maxAmount != null} / {/if}
+                  {#if r.maxAmount != null}max {r.maxAmount.toLocaleString('fr-FR')}{/if}
+                {/if}
+              </span>
+            {/if}
+          </td>
+          <td class="px-4 py-3 text-sm">{r.type === 'ELIGIBILITY' ? r.weight : '—'}</td>
+          <td class="px-4 py-3">
             {#if r.isActive}
               <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
                 <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>Active
@@ -412,7 +506,7 @@
               </span>
             {/if}
           </td>
-          <td class="px-5 py-3">
+          <td class="px-4 py-3">
             <div class="flex gap-1">
               <button onclick={() => openForm(r)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container transition-all cursor-pointer border-none text-on-surface-variant">
                 <Pencil size={18} />
@@ -426,4 +520,35 @@
       {/each}
     </tbody>
   </table>
+  {#if totalPages > 4}
+    <div class="flex items-center justify-between px-4 py-3 border-t border-mint-subtle bg-background">
+      <span class="text-sm text-on-surface-variant">
+        {filtered.length} règle{filtered.length > 1 ? 's' : ''} — page {page}/{totalPages}
+      </span>
+      <div class="flex gap-1">
+        <button onclick={() => page = Math.max(1, page - 1)} disabled={page <= 1}
+          class="px-3 py-1.5 rounded-lg text-sm font-semibold border border-mint-subtle bg-white hover:bg-surface-container transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+          ←
+        </button>
+        {#if pages[0] > 1}
+          <button onclick={() => page = 1} class="px-3 py-1.5 rounded-lg text-sm font-semibold border border-mint-subtle bg-white hover:bg-surface-container transition-all cursor-pointer">1</button>
+          {#if pages[0] > 2}<span class="px-2 py-1.5 text-sm text-on-surface-variant">…</span>{/if}
+        {/if}
+        {#each pages as p}
+          <button onclick={() => page = p}
+            class="px-3 py-1.5 rounded-lg text-sm font-semibold border transition-all cursor-pointer {page === p ? 'bg-primary text-white border-primary' : 'border-mint-subtle bg-white hover:bg-surface-container'}">
+            {p}
+          </button>
+        {/each}
+        {#if pages[pages.length - 1] < totalPages}
+          {#if pages[pages.length - 1] < totalPages - 1}<span class="px-2 py-1.5 text-sm text-on-surface-variant">…</span>{/if}
+          <button onclick={() => page = totalPages} class="px-3 py-1.5 rounded-lg text-sm font-semibold border border-mint-subtle bg-white hover:bg-surface-container transition-all cursor-pointer">{totalPages}</button>
+        {/if}
+        <button onclick={() => page = Math.min(totalPages, page + 1)} disabled={page >= totalPages}
+          class="px-3 py-1.5 rounded-lg text-sm font-semibold border border-mint-subtle bg-white hover:bg-surface-container transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+          →
+        </button>
+      </div>
+    </div>
+  {/if}
 </div>
