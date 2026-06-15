@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { TransactionFetcher } from '../shared/transaction.fetcher';
+import { TransactionSourceRegistry } from '../sources/registry/transaction-source-registry';
 import { BalanceReconstructor } from '../shared/balance.reconstructor';
 import { ExpenseEngine } from '../engines/expense.engine';
 import { RevenueEngine } from '../engines/revenue.engine';
@@ -17,7 +17,7 @@ import { ANALYTICS_CONSTANTS } from '../config/constants';
 @Injectable()
 export class OverviewService {
   constructor(
-    private transactionFetcher: TransactionFetcher,
+    private sourceRegistry: TransactionSourceRegistry,
     private balanceReconstructor: BalanceReconstructor,
     private expenseEngine: ExpenseEngine,
     private revenueEngine: RevenueEngine,
@@ -40,7 +40,7 @@ export class OverviewService {
     month?: number,
   ): Promise<{ refYear: number; refMonth: number; analysisDate: Date }> {
     const latestDate =
-      await this.transactionFetcher.getLatestTransactionDate(customerId);
+      await this.sourceRegistry.getLatestTransactionDate(customerId);
     const now = latestDate ?? new Date();
 
     const refYear = year ?? now.getUTCFullYear();
@@ -107,11 +107,7 @@ export class OverviewService {
     from?: Date,
     to?: Date,
   ): Promise<Entry[]> {
-    return await this.transactionFetcher.fetchCustomerEntries(
-      customerId,
-      from,
-      to,
-    );
+    return await this.sourceRegistry.aggregateEntries(customerId, from, to);
   }
 
   async getExpenses(
@@ -676,7 +672,7 @@ export class OverviewService {
     );
     const entries = await this.getCertifiedEntries(customerId, lookbackStart);
     const savingsAccounts =
-      await this.transactionFetcher.fetchCustomerAccountsByType(
+      await this.sourceRegistry.fetchCustomerAccountsByType(
         customerId,
         'SAVINGS',
       );
@@ -693,7 +689,7 @@ export class OverviewService {
     this.gateway.emit('analytics_requested', { type: 'RETENTION', customerId });
     const { dailyBalances } = await this.getMonthlyDailyBalances(customerId);
     const transactions =
-      await this.transactionFetcher.fetchCustomerAllTransactions(customerId);
+      await this.sourceRegistry.aggregateTransactions(customerId);
 
     return await this.savingsEngine.calculateRetentionCapacity(
       transactions,
@@ -785,12 +781,11 @@ export class OverviewService {
   }
 
   async previewClassifier(customerId: string, from?: Date, to?: Date) {
-    const transactions =
-      await this.transactionFetcher.fetchCustomerTransactionsBetweenDates(
-        customerId,
-        from ?? new Date(0),
-        to ?? new Date(),
-      );
+    const transactions = await this.sourceRegistry.aggregateTransactions(
+      customerId,
+      from ?? new Date(0),
+      to ?? new Date(),
+    );
     const results = await Promise.all(
       transactions.map(async (tx) => ({
         description: tx.description,
@@ -956,7 +951,7 @@ export class OverviewService {
       refMonth,
     );
     const savingsAccounts =
-      await this.transactionFetcher.fetchCustomerAccountsByType(
+      await this.sourceRegistry.fetchCustomerAccountsByType(
         customerId,
         'SAVINGS',
       );

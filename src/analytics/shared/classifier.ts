@@ -1,8 +1,10 @@
-import { Logger, Injectable, OnModuleInit } from '@nestjs/common';
+import { Logger, Injectable, OnModuleInit, Optional } from '@nestjs/common';
 import { RedisService } from '../../redis/redis.service';
 import { EXPENSE_KEYWORDS, ExpenseCategory } from '../config/expense-keywords';
+import { EmbeddingClassifier } from '../embeddings/embedding-classifier';
 import Fuse from 'fuse.js';
 import * as natural from 'natural';
+import type { ScoredCategory } from '../embeddings/embedding-classifier';
 
 @Injectable()
 export class Classifier implements OnModuleInit {
@@ -19,7 +21,10 @@ export class Classifier implements OnModuleInit {
   // Cache des règles globales (mots-clés dynamiques)
   private static globalRules: Record<string, ExpenseCategory> = {};
 
-  constructor(private redisService: RedisService) {}
+  constructor(
+    private redisService: RedisService,
+    @Optional() private readonly embeddingClassifier?: EmbeddingClassifier,
+  ) {}
 
   async onModuleInit() {
     this.initClassifier();
@@ -135,7 +140,7 @@ export class Classifier implements OnModuleInit {
   }
 
   private matchAI(desc: string): ExpenseCategory {
-    // 1. Fuzzy Matching
+    // 1. Fuzzy Matching (Fuse.js)
     if (Classifier.fuseInstances) {
       const words = desc.split(/\s+/).filter((w) => w.length >= 3);
       const scores = new Map<ExpenseCategory, number>();
@@ -158,7 +163,15 @@ export class Classifier implements OnModuleInit {
       }
     }
 
-    // 2. Bayes
+    // 2. Embedding similarity (si les embeddings sont chargés)
+    if (this.embeddingClassifier?.isReady()) {
+      const result = this.embeddingClassifier.classify(desc);
+      if (result) {
+        return result.category;
+      }
+    }
+
+    // 3. Bayes (fallback)
     if (Classifier.bayesTrained && Classifier.bayesClassifier) {
       try {
         return (
@@ -177,6 +190,91 @@ export class Classifier implements OnModuleInit {
    * Enregistre une correction.
    * Elle devient une RÈGLE GLOBALE pour tout le système.
    */
+  /**
+   * Teste toutes les méthodes de classification et retourne les scores détaillés.
+   * Utilisé par l'interface admin.
+   */
+  testAll(
+    description: string,
+  ): {
+    exact: { category: ExpenseCategory; score: number } | null;
+    fuse: { category: ExpenseCategory; score: number } | null;
+    embedding: ScoredCategory | null;
+    embeddingTop3: ScoredCategory[];
+    bayes: ExpenseCategory | null;
+    winner: ExpenseCategory;
+  } {
+    const desc = description.toUpperCase().trim();
+
+    // Exact
+    const exact = this.matchExact(desc);
+    const exactResult =
+      exact !== ExpenseCategory.DIVERS
+        ? { category: exact, score: 10 }
+        : null;
+
+    // Fuse
+    let fuseResult: { category: ExpenseCategory; score: number } | null = null;
+    if (Classifier.fuseInstances) {
+      const words = desc.split(/\s+/).filter((w) => w.length >= 3);
+      const scores = new Map<ExpenseCategory, number>();
+      for (const [category, fuse] of Classifier.fuseInstances.entries()) {
+        for (const word of words) {
+          const results = fuse.search(word);
+          if (results.length > 0 && 1 - results[0].score! > 0.65) {
+            scores.set(
+              category,
+              (scores.get(category) || 0) + (1 - results[0].score!) * 10,
+            );
+          }
+        }
+      }
+      if (scores.size > 0) {
+        const winner = Array.from(scores.entries()).reduce((p, c) =>
+          c[1] > p[1] ? c : p,
+        );
+        fuseResult = { category: winner[0], score: winner[1] };
+      }
+    }
+
+    // Embedding
+    let embeddingResult: ScoredCategory | null = null;
+    let embeddingTop3: ScoredCategory[] = [];
+    if (this.embeddingClassifier?.isReady()) {
+      embeddingResult = this.embeddingClassifier.classify(desc, 0);
+      embeddingTop3 = this.embeddingClassifier.topN(desc, 3);
+    }
+
+    // Bayes
+    let bayesResult: ExpenseCategory | null = null;
+    if (Classifier.bayesTrained && Classifier.bayesClassifier) {
+      try {
+        bayesResult = Classifier.bayesClassifier.classify(
+          desc,
+        ) as ExpenseCategory;
+      } catch {
+        bayesResult = null;
+      }
+    }
+
+    // Winner : priorité exact > fuse > embedding > bayes > DIVERS
+    const winner =
+      exactResult?.category ??
+      fuseResult?.category ??
+      embeddingResult?.category ??
+      bayesResult ??
+      ExpenseCategory.DIVERS;
+
+    return {
+      exact: exactResult,
+      fuse: fuseResult,
+      embedding: embeddingResult,
+      embeddingTop3,
+      bayes: bayesResult,
+      winner,
+    };
+  }
+
   async recordFeedback(
     customerId: string,
     description: string,

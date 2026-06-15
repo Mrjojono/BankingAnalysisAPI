@@ -34,4 +34,24 @@ export const api = {
   getCatalog: () => request<any>('/catalog'),
   updateCatalog: (data: any) =>
     request<any>('/catalog', { method: 'PUT', body: JSON.stringify(data) }),
+
+  // Classifieur
+  testClassifier: (desc: string) =>
+    request<any>('/classifier/test?desc=' + encodeURIComponent(desc)),
+
+  // Embeddings
+  embeddingStats: () => request<any>('/embedding/stats'),
+  embeddingNeighbors: (desc: string, n = 5) =>
+    request<any>('/embedding/neighbors?desc=' + encodeURIComponent(desc) + '&n=' + n),
+
+  // Entraînement
+  trainingExamples: () => request<any>('/training/examples'),
+  createTrainingExample: (data: any) =>
+    request<any>('/training/examples', { method: 'POST', body: JSON.stringify(data) }),
+  updateTrainingExample: (id: string, data: any) =>
+    request<any>('/training/examples/' + id, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTrainingExample: (id: string) =>
+    request<any>('/training/examples/' + id, { method: 'DELETE' }),
+  runTraining: (params: { epochs?: number; lr?: number; layers?: number; margin?: number }) =>
+    request<any>('/training/run', { method: 'POST', body: JSON.stringify(params) }),
 };

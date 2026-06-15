@@ -184,6 +184,74 @@ export function renderAdviceTemplate(
   return result;
 }
 
+export function realizeScoreLabel(score: number, seed?: number): string {
+  const s = seed ?? stableHash(String(score), 42);
+  const labels = (catalog as any).score_labels as Record<string, string[]>;
+
+  let kind: string;
+  if (score >= 80) kind = 'EXCELLENT';
+  else if (score >= 60) kind = 'GOOD';
+  else if (score >= 40) kind = 'FRAGILE';
+  else kind = 'CRITICAL';
+
+  const templates = labels[kind];
+  if (!templates || templates.length === 0) {
+    return `Score : ${score}/100`;
+  }
+
+  const tpl = templates[stableHash(kind + String(s), 0) % templates.length];
+  let result = fillTemplate(tpl, { score });
+  result = correctFrench(result);
+  result = applySynonyms(result, s + 1);
+  return result;
+}
+
+export function realizeScoreInterpretation(
+  componentName: string,
+  score: number,
+): {
+  level: 'CRITIQUE' | 'FAIBLE' | 'MOYEN' | 'BON' | 'EXCELLENT';
+  label: string;
+  message: string;
+  priorities: string[];
+} {
+  const level =
+    score >= 80
+      ? 'EXCELLENT'
+      : score >= 60
+        ? 'BON'
+        : score >= 40
+          ? 'MOYEN'
+          : score >= 20
+            ? 'FAIBLE'
+            : 'CRITIQUE';
+
+  const interpretations = (catalog as any).score_interpretations as Record<
+    string,
+    {
+      label: string;
+      levels: Record<
+        string,
+        { label: string; message: string; priorities: string[] }
+      >;
+    }
+  >;
+
+  const component = interpretations[componentName];
+  const levelData = component?.levels?.[level];
+
+  if (!levelData) {
+    return {
+      level,
+      label: componentName,
+      message: `Score ${componentName} : ${score}/100`,
+      priorities: [],
+    };
+  }
+
+  return { level, ...levelData };
+}
+
 export function realizeEligibilityIntent(
   intent: EligibilityIntent,
   ruleId: string,

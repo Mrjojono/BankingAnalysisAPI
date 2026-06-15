@@ -14,6 +14,9 @@
   let helpOpen = $state(false);
   let loading = $state(false);
   let patternForm = $state<{ label: string; unit: string; pass: string[]; fail: string[]; partial: string[]; advice: string[] } | null>(null);
+  let interpretationForm = $state<{ label: string; levels: Record<string, { label: string; message: string; priorities: string[] }> } | null>(null);
+
+  const LEVEL_KEYS = ['EXCELLENT', 'BON', 'MOYEN', 'FAIBLE', 'CRITIQUE'];
 
   type SectionLabel = { label: string; unit: string };
 
@@ -22,6 +25,8 @@
     advice_templates: { label: 'Conseils', unit: '' },
     interpreter: { label: 'Interpréteur', unit: '' },
     labels: { label: 'Libellés', unit: '' },
+    score_labels: { label: 'Étiquettes de score', unit: '' },
+    score_interpretations: { label: 'Interprétations du score', unit: '' },
   };
 
   const PLACEHOLDER_HINTS = [
@@ -50,6 +55,12 @@
         unit: data.article ?? '',
         pass: [], fail: [], partial: [], advice: [],
       };
+    } else if (section === 'score_labels') {
+      patternForm = {
+        label: '', unit: '',
+        pass: Array.isArray(data) ? [...data] : [],
+        fail: [], partial: [], advice: [],
+      };
     } else if (section === 'interpreter') {
       patternForm = {
         label: data.title ?? '',
@@ -62,6 +73,20 @@
         label: '', unit: '',
         pass: Array.isArray(data) ? [...data] : [],
         fail: [], partial: [], advice: [],
+      };
+    } else if (section === 'score_interpretations') {
+      const levels: Record<string, any> = {};
+      for (const lvl of LEVEL_KEYS) {
+        const l = data.levels?.[lvl];
+        levels[lvl] = {
+          label: l?.label ?? '',
+          message: l?.message ?? '',
+          priorities: Array.isArray(l?.priorities) ? [...l.priorities] : [],
+        };
+      }
+      interpretationForm = {
+        label: data.label ?? '',
+        levels,
       };
     } else {
       patternForm = {
@@ -103,6 +128,15 @@
       catalog[section][patten] = { label: form.label, article: form.unit };
     } else if (section === 'advice_templates') {
       catalog[section][patten] = form.pass.filter(Boolean);
+    } else if (section === 'score_labels') {
+      catalog[section][patten] = form.pass.filter(Boolean);
+    } else if (section === 'score_interpretations') {
+      if (interpretationForm) {
+        catalog[section][patten] = {
+          label: interpretationForm.label,
+          levels: interpretationForm.levels,
+        };
+      }
     } else {
       const data = catalog[section]?.[patten] ?? {};
       Object.assign(data, {
@@ -159,7 +193,13 @@
     <h4 class="font-bold text-base mt-2">3. Section Interpréteur (interpreter)</h4>
     <p>Règles d'interprétation budgétaire avec sévérité (WARNING/INFO), un titre, des templates et des actions suggérées. Utilisées pour analyser les catégories de dépenses (LOGEMENT, ALIMENTATION, TRANSPORT…).</p>
 
-    <h4 class="font-bold text-base mt-2">4. Section Libellés (labels)</h4>
+    <h4 class="font-bold text-base mt-2">4. Section Étiquettes de score (score_labels)</h4>
+      <p>Messages personnalisés pour chaque niveau de score (EXCELLENT, GOOD, FRAGILE, CRITICAL). Chaque clé contient un tableau de variantes de message. Le moteur en choisit une aléatoirement pour accompagner le score.</p>
+
+    <h4 class="font-bold text-base mt-2">5. Section Interprétations du score (score_interpretations)</h4>
+      <p>Interprétation détaillée de chaque composant du score global (C1 dépenses, C2 endettement, C3 épargne, C4 stabilité). Chaque composant définit 5 niveaux (EXCELLENT à CRITIQUE) avec un titre, un message d'explication et une liste de priorités d'action.</p>
+
+    <h4 class="font-bold text-base mt-2">6. Section Libellés (labels)</h4>
       <p>Libellés des catégories de budget avec leur article (le, la, l'). Exemple : <code>LOGEMENT → {'{'}"label": "logement", "article": "le"{'}'}</code>.</p>
 
     <h4 class="font-bold text-base mt-2">Fonctionnement général</h4>
@@ -176,20 +216,22 @@
 <Drawer
   open={drawerOpen}
   title={editingPattern ?? 'Éditeur'}
-  onclose={() => { drawerOpen = false; editingSection = null; editingPattern = null; patternForm = null; }}
+  onclose={() => { drawerOpen = false; editingSection = null; editingPattern = null; patternForm = null; interpretationForm = null; }}
 >
-  {#if patternForm}
+  {#if patternForm || interpretationForm}
     <div class="flex flex-col gap-4">
-      <div class="flex flex-wrap gap-2 mb-2">
-        <span class="text-xs font-semibold text-on-surface-variant w-full">Placeholders disponibles :</span>
-        {#each PLACEHOLDER_HINTS as h}
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-surface-container rounded text-xs font-mono text-on-surface-variant"
-            title={h.desc}>
-            <span class="font-bold">{h.token}</span>
-            <span class="text-[10px] text-outline">— {h.desc}</span>
-          </span>
-        {/each}
-      </div>
+      {#if editingSection !== 'score_interpretations'}
+        <div class="flex flex-wrap gap-2 mb-2">
+          <span class="text-xs font-semibold text-on-surface-variant w-full">Placeholders disponibles :</span>
+          {#each PLACEHOLDER_HINTS as h}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-surface-container rounded text-xs font-mono text-on-surface-variant"
+              title={h.desc}>
+              <span class="font-bold">{h.token}</span>
+              <span class="text-[10px] text-outline">— {h.desc}</span>
+            </span>
+          {/each}
+        </div>
+      {/if}
 
       {#if editingSection === 'labels'}
         <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
@@ -224,9 +266,9 @@
             </button>
           </div>
         </label>
-      {:else if editingSection === 'advice_templates'}
+      {:else if editingSection === 'advice_templates' || editingSection === 'score_labels'}
         <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
-          Messages de conseil
+          {editingSection === 'advice_templates' ? 'Messages de conseil' : 'Messages'}
           <div class="flex flex-col gap-2">
             {#each patternForm.pass as _, i}
               <div class="flex gap-2 items-start">
@@ -244,6 +286,44 @@
             </button>
           </div>
         </label>
+      {:else if editingSection === 'score_interpretations' && interpretationForm}
+        <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+          Nom du composant
+          <input bind:value={interpretationForm.label} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+        </label>
+        {#each LEVEL_KEYS as lvl}
+          <div class="border border-mint-subtle rounded-xl p-4 flex flex-col gap-3">
+            <h4 class="font-bold text-sm text-on-surface-variant uppercase tracking-wide">{lvl}</h4>
+            <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+              Titre
+              <input bind:value={interpretationForm.levels[lvl].label} class="w-full px-3 py-2 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+              Message
+              <textarea bind:value={interpretationForm.levels[lvl].message} rows="3"
+                class="w-full px-3 py-2 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all resize-vertical"></textarea>
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+              Priorités
+              <div class="flex flex-col gap-2">
+                {#each interpretationForm.levels[lvl].priorities as _, i}
+                  <div class="flex gap-2 items-start">
+                    <input bind:value={interpretationForm.levels[lvl].priorities[i]} class="flex-1 px-3 py-2 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+                    <button onclick={() => interpretationForm.levels[lvl].priorities.splice(i, 1)}
+                      class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 hover:text-error transition-all cursor-pointer border-none text-on-surface-variant shrink-0 mt-1">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                {/each}
+                <button onclick={() => interpretationForm.levels[lvl].priorities.push('')}
+                  class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-[#2d5200] transition-all cursor-pointer border-none bg-transparent mt-1">
+                  <Plus size={16} />
+                  Ajouter une priorité
+                </button>
+              </div>
+            </label>
+          </div>
+        {/each}
       {:else}
         <div class="grid grid-cols-2 gap-4">
           <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
@@ -292,7 +372,7 @@
       {/if}
 
       <div class="flex gap-3 justify-end mt-4 pt-4 border-t border-mint-subtle">
-        <button onclick={() => { drawerOpen = false; editingSection = null; editingPattern = null; patternForm = null; }}
+        <button onclick={() => { drawerOpen = false; editingSection = null; editingPattern = null; patternForm = null; interpretationForm = null; }}
           class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white border border-mint-subtle hover:bg-surface-container transition-all cursor-pointer">
           Annuler
         </button>
@@ -319,6 +399,8 @@
           {section === 'advice_templates' ? 'Alertes financières et conseils personnalisés' : ''}
           {section === 'interpreter' ? "Règles d'interprétation budgétaire" : ''}
           {section === 'labels' ? 'Libellés des catégories de budget' : ''}
+          {section === 'score_labels' ? 'Messages personnalisés pour chaque niveau de score financier' : ''}
+          {section === 'score_interpretations' ? 'Interprétation détaillée de chaque composant du score (C1-C4)' : ''}
         </p>
       </div>
       <div class="p-4 flex flex-wrap gap-2">

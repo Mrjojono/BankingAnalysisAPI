@@ -18,8 +18,8 @@ export class ForgotPasswordDto {
   contact: string;
 
   @ApiPropertyOptional({
-    description: 'Code OTP (optionnel)',
-    example: '1234',
+    description: 'Code OTP à 6 chiffres (optionnel)',
+    example: '847291',
   })
   @IsString()
   @IsOptional()

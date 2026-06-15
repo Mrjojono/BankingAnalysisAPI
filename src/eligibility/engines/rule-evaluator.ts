@@ -103,7 +103,7 @@ export class RuleEvaluator {
     const ptype = inferPatternType(
       rule.field ?? '',
       rule.label,
-      rule.operator as string | null,
+      rule.operator,
       rule.percentage != null,
     );
     const unit = detectUnit(rule.field ?? '', rule.label);

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { TransactionFetcher } from '../shared/transaction.fetcher';
+import { TransactionSourceRegistry } from '../sources/registry/transaction-source-registry';
 import { Classifier } from '../shared/classifier';
 import { filterEntries } from '../helper';
 import { InterpreterEngine, type RuleContext } from './interpreter.engine';
@@ -16,12 +16,13 @@ type CategoryTotals = {
   amount: number;
   count: number;
   percent: number;
+  descriptions: string[];
 };
 
 @Injectable()
 export class AdviceEngine {
   constructor(
-    private transactionFetcher: TransactionFetcher,
+    private sourceRegistry: TransactionSourceRegistry,
     private classifier: Classifier,
     private interpreter: InterpreterEngine,
   ) {}
@@ -43,8 +44,7 @@ export class AdviceEngine {
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0, 23, 59, 59, 999),
     );
 
-    const allEntries =
-      await this.transactionFetcher.fetchCustomerEntries(customerId);
+    const allEntries = await this.sourceRegistry.aggregateEntries(customerId);
     if (allEntries.length === 0) return allAdvice;
 
     // recuperation des transactions actuelles et precedentes en les filtrant pour chaque categories
@@ -106,6 +106,7 @@ export class AdviceEngine {
         totalRevenue,
         totalExpenses,
         expenseRatio,
+        descriptions: cat.descriptions,
       };
 
       const intents = this.interpreter.interpret(ctx);
@@ -214,7 +215,14 @@ export class AdviceEngine {
     entries: Entry[],
     customerId: string,
   ): Promise<CategoryTotals[]> {
-    const grouped = new Map<string, { amount: number; count: number }>();
+    const grouped = new Map<
+      string,
+      {
+        amount: number;
+        count: number;
+        descriptions: string[];
+      }
+    >();
 
     for (const entry of entries) {
       const category = await this.classifier.categorizeWithCache(
@@ -222,22 +230,25 @@ export class AdviceEngine {
         customerId,
       );
       const amount = Number(entry.amount);
+      const desc = entry.transaction.description ?? '';
       const existing = grouped.get(category);
       if (existing) {
         existing.amount += amount;
         existing.count += 1;
+        existing.descriptions.push(desc);
       } else {
-        grouped.set(category, { amount, count: 1 });
+        grouped.set(category, { amount, count: 1, descriptions: [desc] });
       }
     }
 
     const total = [...grouped.values()].reduce((s, g) => s + g.amount, 0);
     return [...grouped.entries()]
-      .map(([category, { amount, count }]) => ({
+      .map(([category, { amount, count, descriptions }]) => ({
         category,
         amount,
         count,
         percent: total > 0 ? Math.round((amount / total) * 100) : 0,
+        descriptions,
       }))
       .sort((a, b) => b.amount - a.amount);
   }

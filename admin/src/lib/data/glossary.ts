@@ -1,7 +1,7 @@
 export interface GlossaryEntry {
   term: string;
   def: string;
-  category: 'produit' | 'regle' | 'metrique' | 'frais' | 'sigle' | 'score';
+  category: 'produit' | 'regle' | 'metrique' | 'frais' | 'sigle' | 'score' | 'ia';
   seeAlso?: string[];
 }
 
@@ -23,6 +23,10 @@ export const CATEGORIES: Record<
   score: {
     label: 'Score et éligibilité',
     description: 'Scores, statuts et mécanismes',
+  },
+  ia: {
+    label: 'IA & Analytics',
+    description: 'Classifieur, embeddings, matrice, entraînement',
   },
 };
 
@@ -462,5 +466,232 @@ export const glossary: GlossaryEntry[] = [
     term: 'Pondération (weight)',
     def: "Chaque règle ELIGIBILITY a un poids (weight) de 1 à 10 qui détermine son importance. Le poids maximum total pour un produit est la somme des poids de toutes ses règles ELIGIBILITY. Une règle avec weight=10 est 2× plus importante qu'une règle weight=5.",
     category: 'regle',
+  },
+
+  // ─── IA & Analytics ─────────────────────────────────────────────
+  {
+    term: 'Feature Vector',
+    def: "Vecteur numérique de 21 dimensions (features de base) ou 321 dimensions (21 features + 300 embeddings) qui représente le contexte financier d'un client. Chaque dimension correspond à une feature : montant, ratio, variation, catégorie one-hot, etc. Construit par ContextVectorBuilder.",
+    category: 'ia',
+  },
+  {
+    term: 'Weight Matrix',
+    def: "Matrice 21×17 reliant les 21 features de base aux 17 intentions (AdviceIntent). Chaque cellule contient un poids : positif = activation, négatif = inhibition. Le score d'une intention = somme pondérée des features. Initialisée pour reproduire les 16 règles if/else historiques.",
+    category: 'ia',
+  },
+  {
+    term: 'Deep Weight Matrices (2 couches)',
+    def: "Architecture à 2 couches : W1 (321×32) relie les 321 features à 32 neurones cachés, W2 (32×17) relie les 32 neurones cachés aux 17 intentions. Utilisée quand les embeddings 300D sont disponibles. Plus expressive mais nécessite plus de données d'entraînement.",
+    category: 'ia',
+  },
+  {
+    term: 'Feature Index',
+    def: "Mapping des noms de features (cat_LOGEMENT, percent, change, amount_ratio, expense_ratio…) vers leur position (0-20) dans le vecteur. Défini dans context-vector.builder.ts.",
+    category: 'ia',
+  },
+  {
+    term: 'Intent Index',
+    def: "Mapping des noms d'intentions (LOGEMENT_CRITICAL, ALIMENTATION_SPIKE, GOOD_HABIT…) vers leur colonne (0-16) dans la matrice des poids. Défini dans intent-matrix.ts.",
+    category: 'ia',
+  },
+  {
+    term: 'AdviceIntent (intention)',
+    def: "Résultat d'interprétation du moteur matriciel. Représente un conseil ou une alerte sur la situation financière du client. Exemples : LOGEMENT_CRITICAL (loyer > 50% revenus), ALIMENTATION_SPIKE (pic dépenses nourriture), GOOD_HABIT (bon ratio épargne). 17 intentions possibles.",
+    category: 'ia',
+  },
+  {
+    term: 'Seuil 0.8 (scoring)',
+    def: "Score minimum (0.8) pour qu'une intention soit retenue par le ScoringEngine. Les intentions avec un score inférieur sont rejetées. Évite les faux positifs et ne conserve que les alertes pertinentes.",
+    category: 'ia',
+  },
+  {
+    term: 'ScoringEngine',
+    def: "Calcule le score de chaque intention en multipliant le Feature Vector par la Weight Matrix (produit scalaire). Version 1-layer : score = W × v. Version deep : score = softmax(ReLU(W1 × v) × W2). Seuil à 0.8.",
+    category: 'ia',
+  },
+  {
+    term: 'MatrixInterpreterEngine',
+    def: "Nouveau moteur d'interprétation qui remplace l'ancien InterpreterEngine (if/else). Détecte automatiquement si les embeddings sont disponibles : 321 features + 2 couches si oui, 21 features + 1 couche sinon. Injection via NestJS DI override dans AnalyticsModule.",
+    category: 'ia',
+  },
+  {
+    term: 'Embedding (plongement lexical)',
+    def: "Représentation vectorielle d'un mot dans un espace continu à 300 dimensions. Les mots sémantiquement proches (ex: 'loyer' et 'appartement') ont des vecteurs similaires. Chargé depuis le fichier fastText cc.fr.300.vec (français, 50 000 mots).",
+    category: 'ia',
+  },
+  {
+    term: 'Centroïde',
+    def: "Vecteur moyen obtenu en moyennant les embeddings de tous les mots-clés d'une catégorie. Chaque ExpenseCategory (LOGEMENT, ALIMENTATION…) a un centroïde qui représente le sens moyen de ses mots. La classification cosine compare une description à chaque centroïde.",
+    category: 'ia',
+  },
+  {
+    term: 'Cosine Similarity',
+    def: "Mesure de similarité entre deux vecteurs : cos(θ) = (A·B) / (|A| × |B|). Résultat entre -1 (opposé) et 1 (identique). 0 = orthogonal (aucun rapport). Utilisée par EmbeddingClassifier pour classer une description dans la catégorie la plus proche.",
+    category: 'ia',
+  },
+  {
+    term: 'Exact Match',
+    def: "Méthode de classification la plus rapide : recherche textuelle stricte des mots-clés dans la description. Si la description contient 'LOYER', elle est classée en LOGEMENT. Score fixe = 10. Priorité maximale dans l'ordre des méthodes.",
+    category: 'ia',
+  },
+  {
+    term: 'Fuse.js (Fuzzy Match)',
+    def: "Bibliothèque de recherche approximative tolérant fautes de frappe et variations. Pour chaque mot de la description, cherche le mot-clé le plus proche. Score sur 10 : ≥ 4 = fiable. Deuxième méthode dans l'ordre de priorité.",
+    category: 'ia',
+  },
+  {
+    term: 'Bayes Classifier',
+    def: "Classifieur probabiliste Naïve Bayes de la bibliothèque natural. Entraîné sur tous les mots-clés de EXPENSE_KEYWORDS. Retourne directement la catégorie la plus probable sans score numérique. Dernière méthode de l'ordre de priorité.",
+    category: 'ia',
+  },
+  {
+    term: 'EmbeddingClassifier',
+    def: "Classifieur basé sur les embeddings : calcule le centroïde de chaque ExpenseCategory, vectorise la description via TextVectorizer, puis trouve la catégorie dont le centroïde est le plus proche (cosine similarity ≥ 0.5). Peut retourner le top-N des catégories les plus proches.",
+    category: 'ia',
+  },
+  {
+    term: 'TextVectorizer',
+    def: "Transforme un texte en vecteur 300D en tokenisant et en faisant la moyenne des embeddings de chaque mot. Si aucun embedding n'est trouvé pour un mot, il est ignoré. Retourne un vecteur nul si aucun mot n'est reconnu.",
+    category: 'ia',
+  },
+  {
+    term: 'EmbeddingLoader',
+    def: "Charge le fichier fastText cc.fr.300.vec en mémoire. Limité à 50 000 mots les plus fréquents pour rester sous 60 Mo RAM. Affiche une barre de progression animée. Si le fichier est absent, le système fonctionne sans embeddings (mode 21 features only).",
+    category: 'ia',
+  },
+  {
+    term: 'cc.fr.300.vec',
+    def: "Fichier de plongements lexicaux fastText pour le français. Chaque ligne = un mot + 300 nombres flottants (ses coordonnées vectorielles). Contient ~2M mots (2.4 Go), limité à 50 000. À télécharger via scripts/download-embeddings.sh (non commité dans git).",
+    category: 'ia',
+  },
+  {
+    term: 'MAX_EMBEDDING_WORDS',
+    def: "Constante fixée à 50 000 mots maximum chargés depuis le fichier .vec. Évite l'explosion mémoire (2.4 Go → ~60 Mo). Les mots sont triés par fréquence décroissante dans le fichier, donc seuls les 50 000 plus fréquents sont conservés.",
+    category: 'ia',
+  },
+  {
+    term: 'Entraînement (Training)',
+    def: "Processus supervisé qui optimise les poids de la matrice pour minimiser l'erreur sur des exemples connus. Utilise la descente de gradient (gradient descent) avec margin loss. Les poids entraînés sont sauvegardés dans src/analytics/matrix/trained-weights.ts.",
+    category: 'ia',
+  },
+  {
+    term: 'Époque (epoch)',
+    def: "Un passage complet sur l'ensemble des données d'entraînement. Plus d'époques = plus d'apprentissage, mais risque de surapprentissage (overfitting) au-delà de 500 époques. Valeur par défaut : 100.",
+    category: 'ia',
+  },
+  {
+    term: 'Learning Rate (lr)',
+    def: "Pas de la descente de gradient. Détermine la vitesse d'ajustement des poids à chaque itération. 0.01 = valeur sûre. Trop élevé (≥ 0.1) : instable, la loss peut diverger. Trop faible (≤ 0.0001) : convergence très lente.",
+    category: 'ia',
+  },
+  {
+    term: 'Loss (perte / erreur)',
+    def: "Valeur à minimiser pendant l'entraînement. Mesure l'écart entre les prédictions du modèle et les résultats attendus. Doit diminuer au fil des époques. Si elle augmente ou oscille, le learning rate est trop élevé.",
+    category: 'ia',
+  },
+  {
+    term: 'Margin Loss',
+    def: "Fonction de perte avec marge : loss = max(0, marge - score_bonne_classe + score_mauvaise_classe). Encourage le modèle à être confiant dans ses prédictions en imposant un écart minimum (margin) entre le bon score et les mauvais. Valeur par défaut : 0.5.",
+    category: 'ia',
+  },
+  {
+    term: 'Accuracy (précision)',
+    def: "Pourcentage de classifications correctes. Accuracy simple = la bonne intention est en première position. Top-3 accuracy = la bonne intention est dans les 3 premiers scores. Affiché à chaque époque pendant l'entraînement.",
+    category: 'ia',
+  },
+  {
+    term: 'Gradient Descent',
+    def: "Algorithme d'optimisation qui ajuste les poids dans la direction opposée au gradient de la loss. Pour chaque poids : nouveau_poids = ancien_poids - lr × ∂loss/∂poids. Implémenté dans gradient-descent.ts pour 1 couche (direct) et 2 couches (backpropagation).",
+    category: 'ia',
+  },
+  {
+    term: 'Backpropagation (rétropropagation)',
+    def: "Algorithme qui calcule le gradient de la loss à travers les couches du réseau. Utilise la dérivée de ReLU pour propager l'erreur de la sortie vers l'entrée. Nécessaire pour l'architecture 2 couches (W1 → ReLU → W2 → softmax).",
+    category: 'ia',
+  },
+  {
+    term: '1 couche (linéaire)',
+    def: "Architecture simple : 21 features → 17 intentions. Calcul direct : score = W × v. Pas de non-linéarité. Reproduit exactement les 16 règles if/else. Sûre, rapide, mais moins expressive que la version 2 couches.",
+    category: 'ia',
+  },
+  {
+    term: '2 couches (profond)',
+    def: "Architecture avec une couche cachée de 32 neurones ReLU : 321 features (21 + 300 embeddings) → 32 → softmax → 17 intentions. Plus expressive mais nécessite les embeddings et plus de données d'entraînement.",
+    category: 'ia',
+  },
+  {
+    term: 'trained-weights.ts',
+    def: "Fichier automatiquement généré par l'entraînement dans src/analytics/matrix/. Contient les poids optimisés (TRAINED_WEIGHTS pour 1 couche, TRAINED_W1 + TRAINED_W2 pour 2 couches). Non commité dans git (dans .gitignore). Chargé par loadOrBuildWeights() au démarrage.",
+    category: 'ia',
+  },
+  {
+    term: 'training-data.json',
+    def: "Fichier de données d'entraînement à la racine du projet. Contient un tableau d'exemples (id, context, expected). 36 exemples initiaux couvrant les 17 intentions. Modifiable manuellement ou via l'interface Entraînement de l'admin.",
+    category: 'ia',
+  },
+  {
+    term: 'TransactionSourceProvider',
+    def: "Interface TypeScript définissant le contrat pour toute source de transactions financières. Méthode fetchEntries(clientId, dateFrom, dateTo) retournant des TransactionEntry[]. Permet d'ajouter de nouvelles sources (TMoney, Orange Money…) sans modifier le code existant.",
+    category: 'ia',
+  },
+  {
+    term: 'TransactionSourceRegistry',
+    def: "Orchestrateur qui agrège les transactions de toutes les sources connectées. Utilise Promise.allSettled() pour qu'une source défaillante ne bloque pas les autres. Déduplique les transactions par ID.",
+    category: 'ia',
+  },
+  {
+    term: 'DbSource',
+    def: "Ancien TransactionFetcher, devenu une source comme les autres. Lit les transactions depuis la base PostgreSQL (historique bancaire). Toujours actif et prioritaire.",
+    category: 'ia',
+  },
+  {
+    term: 'TMoneySource',
+    def: "Source de transactions mobile money pour le service TMoney (opérateur togolais). Stub actuellement : retourne un tableau vide. À connecter à l'API TMoney réelle quand disponible.",
+    category: 'ia',
+  },
+  {
+    term: 'ExpenseCategory',
+    def: "Énumération des 15 catégories de dépenses : LOGEMENT, ALIMENTATION, TRANSPORT, SANTE, MOBILE_MONEY, CARBURANT, COMMERCE, FRAIS_BANCAIRES, VIREMENTS, RETRAITS, DEPOTS, INTERETS, CREDIT, SALAIRE, DIVERS. Utilisée par le classifieur et le moteur d'analyse.",
+    category: 'ia',
+  },
+  {
+    term: 'EXPENSE_KEYWORDS',
+    def: "Dictionnaire statique associant chaque ExpenseCategory à une liste de mots-clés. Exemple : LOGEMENT → ['LOYER', 'CEET', 'TOGOCOM', 'APPARTEMENT'…]. Environ 500 mots-clés au total. Source unique de vérité pour la classification par mots-clés.",
+    category: 'ia',
+  },
+  {
+    term: 'Classifieur (Classifier)',
+    def: "Service central de classification des descriptions bancaires. Combine 4 méthodes dans cet ordre : 1) Exact Match (mots-clés stricts), 2) Fuse.js (fuzzy), 3) Embedding (cosinus), 4) Bayes (probabiliste). Priorité : la première méthode qui trouve un résultat gagne.",
+    category: 'ia',
+  },
+  {
+    term: 'scripts/download-embeddings.sh',
+    def: "Script shell qui télécharge le fichier cc.fr.300.vec depuis le site fastText (~2.4 Go). À exécuter une fois pour activer les embeddings. Le fichier est stocké dans data/embeddings/ et ne doit pas être commité.",
+    category: 'ia',
+  },
+  {
+    term: 'MATRIX_MODULE.md',
+    def: "Documentation détaillée du module matriciel à la racine du projet. Explique le calcul des scores, la structure des matrices, et donne des exemples concrets pour chaque intention.",
+    category: 'ia',
+  },
+  {
+    term: 'Classifieur Admin (page)',
+    def: "Interface de test interactif du classifieur. Permet de saisir une description bancaire et de voir le résultat de chaque méthode (Exact, Fuse.js, Embedding, Bayes) avec leurs scores. Affiche le top-3 des similarités cosinus.",
+    category: 'ia',
+  },
+  {
+    term: 'Embeddings Admin (page)',
+    def: "Interface affichant les statistiques du module d'embeddings : statut de chargement, taille du vocabulaire, nombre de catégories, mots-clés trouvés par catégorie. Permet aussi une recherche sémantique (top-5 des catégories les plus proches d'une description).",
+    category: 'ia',
+  },
+  {
+    term: 'Entraînement Admin (page)',
+    def: "Interface de configuration et de lancement de l'entraînement supervisé. Paramètres : époques, learning rate, nombre de couches, marge. Affiche les données d'entraînement et les résultats (loss, accuracy, top-3) après exécution.",
+    category: 'ia',
+  },
+  {
+    term: 'InfoDrawer',
+    def: "Composant Svelte réutilisable qui affiche un panneau latéral d'explications. Chaque page de l'admin Analytics (Classifieur, Embeddings, Entraînement) a son propre contenu d'aide avec des icônes lucide et des définitions claires.",
+    category: 'ia',
   },
 ];

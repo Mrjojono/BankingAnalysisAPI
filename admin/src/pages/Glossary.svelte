@@ -50,7 +50,7 @@
   <div class="flex flex-col gap-4 text-sm leading-relaxed text-on-surface">
     <p>Cette page regroupe les définitions des termes techniques utilisés dans l'application. Les données proviennent du fichier <code>admin/src/lib/data/glossary.ts</code>.</p>
 
-    <h4 class="font-bold text-base mt-2">Les 6 catégories</h4>
+    <h4 class="font-bold text-base mt-2">Les 7 catégories</h4>
     <ul class="list-disc pl-5 flex flex-col gap-1.5">
       <li><span class="font-semibold">Sigles</span> — acronymes bancaires (BCEAO, SWIFT, GIM, TBB, TAF, UEMOA…)</li>
       <li><span class="font-semibold">Produits et services</span> — définitions des produits (compte chèques, prêt consommation, crédit habitat, carte prépayée, découvert…)</li>
@@ -58,6 +58,7 @@
       <li><span class="font-semibold">Métriques</span> — indicateurs financiers calculés par le moteur analytics (debtRatio, monthlyIncome, expenseRatio, overdraftDays, savingsRate…)</li>
       <li><span class="font-semibold">Frais</span> — frais et commissions bancaires (tenue de compte, commission plus fort découvert, frais de dossier…)</li>
       <li><span class="font-semibold">Score et éligibilité</span> — mécanismes de scoring (score éligibilité, statuts ELIGIBLE/PARTIAL/NOT_ELIGIBLE, patterns de messages, moteur d'éligibilité…)</li>
+      <li><span class="font-semibold">IA & Analytics</span> — classifieur, embeddings, matrice des poids, intentions, entraînement, sources de données (45 nouveaux termes)</li>
     </ul>
 
     <h4 class="font-bold text-base mt-2">Navigation</h4>

@@ -101,10 +101,7 @@
     "BOOLEAN_TRUE": {
       "label": "statut",
       "unit": "",
-      "pass": [
-        "Le statut est conforme : {value}.",
-        "Critère OK : {value}."
-      ],
+      "pass": ["Le statut est conforme : {value}.", "Critère OK : {value}."],
       "fail": [
         "Le statut \"{value}\" doit être activé.",
         "Critère non rempli : le statut doit être validé."
@@ -168,12 +165,8 @@
     "UNKNOWN": {
       "label": "valeur",
       "unit": "",
-      "pass": [
-        "{label} : {value} — condition remplie."
-      ],
-      "fail": [
-        "{label} : {value} — seuil requis : {threshold}{unit}."
-      ],
+      "pass": ["{label} : {value} — condition remplie."],
+      "fail": ["{label} : {value} — seuil requis : {threshold}{unit}."],
       "partial": [
         "{label} : {value} — proche du seuil requis {threshold}{unit}."
       ],
@@ -242,9 +235,7 @@
         "Votre logement représente {percent}% de vos dépenses, soit {amount} FCFA. C'est dans la norme (moins de {threshold}%). Votre budget logement est équilibré.",
         "Bon point : le logement ne pèse que {percent}% du budget ({amount} FCFA). La norme est {threshold}%."
       ],
-      "actions": [
-        ""
-      ]
+      "actions": [""]
     },
     "CREDIT_HIGH": {
       "severity": "WARNING",
@@ -363,9 +354,7 @@
         "Vos transactions mobile money ont augmenté de {change}% ce mois. Vérifiez que vous n'accumulez pas trop de frais sur ces transferts.",
         "Mobile money : +{change}% ce mois. Regroupez vos transferts pour réduire les frais."
       ],
-      "actions": [
-        "Regroupez vos transferts pour réduire les frais unitaires."
-      ]
+      "actions": ["Regroupez vos transferts pour réduire les frais unitaires."]
     },
     "FEES_HIGH": {
       "severity": "WARNING",
@@ -397,9 +386,203 @@
         "Vous ne dépensez que {percent}% de votre budget en {label}. C'est un bon équilibre.",
         "Bon point : {label} ne représente que {percent}% du budget. Continuez ainsi."
       ],
-      "actions": [
-        ""
-      ]
+      "actions": [""]
+    }
+  },
+  "score_labels": {
+    "EXCELLENT": [
+      "Votre santé financière est excellente ! Continuez ainsi !",
+      "Félicitations ! Votre situation financière est au top.",
+      "Excellent résultat ! Vos finances sont parfaitement gérées.",
+      "Vous maîtrisez parfaitement votre budget, bravo !"
+    ],
+    "GOOD": [
+      "Votre situation financière est bonne ce mois-ci.",
+      "Bonne santé financière ! Vous gérez bien votre budget.",
+      "Vos finances sont sur la bonne voie. Continuez vos efforts !",
+      "Une situation financière satisfaisante, continuez comme ça."
+    ],
+    "FRAGILE": [
+      "Votre situation financière est fragile. Quelques ajustements sont nécessaires.",
+      "Santé financière fragile. Identifiez vos postes de dépenses à réduire.",
+      "Attention : votre situation montre une fragilité. Revoyez votre budget.",
+      "Des efforts sont à prévoir pour améliorer votre santé financière."
+    ],
+    "CRITICAL": [
+      "Votre situation financière nécessite une attention urgente.",
+      "Santé financière critique. Prenez rapidement des mesures correctives.",
+      "Alerte : votre situation est critique. Contactez votre conseiller.",
+      "Une situation préoccupante. Une action immédiate est recommandée.",
+      "vous devriez voir votre manager "
+    ]
+  },
+  "score_interpretations": {
+    "C1_expenses": {
+      "label": "Dépenses",
+      "levels": {
+        "EXCELLENT": {
+          "label": "Dépenses maîtrisées",
+          "message": "Vos d\u00e9penses sont parfaitement sous contr\u00f4le. Vous d\u00e9pensez moins que vos revenus et vos paiements sont r\u00e9guliers.",
+          "priorities": ["Maintenez cette discipline"]
+        },
+        "BON": {
+          "label": "D\u00e9penses satisfaisantes",
+          "message": "Vos d\u00e9penses sont globalement ma\u00eetris\u00e9es. Continuez \u00e0 surveiller vos postes variables.",
+          "priorities": ["Surveillez les d\u00e9penses variables"]
+        },
+        "MOYEN": {
+          "label": "D\u00e9penses \u00e0 surveiller",
+          "message": "Vos d\u00e9penses commencent \u00e0 peser sur votre budget. Essayez de r\u00e9duire les postes non essentiels.",
+          "priorities": [
+            "Identifiez les d\u00e9penses superflues",
+            "Fixez un budget mensuel"
+          ]
+        },
+        "FAIBLE": {
+          "label": "D\u00e9penses \u00e9lev\u00e9es",
+          "message": "Vous d\u00e9pensez une part trop importante de vos revenus. Votre marge de man\u0153uvre est r\u00e9duite.",
+          "priorities": [
+            "R\u00e9duisez vos d\u00e9penses variables",
+            "\u00c9vitez les achats impulsifs",
+            "N\u00e9gociez vos abonnements"
+          ]
+        },
+        "CRITIQUE": {
+          "label": "D\u00e9penses excessives",
+          "message": "Vos d\u00e9penses d\u00e9passent ou \u00e9galent quasi vos revenus. La moindre variation de revenu vous met en difficult\u00e9.",
+          "priorities": [
+            "R\u00e9duisez imm\u00e9diatement vos d\u00e9penses",
+            "\u00c9tablissez un budget d'urgence",
+            "Consultez un conseiller"
+          ]
+        }
+      }
+    },
+    "C2_debt": {
+      "label": "Endettement",
+      "levels": {
+        "EXCELLENT": {
+          "label": "Endettement ma\u00eetris\u00e9",
+          "message": "Votre niveau d'endettement est tr\u00e8s sain. Vous respectez largement les seuils BCEAO.",
+          "priorities": ["Maintenez cette discipline de remboursement"]
+        },
+        "BON": {
+          "label": "Endettement correct",
+          "message": "Votre endettement est sous contr\u00f4le et vos remboursements sont r\u00e9guliers.",
+          "priorities": ["\u00c9vitez de souscrire de nouveaux cr\u00e9dits"]
+        },
+        "MOYEN": {
+          "label": "Endettement mod\u00e9r\u00e9",
+          "message": "Votre taux d'endettement approche les limites recommand\u00e9es. Restez prudent.",
+          "priorities": [
+            "Limitez tout nouveau cr\u00e9dit",
+            "Consolidez vos dettes existantes"
+          ]
+        },
+        "FAIBLE": {
+          "label": "Endettement pr\u00e9occupant",
+          "message": "Votre endettement est \u00e9lev\u00e9. Une partie significative de vos revenus part au remboursement.",
+          "priorities": [
+            "\u00c9vitez tout nouveau cr\u00e9dit",
+            "Remboursez par anticipation si possible"
+          ]
+        },
+        "CRITIQUE": {
+          "label": "Endettement critique",
+          "message": "Vous \u00eates surendett\u00e9 ou tr\u00e8s proche du seuil BCEAO. Vos remboursements p\u00e8sent lourdement sur votre budget.",
+          "priorities": [
+            "Contactez votre conseiller bancaire",
+            "\u00c9vitez tout nouveau cr\u00e9dit",
+            "\u00c9tudiez un r\u00e9am\u00e9nagement de dettes"
+          ]
+        }
+      }
+    },
+    "C3_savings": {
+      "label": "\u00c9pargne",
+      "levels": {
+        "EXCELLENT": {
+          "label": "\u00c9pargne solide",
+          "message": "Vous \u00e9pargnez r\u00e9guli\u00e8rement et disposez d'un fonds d'urgence confortable.",
+          "priorities": [
+            "Continuez \u00e0 \u00e9pargner",
+            "Revoir vos objectifs de placement"
+          ]
+        },
+        "BON": {
+          "label": "Bonne \u00e9pargne",
+          "message": "Vous \u00e9pargnez r\u00e9guli\u00e8rement. Votre fonds d'urgence commence \u00e0 se constituer.",
+          "priorities": ["Augmentez progressivement votre taux d'\u00e9pargne"]
+        },
+        "MOYEN": {
+          "label": "\u00c9pargne modeste",
+          "message": "Votre \u00e9pargne est irr\u00e9guli\u00e8re. Votre fonds d'urgence est insuffisant pour faire face aux impr\u00e9vus.",
+          "priorities": [
+            "Mettez en place un virement automatique mensuel",
+            "Visez 5% de vos revenus en \u00e9pargne"
+          ]
+        },
+        "FAIBLE": {
+          "label": "\u00c9pargne insuffisante",
+          "message": "Vous \u00e9pargnez tr\u00e8s peu ou pas assez r\u00e9guli\u00e8rement. Un impr\u00e9vu financier pourrait vous mettre en difficult\u00e9.",
+          "priorities": [
+            "\u00c9pargnez au moins 5% de vos revenus",
+            "R\u00e9duisez une d\u00e9pense pour d\u00e9gager de l'\u00e9pargne"
+          ]
+        },
+        "CRITIQUE": {
+          "label": "\u00c9pargne inexistante",
+          "message": "Vous n'\u00e9pargnez pas ou quasi pas. Vous \u00eates totalement vuln\u00e9rable face aux impr\u00e9vus.",
+          "priorities": [
+            "D\u00e9marrez une \u00e9pargne m\u00eame modeste (2-5% des revenus)",
+            "Automatisez un virement mensuel",
+            "R\u00e9duisez les d\u00e9penses non essentielles"
+          ]
+        }
+      }
+    },
+    "C4_stability": {
+      "label": "Stabilit\u00e9",
+      "levels": {
+        "EXCELLENT": {
+          "label": "Stabilit\u00e9 financi\u00e8re",
+          "message": "Votre situation est stable : pas de d\u00e9couverts, revenus r\u00e9guliers et solde \u00e9quilibr\u00e9.",
+          "priorities": ["Maintenez cette stabilit\u00e9"]
+        },
+        "BON": {
+          "label": "Bonne stabilit\u00e9",
+          "message": "Votre compte est globalement stable avec peu d'incidents.",
+          "priorities": [
+            "Surveillez les variations saisonni\u00e8res des revenus"
+          ]
+        },
+        "MOYEN": {
+          "label": "Stabilit\u00e9 mod\u00e9r\u00e9e",
+          "message": "Quelques incidents de d\u00e9couvert ou des variations de revenus sont observ\u00e9s.",
+          "priorities": [
+            "Constituez une r\u00e9serve de s\u00e9curit\u00e9",
+            "Activez les alertes SMS sur votre compte"
+          ]
+        },
+        "FAIBLE": {
+          "label": "Stabilit\u00e9 faible",
+          "message": "Vos revenus sont irr\u00e9guliers et/ou vous subissez des d\u00e9couverts fr\u00e9quents.",
+          "priorities": [
+            "Lissez vos d\u00e9penses sur le mois",
+            "R\u00e9duisez les frais bancaires",
+            "Stabilisez vos rentr\u00e9es d'argent"
+          ]
+        },
+        "CRITIQUE": {
+          "label": "Situation instable",
+          "message": "D\u00e9couverts r\u00e9p\u00e9t\u00e9s et forte volatilit\u00e9 de vos revenus et de votre solde.",
+          "priorities": [
+            "R\u00e9gularisez votre d\u00e9couvert en priorit\u00e9",
+            "Contactez votre banque",
+            "\u00c9vitez toute d\u00e9pense non urgente"
+          ]
+        }
+      }
     }
   },
   "labels": {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Landmark, FileCheck, MessageSquare, BookOpen, LogOut } from '@lucide/svelte';
+  import { Landmark, FileCheck, MessageSquare, BookOpen, LogOut, FlaskConical, Layers, Brain } from '@lucide/svelte';
 
   let {
     page, onNavigate, collapsed = $bindable(false),
@@ -15,6 +15,12 @@
     { id: 'products', icon: Landmark, label: 'Produits' },
     { id: 'rules', icon: FileCheck, label: 'Règles' },
     { id: 'catalog', icon: MessageSquare, label: 'Messages' },
+  ];
+
+  const analyticsItems = [
+    { id: 'classifier', icon: FlaskConical, label: 'Classifieur' },
+    { id: 'embedding', icon: Layers, label: 'Embeddings' },
+    { id: 'training', icon: Brain, label: 'Entraînement' },
   ];
 
   const bottomItems = [
@@ -46,6 +52,28 @@
       </p>
     {/if}
     {#each items as { id, icon: Icon, label }}
+      <button
+        onclick={() => onNavigate(id)}
+        title={collapsed ? label : undefined}
+        class="flex items-center gap-3 w-full rounded-xl text-sm font-medium transition-all cursor-pointer
+          {collapsed
+            ? 'justify-center p-2.5'
+            : 'px-4 py-3'}
+          {page === id
+            ? 'bg-primary-container text-on-primary-container'
+            : 'text-on-surface-variant hover:bg-surface-container'}"
+      >
+        <Icon size={22} class="shrink-0" />
+        {#if !collapsed}<span class="truncate">{label}</span>{/if}
+      </button>
+    {/each}
+
+    {#if !collapsed}
+      <p class="text-[10px] font-bold text-outline uppercase tracking-widest px-3 pb-2 pt-3 mt-1 border-t border-mint-subtle">
+        Analytics
+      </p>
+    {/if}
+    {#each analyticsItems as { id, icon: Icon, label }}
       <button
         onclick={() => onNavigate(id)}
         title={collapsed ? label : undefined}

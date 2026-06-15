@@ -6,6 +6,9 @@
   import Catalog from './pages/Catalog.svelte';
   import Glossary from './pages/Glossary.svelte';
   import Login from './pages/Login.svelte';
+  import Classifier from './pages/Classifier.svelte';
+  import Embedding from './pages/Embedding.svelte';
+  import Training from './pages/Training.svelte';
 
   let page = $state('products');
   let sidebarCollapsed = $state(false);
@@ -48,7 +51,7 @@
         <span class="text-on-surface-variant ml-1">Monitoring</span>
         <ChevronRight size={16} class="text-outline" />
         <span class="font-semibold text-on-surface">
-          {page === 'products' ? 'Produits' : page === 'rules' ? 'Règles' : page === 'catalog' ? 'Messages' : 'Lexique'}
+          {page === 'products' ? 'Produits' : page === 'rules' ? 'Règles' : page === 'catalog' ? 'Messages' : page === 'classifier' ? 'Classifieur' : page === 'embedding' ? 'Embeddings' : page === 'training' ? 'Entraînement' : 'Lexique'}
         </span>
       </div>
 
@@ -68,6 +71,12 @@
           <Rules />
         {:else if page === 'catalog'}
           <Catalog />
+        {:else if page === 'classifier'}
+          <Classifier />
+        {:else if page === 'embedding'}
+          <Embedding />
+        {:else if page === 'training'}
+          <Training />
         {:else if page === 'glossary'}
           <Glossary />
         {/if}

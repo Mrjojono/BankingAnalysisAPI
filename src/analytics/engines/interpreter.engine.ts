@@ -11,6 +11,7 @@ export type RuleContext = {
   totalRevenue: number;
   totalExpenses: number;
   expenseRatio: number;
+  descriptions?: string[];
 };
 
 type RuleDef = {

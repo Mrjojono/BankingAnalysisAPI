@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { TransactionFetcher } from './transaction.fetcher';
+import { TransactionSourceRegistry } from '../sources/registry/transaction-source-registry';
 import Decimal from 'decimal.js';
 import { Transaction, TransactionStatus } from '../types';
 
@@ -10,7 +10,7 @@ type DailyBalance = {
 
 @Injectable()
 export class BalanceReconstructor {
-  constructor(private transactionFetcher: TransactionFetcher) {}
+  constructor(private sourceRegistry: TransactionSourceRegistry) {}
 
   /**
    * Reconstruit le solde d'un client à un instant T (date spécifiée).
@@ -23,7 +23,7 @@ export class BalanceReconstructor {
   async reconstructBalance(accountId: string, date: Date): Promise<Decimal> {
     // On récupère toutes les transactions STRICTEMENT antérieures à la date donnée
     const transactions =
-      await this.transactionFetcher.fetchCustomerTransactionsBeforeDate(
+      await this.sourceRegistry.aggregateTransactionsBeforeDate(
         accountId,
         date,
       );
@@ -55,7 +55,7 @@ export class BalanceReconstructor {
    * @param accountId - Identifiant du client.
    */
   async getDailyBalance(accountId: string) {
-    const snapshots = await this.transactionFetcher.getDailyBalance(accountId);
+    const snapshots = await this.sourceRegistry.getDailyBalance(accountId);
 
     return snapshots.map((s) => ({
       date: s.snapshotDate.toISOString().split('T')[0],

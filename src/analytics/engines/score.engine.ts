@@ -8,6 +8,10 @@ import {
 } from '../types';
 import Decimal from 'decimal.js';
 import { Injectable } from '@nestjs/common';
+import {
+  realizeScoreLabel,
+  realizeScoreInterpretation,
+} from '../../messages/realizer';
 
 @Injectable()
 export class ScoreEngine {
@@ -83,6 +87,32 @@ export class ScoreEngine {
       },
       methodology:
         'CFPB + Financial Health Network + FICO + Garman & Forgue + BCEAO',
+      interpretations: this.interpretComponents({
+        C1_expenses: c1Score,
+        C2_debt: c2Score,
+        C3_savings: c3Score,
+        C4_stability: c4Score,
+      }),
+    };
+  }
+
+  interpretComponents(scores: {
+    C1_expenses: number;
+    C2_debt: number;
+    C3_savings: number;
+    C4_stability: number;
+  }): GlobalScoreResponse['interpretations'] {
+    return {
+      C1_expenses: realizeScoreInterpretation(
+        'C1_expenses',
+        scores.C1_expenses,
+      ),
+      C2_debt: realizeScoreInterpretation('C2_debt', scores.C2_debt),
+      C3_savings: realizeScoreInterpretation('C3_savings', scores.C3_savings),
+      C4_stability: realizeScoreInterpretation(
+        'C4_stability',
+        scores.C4_stability,
+      ),
     };
   }
 
@@ -90,10 +120,7 @@ export class ScoreEngine {
    * Retourne le label correspondant au score.
    */
   getScoreLabel(score: number): string {
-    if (score >= 80) return 'EXCELLENTE SANTÉ FINANCIÈRE';
-    if (score >= 60) return 'BONNE SANTÉ FINANCIÈRE';
-    if (score >= 40) return 'SANTÉ FINANCIÈRE FRAGILE';
-    return 'SANTÉ FINANCIÈRE CRITIQUE';
+    return realizeScoreLabel(score);
   }
 
   /**

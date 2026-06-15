@@ -6,19 +6,31 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   ParseUUIDPipe,
-  UseGuards,
+  Optional,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Classifier } from '../analytics/shared/classifier';
+import { EmbeddingLoader } from '../analytics/embeddings/embedding-loader';
+import { EmbeddingClassifier } from '../analytics/embeddings/embedding-classifier';
+import { TrainCommand } from '../analytics/training/train-command';
+import { EXPENSE_KEYWORDS } from '../analytics/config/expense-keywords';
+import type { ExpenseCategory } from '../analytics/config/expense-keywords';
 
 @ApiTags('Admin')
 //@ApiBearerAuth()
 //@UseGuards(JwtAuthGuard)
 @Controller('api/admin')
 export class AdminController {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private readonly classifier?: Classifier,
+    @Optional() private readonly embeddingLoader?: EmbeddingLoader,
+    @Optional() private readonly embeddingClassifier?: EmbeddingClassifier,
+    @Optional() private readonly trainCommand?: TrainCommand,
+  ) {}
 
   @Get('products')
   async listProducts() {
@@ -106,5 +118,112 @@ export class AdminController {
       'utf-8',
     );
     return { ok: true };
+  }
+
+  // ──────────── Nouveautés Analytics ────────────
+
+  @Get('classifier/test')
+  async testClassifier(@Query('desc') desc: string) {
+    if (!desc) return { error: 'Paramètre desc requis' };
+    if (!this.classifier) return { error: 'Classifieur non disponible' };
+    return this.classifier.testAll(desc);
+  }
+
+  @Get('embedding/stats')
+  async embeddingStats() {
+    if (!this.embeddingLoader) return { error: 'Embeddings non disponible' };
+    const loaded = this.embeddingLoader.isLoaded();
+    const stats: Record<string, unknown> = {
+      loaded,
+      vocabSize: loaded ? this.embeddingLoader.vocabSize() : 0,
+    };
+
+    if (loaded && this.embeddingClassifier?.isReady()) {
+      const wordsPerCategory: Record<string, number> = {};
+      let totalKeywords = 0;
+      for (const [cat, keywords] of Object.entries(EXPENSE_KEYWORDS)) {
+        let found = 0;
+        for (const kw of keywords) {
+          if (this.embeddingLoader!.getVector(kw.toLowerCase())) found++;
+        }
+        wordsPerCategory[cat] = found;
+        totalKeywords += keywords.length;
+      }
+      stats.wordsPerCategory = wordsPerCategory;
+      stats.totalKeywords = totalKeywords;
+      stats.categories = Object.keys(wordsPerCategory).length;
+    }
+
+    return stats;
+  }
+
+  @Get('embedding/neighbors')
+  async embeddingNeighbors(
+    @Query('desc') desc: string,
+    @Query('n') n?: string,
+  ) {
+    if (!desc) return { error: 'Paramètre desc requis' };
+    if (!this.embeddingClassifier?.isReady())
+      return { error: 'Embeddings non chargés' };
+    const top = this.embeddingClassifier.topN(desc, Number(n) || 5);
+    return { description: desc, neighbors: top };
+  }
+
+  @Get('training/examples')
+  async trainingExamples() {
+    const { loadTrainingData } =
+      await import('../analytics/training/data-loader.js');
+    const examples = loadTrainingData();
+    return { count: examples.length, examples };
+  }
+
+  @Put('training/examples/:id')
+  async updateTrainingExample(@Param('id') id: string, @Body() body: any) {
+    const { updateTrainingExample } =
+      await import('../analytics/training/data-loader.js');
+    const updated = updateTrainingExample(id, body);
+    if (!updated) return { error: 'Exemple introuvable' };
+    return updated;
+  }
+
+  @Post('training/examples')
+  async createTrainingExample(@Body() body: any) {
+    const { appendTrainingExample } =
+      await import('../analytics/training/data-loader.js');
+    appendTrainingExample(body);
+    return { ok: true, example: body };
+  }
+
+  @Delete('training/examples/:id')
+  async deleteTrainingExample(@Param('id') id: string) {
+    const { deleteTrainingExample } =
+      await import('../analytics/training/data-loader.js');
+    const deleted = deleteTrainingExample(id);
+    if (!deleted) return { error: 'Exemple introuvable' };
+    return { ok: true };
+  }
+
+  @Post('training/run')
+  async runTraining(
+    @Body()
+    params: {
+      epochs?: number;
+      lr?: number;
+      layers?: number;
+      margin?: number;
+    },
+  ) {
+    if (!this.trainCommand) return { error: 'Entraînement non disponible' };
+    const result = await this.trainCommand.run({
+      epochs: params.epochs,
+      learningRate: params.lr,
+      layers: (params.layers as 1 | 2) ?? 1,
+      margin: params.margin,
+    });
+    return {
+      config: result.config,
+      finalAccuracy: result.finalAccuracy,
+      metrics: result.metrics.slice(-5), // 5 dernières époques
+    };
   }
 }

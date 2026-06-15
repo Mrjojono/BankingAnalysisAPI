@@ -378,6 +378,13 @@ export type ScoreComponent = {
   contribution: number;
 };
 
+export type ComponentInterpretation = {
+  level: 'CRITIQUE' | 'FAIBLE' | 'MOYEN' | 'BON' | 'EXCELLENT';
+  label: string;
+  message: string;
+  priorities: string[];
+};
+
 export type GlobalScoreResponse = {
   globalScore: number;
   label: string;
@@ -386,6 +393,12 @@ export type GlobalScoreResponse = {
     C2_debt: ScoreComponent;
     C3_savings: ScoreComponent;
     C4_stability: ScoreComponent;
+  };
+  interpretations: {
+    C1_expenses: ComponentInterpretation;
+    C2_debt: ComponentInterpretation;
+    C3_savings: ComponentInterpretation;
+    C4_stability: ComponentInterpretation;
   };
   methodology: string;
 };

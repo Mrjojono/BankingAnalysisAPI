@@ -1,9 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AnalyticsController } from './analytics.controller';
 import { OverviewService } from './overview/overview.service';
-import { TransactionFetcher } from './shared/transaction.fetcher';
+import { TransactionSourcesModule } from './sources/sources.module';
 import { BalanceReconstructor } from './shared/balance.reconstructor';
-import { PrismaService } from '../prisma/prisma.service';
 import { Classifier } from './shared/classifier';
 import { ExpenseEngine } from './engines/expense.engine';
 import { RevenueEngine } from './engines/revenue.engine';
@@ -14,17 +13,25 @@ import { ScoreEngine } from './engines/score.engine';
 import { RecommendationEngine } from './engines/recommendation.engine';
 import { AdviceEngine } from './engines/advice.engine';
 import { InterpreterEngine } from './engines/interpreter.engine';
+import { MatrixModule } from './matrix/matrix.module';
+import { MatrixInterpreterEngine } from './matrix/matrix-interpreter.engine';
+import { EmbeddingsModule } from './embeddings/embeddings.module';
 import { RedisModule } from '../redis/redis.module';
 import { AuthModule } from '../auth/auth.module';
 
+//pour revenir a l'ancien interpreter  supprimer MatrixInterpreterEngine et remmetre InterpreterEngine
 @Module({
-  imports: [RedisModule, AuthModule],
+  imports: [
+    TransactionSourcesModule,
+    MatrixModule,
+    EmbeddingsModule,
+    RedisModule,
+    AuthModule,
+  ],
   controllers: [AnalyticsController],
   providers: [
-    TransactionFetcher,
     BalanceReconstructor,
     OverviewService,
-    PrismaService,
     Classifier,
     ExpenseEngine,
     RevenueEngine,
@@ -34,8 +41,12 @@ import { AuthModule } from '../auth/auth.module';
     ScoreEngine,
     RecommendationEngine,
     AdviceEngine,
-    InterpreterEngine,
+    MatrixInterpreterEngine,
+    {
+      provide: InterpreterEngine,
+      useClass: MatrixInterpreterEngine,
+    },
   ],
-  exports: [OverviewService],
+  exports: [OverviewService, Classifier],
 })
 export class AnalyticsModule {}

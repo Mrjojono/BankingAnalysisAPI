@@ -7,6 +7,7 @@ export type EligibilityCatalog = Catalog['eligibility'];
 
 export type IntentKind = keyof InterpreterCatalog;
 export type AdviceTemplateKind = keyof AdviceTemplateCatalog;
+export type ScoreLabelKind = keyof Catalog['score_labels'];
 export type EligibilityPatternKind = keyof EligibilityCatalog;
 
 export type EligibilityStatus = 'PASS' | 'FAIL' | 'PARTIAL';

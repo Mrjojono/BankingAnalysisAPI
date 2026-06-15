@@ -1,0 +1,182 @@
+[
+  {
+    "id": "ex-logement-critique-001",
+    "context": { "category": "LOGEMENT", "percent": 55, "change": 10, "amount": 275000, "prevAmount": 250000, "totalRevenue": 500000, "totalExpenses": 400000, "expenseRatio": 80, "label": "Logement" },
+    "expected": "LOGEMENT_CRITICAL"
+  },
+  {
+    "id": "ex-logement-critique-002",
+    "context": { "category": "LOGEMENT", "percent": 62, "change": 5, "amount": 310000, "prevAmount": 295000, "totalRevenue": 500000, "totalExpenses": 420000, "expenseRatio": 84, "label": "Logement" },
+    "expected": "LOGEMENT_CRITICAL"
+  },
+  {
+    "id": "ex-logement-high-001",
+    "context": { "category": "LOGEMENT", "percent": 42, "change": 8, "amount": 168000, "prevAmount": 155000, "totalRevenue": 400000, "totalExpenses": 300000, "expenseRatio": 75, "label": "Logement" },
+    "expected": "LOGEMENT_HIGH"
+  },
+  {
+    "id": "ex-logement-high-002",
+    "context": { "category": "LOGEMENT", "percent": 36, "change": 3, "amount": 144000, "prevAmount": 140000, "totalRevenue": 400000, "totalExpenses": 280000, "expenseRatio": 70, "label": "Logement" },
+    "expected": "LOGEMENT_HIGH"
+  },
+  {
+    "id": "ex-logement-ok-001",
+    "context": { "category": "LOGEMENT", "percent": 25, "change": 0, "amount": 100000, "prevAmount": 100000, "totalRevenue": 400000, "totalExpenses": 250000, "expenseRatio": 62, "label": "Logement" },
+    "expected": "LOGEMENT_OK"
+  },
+  {
+    "id": "ex-logement-ok-002",
+    "context": { "category": "LOGEMENT", "percent": 30, "change": -5, "amount": 120000, "prevAmount": 126000, "totalRevenue": 400000, "totalExpenses": 260000, "expenseRatio": 65, "label": "Logement" },
+    "expected": "LOGEMENT_OK"
+  },
+  {
+    "id": "ex-credit-high-001",
+    "context": { "category": "CREDIT", "percent": 40, "change": 0, "amount": 80000, "prevAmount": 80000, "totalRevenue": 200000, "totalExpenses": 150000, "expenseRatio": 75, "label": "Crédit" },
+    "expected": "CREDIT_HIGH"
+  },
+  {
+    "id": "ex-credit-high-002",
+    "context": { "category": "CREDIT", "percent": 45, "change": 15, "amount": 90000, "prevAmount": 78000, "totalRevenue": 200000, "totalExpenses": 160000, "expenseRatio": 80, "label": "Crédit" },
+    "expected": "CREDIT_HIGH"
+  },
+  {
+    "id": "ex-credit-near-001",
+    "context": { "category": "CREDIT", "percent": 30, "change": 0, "amount": 60000, "prevAmount": 60000, "totalRevenue": 200000, "totalExpenses": 150000, "expenseRatio": 75, "label": "Crédit" },
+    "expected": "CREDIT_NEAR_LIMIT"
+  },
+  {
+    "id": "ex-credit-near-002",
+    "context": { "category": "CREDIT", "percent": 29, "change": 2, "amount": 58000, "prevAmount": 57000, "totalRevenue": 200000, "totalExpenses": 148000, "expenseRatio": 74, "label": "Crédit" },
+    "expected": "CREDIT_NEAR_LIMIT"
+  },
+  {
+    "id": "ex-credit-increase-001",
+    "context": { "category": "CREDIT", "percent": 25, "change": 30, "amount": 50000, "prevAmount": 38500, "totalRevenue": 200000, "totalExpenses": 150000, "expenseRatio": 75, "label": "Crédit" },
+    "expected": "CREDIT_INCREASE"
+  },
+  {
+    "id": "ex-credit-increase-002",
+    "context": { "category": "CREDIT", "percent": 20, "change": 40, "amount": 40000, "prevAmount": 28600, "totalRevenue": 200000, "totalExpenses": 145000, "expenseRatio": 72, "label": "Crédit" },
+    "expected": "CREDIT_INCREASE"
+  },
+  {
+    "id": "ex-credit-increase-003",
+    "context": { "category": "CREDIT", "percent": 15, "change": 25, "amount": 30000, "prevAmount": 24000, "totalRevenue": 200000, "totalExpenses": 140000, "expenseRatio": 70, "label": "Crédit" },
+    "expected": "CREDIT_INCREASE"
+  },
+  {
+    "id": "ex-ali-spike-001",
+    "context": { "category": "ALIMENTATION", "percent": 20, "change": 45, "amount": 60000, "prevAmount": 41400, "totalRevenue": 300000, "totalExpenses": 200000, "expenseRatio": 67, "label": "Alimentation" },
+    "expected": "ALIMENTATION_SPIKE"
+  },
+  {
+    "id": "ex-ali-spike-002",
+    "context": { "category": "ALIMENTATION", "percent": 18, "change": 60, "amount": 54000, "prevAmount": 33800, "totalRevenue": 300000, "totalExpenses": 200000, "expenseRatio": 67, "label": "Alimentation" },
+    "expected": "ALIMENTATION_SPIKE"
+  },
+  {
+    "id": "ex-ali-high-001",
+    "context": { "category": "ALIMENTATION", "percent": 35, "change": 5, "amount": 87500, "prevAmount": 83300, "totalRevenue": 250000, "totalExpenses": 180000, "expenseRatio": 72, "label": "Alimentation" },
+    "expected": "ALIMENTATION_HIGH"
+  },
+  {
+    "id": "ex-ali-high-002",
+    "context": { "category": "ALIMENTATION", "percent": 32, "change": 8, "amount": 80000, "prevAmount": 74100, "totalRevenue": 250000, "totalExpenses": 175000, "expenseRatio": 70, "label": "Alimentation" },
+    "expected": "ALIMENTATION_HIGH"
+  },
+  {
+    "id": "ex-transport-spike-001",
+    "context": { "category": "TRANSPORT", "percent": 12, "change": 40, "amount": 36000, "prevAmount": 25700, "totalRevenue": 300000, "totalExpenses": 200000, "expenseRatio": 67, "label": "Transport" },
+    "expected": "TRANSPORT_SPIKE"
+  },
+  {
+    "id": "ex-transport-spike-002",
+    "context": { "category": "TRANSPORT", "percent": 10, "change": 55, "amount": 30000, "prevAmount": 19400, "totalRevenue": 300000, "totalExpenses": 200000, "expenseRatio": 67, "label": "Transport" },
+    "expected": "TRANSPORT_SPIKE"
+  },
+  {
+    "id": "ex-transport-high-001",
+    "context": { "category": "TRANSPORT", "percent": 20, "change": 5, "amount": 50000, "prevAmount": 47600, "totalRevenue": 250000, "totalExpenses": 180000, "expenseRatio": 72, "label": "Transport" },
+    "expected": "TRANSPORT_HIGH"
+  },
+  {
+    "id": "ex-transport-high-002",
+    "context": { "category": "TRANSPORT", "percent": 18, "change": 10, "amount": 45000, "prevAmount": 40900, "totalRevenue": 250000, "totalExpenses": 175000, "expenseRatio": 70, "label": "Transport" },
+    "expected": "TRANSPORT_HIGH"
+  },
+  {
+    "id": "ex-commerce-spike-001",
+    "context": { "category": "COMMERCE", "percent": 15, "change": 45, "amount": 45000, "prevAmount": 31000, "totalRevenue": 300000, "totalExpenses": 200000, "expenseRatio": 67, "label": "Commerce" },
+    "expected": "COMMERCE_SPIKE"
+  },
+  {
+    "id": "ex-commerce-spike-002",
+    "context": { "category": "DIVERS", "percent": 8, "change": 35, "amount": 24000, "prevAmount": 17800, "totalRevenue": 300000, "totalExpenses": 200000, "expenseRatio": 67, "label": "Divers" },
+    "expected": "COMMERCE_SPIKE"
+  },
+  {
+    "id": "ex-carburant-spike-001",
+    "context": { "category": "CARBURANT", "percent": 10, "change": 25, "amount": 25000, "prevAmount": 20000, "totalRevenue": 250000, "totalExpenses": 180000, "expenseRatio": 72, "label": "Carburant" },
+    "expected": "CARBURANT_SPIKE"
+  },
+  {
+    "id": "ex-carburant-spike-002",
+    "context": { "category": "CARBURANT", "percent": 12, "change": 30, "amount": 30000, "prevAmount": 23100, "totalRevenue": 250000, "totalExpenses": 180000, "expenseRatio": 72, "label": "Carburant" },
+    "expected": "CARBURANT_SPIKE"
+  },
+  {
+    "id": "ex-sante-high-001",
+    "context": { "category": "SANTE", "percent": 8, "change": 60, "amount": 40000, "prevAmount": 25000, "totalRevenue": 500000, "totalExpenses": 350000, "expenseRatio": 70, "label": "Santé" },
+    "expected": "SANTE_HIGH"
+  },
+  {
+    "id": "ex-sante-high-002",
+    "context": { "category": "SANTE", "percent": 5, "change": 80, "amount": 25000, "prevAmount": 13900, "totalRevenue": 500000, "totalExpenses": 350000, "expenseRatio": 70, "label": "Santé" },
+    "expected": "SANTE_HIGH"
+  },
+  {
+    "id": "ex-momo-high-001",
+    "context": { "category": "MOBILE_MONEY", "percent": 10, "change": 55, "amount": 50000, "prevAmount": 32300, "totalRevenue": 500000, "totalExpenses": 350000, "expenseRatio": 70, "label": "Mobile Money" },
+    "expected": "MOBILE_MONEY_HIGH"
+  },
+  {
+    "id": "ex-momo-high-002",
+    "context": { "category": "MOBILE_MONEY", "percent": 8, "change": 70, "amount": 40000, "prevAmount": 23500, "totalRevenue": 500000, "totalExpenses": 350000, "expenseRatio": 70, "label": "Mobile Money" },
+    "expected": "MOBILE_MONEY_HIGH"
+  },
+  {
+    "id": "ex-fees-high-001",
+    "context": { "category": "FRAIS_BANCAIRES", "percent": 5, "change": 0, "amount": 15000, "prevAmount": 15000, "totalRevenue": 300000, "totalExpenses": 200000, "expenseRatio": 67, "label": "Frais bancaires" },
+    "expected": "FEES_HIGH"
+  },
+  {
+    "id": "ex-fees-high-002",
+    "context": { "category": "FRAIS_BANCAIRES", "percent": 3, "change": 0, "amount": 12000, "prevAmount": 12000, "totalRevenue": 400000, "totalExpenses": 250000, "expenseRatio": 62, "label": "Frais bancaires" },
+    "expected": "FEES_HIGH"
+  },
+  {
+    "id": "ex-income-drop-001",
+    "context": { "category": "SALAIRE", "percent": 60, "change": -30, "amount": 300000, "prevAmount": 429000, "totalRevenue": 300000, "totalExpenses": 200000, "expenseRatio": 67, "label": "Salaire" },
+    "expected": "INCOME_DROP"
+  },
+  {
+    "id": "ex-income-drop-002",
+    "context": { "category": "SALAIRE", "percent": 55, "change": -40, "amount": 275000, "prevAmount": 458000, "totalRevenue": 275000, "totalExpenses": 190000, "expenseRatio": 69, "label": "Salaire" },
+    "expected": "INCOME_DROP"
+  },
+  {
+    "id": "ex-good-habit-001",
+    "context": { "category": "ALIMENTATION", "percent": 20, "change": 0, "amount": 40000, "prevAmount": 40000, "totalRevenue": 200000, "totalExpenses": 100000, "expenseRatio": 50, "label": "Alimentation" },
+    "expected": "GOOD_HABIT"
+  },
+  {
+    "id": "ex-good-habit-002",
+    "context": { "category": "ALIMENTATION", "percent": 18, "change": 5, "amount": 36000, "prevAmount": 34300, "totalRevenue": 200000, "totalExpenses": 90000, "expenseRatio": 45, "label": "Alimentation" },
+    "expected": "GOOD_HABIT"
+  },
+  {
+    "id": "ex-good-habit-003",
+    "context": { "category": "ALIMENTATION", "percent": 15, "change": -10, "amount": 30000, "prevAmount": 33300, "totalRevenue": 200000, "totalExpenses": 85000, "expenseRatio": 42, "label": "Alimentation" },
+    "expected": "GOOD_HABIT"
+  }
+]
