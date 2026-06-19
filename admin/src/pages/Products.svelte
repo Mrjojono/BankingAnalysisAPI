@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus, Pencil, Trash2, Search, Info } from '@lucide/svelte';
+  import { Plus, Pencil, Trash2, Search, Info, GitGraph } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
   import Drawer from '../lib/components/Drawer.svelte';
@@ -11,6 +11,7 @@
   let drawerOpen = $state(false);
   let helpOpen = $state(false);
   let search = $state('');
+  let { onNavigate }: { onNavigate?: (p: string, productId?: string | null) => void } = $props();
 
   const CATEGORIES: { value: string; label: string; desc: string; class: string }[] = [
     { value: 'ACCOUNT', label: 'Compte', desc: 'Ouverture, clôture et gestion de comptes bancaires', class: 'bg-blue-50 text-blue-700 ring-blue-200' },
@@ -60,8 +61,13 @@
   };
 
   onMount(async () => {
-    try { products = await api.listProducts(); }
-    catch { error = 'Erreur chargement produits'; }
+    try {
+      products = await api.listProducts();
+      console.log(`[Products] ${products.length} produits chargés`);
+    } catch (e: any) {
+      error = 'Erreur chargement produits';
+      console.error(`[Products] chargement échoué:`, e.message);
+    }
   });
 
   let page = $state(1);
@@ -247,7 +253,12 @@
       {#each paged as p}
         <tr class="hover:bg-[#fafcfa] transition-all border-t border-mint-subtle/50">
           <td class="px-4 py-3 text-sm"><code class="bg-surface-container px-1.5 py-0.5 rounded text-xs font-mono font-semibold tracking-tight">{p.code}</code></td>
-          <td class="px-4 py-3 text-sm font-semibold">{p.name}</td>
+          <td class="px-4 py-3 text-sm font-semibold">
+            <button onclick={() => onNavigate?.('graph', p.id)}
+              class="bg-transparent border-none p-0 text-inherit font-semibold cursor-pointer hover:underline text-left">
+              {p.name}
+            </button>
+          </td>
           <td class="px-4 py-3 text-sm text-on-surface-variant">{p.reference ?? '—'}</td>
           <td class="px-4 py-3">
             {#if CATEGORY_MAP[p.category]}
@@ -284,10 +295,13 @@
           </td>
           <td class="px-4 py-3">
             <div class="flex gap-1">
-              <button onclick={() => openForm(p)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container transition-all cursor-pointer border-none text-on-surface-variant">
+              <button onclick={() => onNavigate?.('graph', p.id)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-primary-container hover:text-primary transition-all cursor-pointer border-none text-on-surface-variant" title="Voir dans le graphe">
+                <GitGraph size={18} />
+              </button>
+              <button onclick={() => openForm(p)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container transition-all cursor-pointer border-none text-on-surface-variant" title="Modifier">
                 <Pencil size={18} />
               </button>
-              <button onclick={() => remove(p.id)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 hover:text-error transition-all cursor-pointer border-none text-on-surface-variant">
+              <button onclick={() => remove(p.id)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 hover:text-error transition-all cursor-pointer border-none text-on-surface-variant" title="Supprimer">
                 <Trash2 size={18} />
               </button>
             </div>

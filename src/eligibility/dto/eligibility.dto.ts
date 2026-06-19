@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsOptional, IsObject } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsObject,
+  IsIn,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class EvaluateEligibilityDto {
@@ -26,4 +32,15 @@ export class EvaluateEligibilityDto {
   @IsObject()
   @IsOptional()
   inputs?: Record<string, number | boolean | string>;
+
+  @ApiPropertyOptional({
+    description:
+      "Mode d'évaluation : matrix (défaut) ou rules (moteur règles classique)",
+    example: 'matrix',
+    default: 'matrix',
+  })
+  @IsString()
+  @IsOptional()
+  @IsIn(['matrix', 'rules'])
+  mode?: 'matrix' | 'rules' = 'matrix';
 }

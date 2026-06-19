@@ -145,7 +145,7 @@ export function trainTwoLayer(
 
       if (loss > 0) {
         // Gradients sur W2
-        // dL/dW2[i][j] = hidden[i] * (j === correctIdx ? -1 : j === wrongIdx ? +1 : 0)
+        //dL/dW2[i][j] = hidden[i] * (j === correctIdx ? -1 : j === wrongIdx ? +1 : 0)
         const dLdscores: number[] = new Array(W2[0].length).fill(0);
         dLdscores[correctIdx] = -1;
         dLdscores[wrongIdx] = +1;

@@ -9,23 +9,30 @@ import {
   Query,
   ParseUUIDPipe,
   Optional,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
 import { Classifier } from '../analytics/shared/classifier';
 import { EmbeddingLoader } from '../analytics/embeddings/embedding-loader';
 import { EmbeddingClassifier } from '../analytics/embeddings/embedding-classifier';
 import { TrainCommand } from '../analytics/training/train-command';
 import { EXPENSE_KEYWORDS } from '../analytics/config/expense-keywords';
-import type { ExpenseCategory } from '../analytics/config/expense-keywords';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { SmsService } from '../sms/sms.service';
+import { Role } from '../../generated/prisma/client';
 
 @ApiTags('Admin')
-//@ApiBearerAuth()
-//@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.ADMIN, Role.SUPER_ADMIN)
 @Controller('api/admin')
 export class AdminController {
   constructor(
     private prisma: PrismaService,
+    private readonly smsService: SmsService,
     @Optional() private readonly classifier?: Classifier,
     @Optional() private readonly embeddingLoader?: EmbeddingLoader,
     @Optional() private readonly embeddingClassifier?: EmbeddingClassifier,
@@ -59,6 +66,24 @@ export class AdminController {
     @Body() body: any,
   ) {
     return this.prisma.bankProduct.update({ where: { id }, data: body });
+  }
+
+  @Put('products/:id/rules')
+  async updateProductRules(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { ruleIds: string[] },
+  ) {
+    const [cleared, updated] = await this.prisma.$transaction([
+      this.prisma.rule.updateMany({
+        where: { productId: id },
+        data: { productId: null },
+      }),
+      this.prisma.rule.updateMany({
+        where: { id: { in: body.ruleIds } },
+        data: { productId: id },
+      }),
+    ]);
+    return { cleared: cleared.count, updated: updated.count };
   }
 
   @Delete('products/:id')
@@ -225,5 +250,15 @@ export class AdminController {
       finalAccuracy: result.finalAccuracy,
       metrics: result.metrics.slice(-5), // 5 dernières époques
     };
+  }
+
+  @Post('sms/debug')
+  @ApiOperation({
+    summary: 'Diagnostiquer le filtrage SMS (parseSms + classifier)',
+  })
+  async debugSmsFilter(
+    @Body() body: { address: string; body: string; dateSent?: string },
+  ) {
+    return this.smsService.debugFilter(body.address, body.body, body.dateSent);
   }
 }

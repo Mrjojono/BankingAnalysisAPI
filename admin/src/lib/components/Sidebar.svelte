@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Landmark, FileCheck, MessageSquare, BookOpen, LogOut, FlaskConical, Layers, Brain } from '@lucide/svelte';
+  import { Landmark, FileCheck, MessageSquare, BookOpen, FileText, LogOut, FlaskConical, Layers, Brain, GitGraph } from '@lucide/svelte';
+  import { getAuth } from '../stores/auth.svelte';
 
   let {
     page, onNavigate, collapsed = $bindable(false),
@@ -11,21 +12,34 @@
     collapsed?: boolean;
   } = $props();
 
-  const items = [
-    { id: 'products', icon: Landmark, label: 'Produits' },
-    { id: 'rules', icon: FileCheck, label: 'Règles' },
-    { id: 'catalog', icon: MessageSquare, label: 'Messages' },
+  const auth = getAuth();
+
+  const navItems = [
+    { section: 'Administration', items: [
+      { id: 'products', icon: Landmark, label: 'Produits' },
+      { id: 'rules', icon: FileCheck, label: 'Règles' },
+      { id: 'graph', icon: GitGraph, label: 'Graphique' },
+      { id: 'catalog', icon: MessageSquare, label: 'Messages' },
+    ]},
+    { section: 'Analytics', items: [
+      { id: 'classifier', icon: FlaskConical, label: 'Classifieur' },
+      { id: 'embedding', icon: Layers, label: 'Embeddings' },
+      { id: 'training', icon: Brain, label: 'Entraînement' },
+    ]},
+    { section: 'Documentation', items: [
+      { id: 'glossary', icon: BookOpen, label: 'Lexique' },
+      { id: 'docs', icon: FileText, label: 'Documentation' },
+    ]},
   ];
 
-  const analyticsItems = [
-    { id: 'classifier', icon: FlaskConical, label: 'Classifieur' },
-    { id: 'embedding', icon: Layers, label: 'Embeddings' },
-    { id: 'training', icon: Brain, label: 'Entraînement' },
-  ];
-
-  const bottomItems = [
-    { id: 'glossary', icon: BookOpen, label: 'Lexique' },
-  ];
+  function navBtnClasses(id: string) {
+    const base = 'flex items-center gap-3 w-full rounded-xl text-sm font-medium transition-all cursor-pointer';
+    const sizing = collapsed ? 'justify-center p-2.5' : 'px-4 py-3';
+    const active = page === id
+      ? 'bg-primary-container text-on-primary-container'
+      : 'text-on-surface-variant hover:bg-surface-container';
+    return `${base} ${sizing} ${active}`;
+  }
 </script>
 
 <aside
@@ -45,73 +59,28 @@
     {/if}
   </div>
 
-  <nav class="flex-1 p-2 flex flex-col gap-1">
-    {#if !collapsed}
-      <p class="text-[10px] font-bold text-outline uppercase tracking-widest px-3 pb-2">
-        Administration
-      </p>
-    {/if}
-    {#each items as { id, icon: Icon, label }}
-      <button
-        onclick={() => onNavigate(id)}
-        title={collapsed ? label : undefined}
-        class="flex items-center gap-3 w-full rounded-xl text-sm font-medium transition-all cursor-pointer
-          {collapsed
-            ? 'justify-center p-2.5'
-            : 'px-4 py-3'}
-          {page === id
-            ? 'bg-primary-container text-on-primary-container'
-            : 'text-on-surface-variant hover:bg-surface-container'}"
-      >
-        <Icon size={22} class="shrink-0" />
-        {#if !collapsed}<span class="truncate">{label}</span>{/if}
-      </button>
-    {/each}
-
-    {#if !collapsed}
-      <p class="text-[10px] font-bold text-outline uppercase tracking-widest px-3 pb-2 pt-3 mt-1 border-t border-mint-subtle">
-        Analytics
-      </p>
-    {/if}
-    {#each analyticsItems as { id, icon: Icon, label }}
-      <button
-        onclick={() => onNavigate(id)}
-        title={collapsed ? label : undefined}
-        class="flex items-center gap-3 w-full rounded-xl text-sm font-medium transition-all cursor-pointer
-          {collapsed
-            ? 'justify-center p-2.5'
-            : 'px-4 py-3'}
-          {page === id
-            ? 'bg-primary-container text-on-primary-container'
-            : 'text-on-surface-variant hover:bg-surface-container'}"
-      >
-        <Icon size={22} class="shrink-0" />
-        {#if !collapsed}<span class="truncate">{label}</span>{/if}
-      </button>
-    {/each}
-  </nav>
-
-  <nav class="p-2 flex flex-col gap-1">
-    {#if !collapsed}
-      <p class="text-[10px] font-bold text-outline uppercase tracking-widest px-3 pb-2">
-        Documentation
-      </p>
-    {/if}
-    {#each bottomItems as { id, icon: Icon, label }}
-      <button
-        onclick={() => onNavigate(id)}
-        title={collapsed ? label : undefined}
-        class="flex items-center gap-3 w-full rounded-xl text-sm font-medium transition-all cursor-pointer
-          {collapsed
-            ? 'justify-center p-2.5'
-            : 'px-4 py-3'}
-          {page === id
-            ? 'bg-primary-container text-on-primary-container'
-            : 'text-on-surface-variant hover:bg-surface-container'}"
-      >
-        <Icon size={22} class="shrink-0" />
-        {#if !collapsed}<span class="truncate">{label}</span>{/if}
-      </button>
+  <nav class="flex-1 p-2 flex flex-col gap-3 overflow-y-auto">
+    {#each navItems as { section, items }}
+      {#if !collapsed}
+        <p class="text-[10px] font-bold text-outline uppercase tracking-widest px-3">
+          {section}
+        </p>
+      {/if}
+      <div class="flex flex-col gap-1">
+        {#each items as { id, icon: Icon, label }}
+          <button
+            onclick={() => onNavigate(id)}
+            title={collapsed ? label : undefined}
+            class={navBtnClasses(id)}
+          >
+            <Icon size={22} class="shrink-0" />
+            {#if !collapsed}<span class="truncate">{label}</span>{/if}
+          </button>
+        {/each}
+      </div>
+      {#if !collapsed && section !== 'Documentation'}
+        <div class="border-t border-mint-subtle mx-3"></div>
+      {/if}
     {/each}
   </nav>
 
@@ -119,11 +88,17 @@
     {#if !collapsed}
       <div class="flex items-center gap-3 p-2 rounded-xl bg-white border border-mint-subtle">
         <div class="w-10 h-10 rounded-full overflow-hidden border border-mint-subtle shrink-0">
-          <img src="https://ui-avatars.com/api/?name=Admin+Orabank&background=3a6a00&color=fff" alt="User" />
+          <img
+            src="https://ui-avatars.com/api/?name={encodeURIComponent(auth.user?.email ?? 'Admin+Orabank')}&background=3a6a00&color=fff"
+            alt="User"
+          />
         </div>
-        <div class="min-w-0">
-          <p class="text-sm font-bold text-on-surface truncate">Admin</p>
-          <button onclick={logout} class="text-sm font-medium text-on-surface-variant">Déconnexion</button>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-bold text-on-surface truncate">{auth.user?.username ?? auth.user?.email ?? 'Admin'}</p>
+          <p class="text-xs text-outline">{auth.user?.role ?? '—'}</p>
+          <button onclick={logout} class="text-xs font-medium text-on-surface-variant mt-0.5 hover:text-error transition-colors cursor-pointer bg-transparent border-none p-0">
+            Déconnexion
+          </button>
         </div>
       </div>
     {:else}

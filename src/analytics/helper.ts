@@ -60,21 +60,36 @@ export function filterEntries(
   entries: Entry[],
   options: {
     direction?: 'DEBIT' | 'CREDIT';
-    accountType?: 'CHECKING' | 'SAVINGS' | 'LOAN' | 'CORPORATE';
+    accountType?:
+      | 'CHECKING'
+      | 'SAVINGS'
+      | 'LOAN'
+      | 'CORPORATE'
+      | 'MOBILE_MONEY';
+    includeMobileMoney?: boolean;
     year?: number;
     month?: number;
     from?: Date;
     to?: Date;
   },
 ): Entry[] {
-  const { direction, accountType, year, month, from, to } = options;
+  const { direction, accountType, includeMobileMoney, year, month, from, to } =
+    options;
 
   return entries.filter((entry) => {
     // 1. Filtrage par direction
     if (direction && entry.direction !== direction) return false;
 
     // 2. Filtrage par type de compte
-    if (accountType && entry.account.bankAccount?.accountType !== accountType)
+    if (
+      accountType &&
+      entry.account.bankAccount?.accountType !== accountType &&
+      !(
+        includeMobileMoney &&
+        accountType === 'CHECKING' &&
+        entry.account.bankAccount?.accountType === 'MOBILE_MONEY'
+      )
+    )
       return false;
 
     // 3. Filtrage par période

@@ -19,7 +19,7 @@ export const TRANSACTION_SOURCE_PROVIDER = Symbol(
  *
  * @example
  * ```typescript
- * class TMoneySource implements TransactionSourceProvider {
+ * class SmsSource implements TransactionSourceProvider {
  *   readonly name = 'tmoney';
  *   isAvailable() { ... }
  *   fetchEntries(customerId, from, to) { ... }

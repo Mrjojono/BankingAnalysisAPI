@@ -1,7 +1,14 @@
 export interface GlossaryEntry {
   term: string;
   def: string;
-  category: 'produit' | 'regle' | 'metrique' | 'frais' | 'sigle' | 'score' | 'ia';
+  category:
+    | 'produit'
+    | 'regle'
+    | 'metrique'
+    | 'frais'
+    | 'sigle'
+    | 'score'
+    | 'ia';
   seeAlso?: string[];
 }
 
@@ -281,8 +288,168 @@ export const glossary: GlossaryEntry[] = [
 
   // ─── Métriques ─────────────────────────────────────────────────
   {
-    term: "Taux d'endettement (debtRatio)",
-    def: 'Pourcentage des revenus mensuels consacré au remboursement des dettes. Calcul: total des mensualités / revenus × 100. Plafond BCEAO: 33%.',
+    term: 'StdDev (Écart-type)',
+    def: 'Écart-type (Standard Deviation). Mesure de dispersion des valeurs autour de la moyenne. En analytics: stdDev des revenus mensuels = volatilité des revenus; stdDev du solde quotidien = volatilité du compte. Plus la valeur est élevée, plus les données sont dispersées.',
+    category: 'metrique',
+  },
+  {
+    term: 'Coefficient of Variation (CV)',
+    def: 'Coefficient de variation = (stdDev / moyenne) × 100. Mesure relative de dispersion, exprimée en %. Permet de comparer la variabilité de différentes métriques indépendamment de leur échelle. Ex: CV = 25% sur les revenus = volatilité modérée.',
+    category: 'metrique',
+  },
+  {
+    term: 'VolatilityScore',
+    def: 'Score de volatilité (0-100) calculé à partir du coefficient de variation. Plus le score est élevé, plus la métrique est stable (bon). Inversement, un score faible indique une forte volatilité (risque). Utilisé pour les revenus, le solde, et les dépenses.',
+    category: 'metrique',
+  },
+  {
+    term: 'StabilityScore',
+    def: "Score de stabilité des revenus (0-100). Basé sur la régularité des entrées créditrices (écart-type des intervalles, nombre d'entrées par mois). Seuil: ≥ 80 = VERY_STABLE, ≥ 60 = STABLE, ≥ 40 = UNSTABLE, &lt; 40 = VERY_UNSTABLE.",
+    category: 'metrique',
+  },
+  {
+    term: 'StabilityLabel',
+    def: 'Étiquette de stabilité des revenus: VERY_STABLE (très stable), STABLE (stable), UNSTABLE (instable), VERY_UNSTABLE (très instable), INSUFFICIENT_DATA (données insuffisantes). Déterminée par le StabilityScore.',
+    category: 'metrique',
+  },
+  {
+    term: 'VariationPercent',
+    def: 'Variation en pourcentage entre deux périodes. Calcul: ((nouvelle_valeur - ancienne_valeur) / ancienne_valeur) × 100. Positif = hausse, négatif = baisse. Utilisé pour comparer mois en cours vs mois précédent.',
+    category: 'metrique',
+  },
+  {
+    term: 'Trend (tendance)',
+    def: 'Direction de la tendance: UP (hausse), DOWN (baisse), STABLE (stable). Déterminée par la pente de régression linéaire sur les 6 derniers mois. Utilisée pour les revenus, les dépenses, et le score global.',
+    category: 'metrique',
+  },
+  {
+    term: 'NetFlow (flux net)',
+    def: 'Différence entre le total des crédits et le total des débits sur une période: NetFlow = TotalCredits - TotalDebits. Positif = épargne nette. Négatif = déséquilibre financier. Exprimé en FCFA.',
+    category: 'metrique',
+  },
+  {
+    term: 'Rolling30Days',
+    def: "Montant total des crédits (ou revenus) sur les 30 derniers jours glissants. Mesure plus réactive que la moyenne mensuelle car elle s'ajuste quotidiennement. Exprimé en FCFA.",
+    category: 'metrique',
+  },
+  {
+    term: 'Score ratio dépenses (expenseRatio)',
+    def: 'Ratio dépenses/revenus exprimé en %. Calcul: (dépenses_total / revenus_total) × 100. Labels: ≤ 50% = EXCELLENT, ≤ 75% = SAIN, ≤ 90% = ATTENTION, &gt; 90% = CRITIQUE. Un ratio &gt; 100% = les dépenses dépassent les revenus.',
+    category: 'metrique',
+  },
+  {
+    term: 'OverdraftRate (taux découvert)',
+    def: 'Pourcentage de jours où le compte est en découvert: (jours_découvert / jours_total) × 100. Labels: 0% = EXCELLENT, &lt; 10% = SAIN, &lt; 25% = ATTENTION, &lt; 50% = PRUDENCE, ≥ 50% = CRITIQUE.',
+    category: 'metrique',
+  },
+  {
+    term: 'OverdraftDays (jours découvert)',
+    def: 'Nombre de jours calendaires où le solde du compte est négatif (à découvert) sur une période donnée. Indicateur clé de santé financière. Plus le nombre est élevé, plus le client est en difficulté de trésorerie.',
+    category: 'metrique',
+  },
+  {
+    term: 'BCEAO Threshold (seuil BCEAO)',
+    def: "Seuil réglementaire de la Banque Centrale fixant le taux d'endettement maximum à 33% des revenus mensuels. Défini par la constante BCEAO_DEBT_RATIO_THRESHOLD = 33. Utilisé comme référence dans l'évaluation du debtRatio.",
+    category: 'metrique',
+  },
+  {
+    term: 'DebtRatio (taux endettement)',
+    def: "Taux d'endettement = (total_mensualités_dettes / revenus_mensuels) × 100. La BCEAO fixe le maximum à 33%. Labels: &lt; 20% = EXCELLENT, &lt; 33% = SAIN, &lt; 50% = ATTENTION, ≥ 50% = CRITIQUE. Interprétation textuelle générée dynamiquement.",
+    category: 'metrique',
+  },
+  {
+    term: 'Margin (marge endettement)',
+    def: "Marge de manœuvre avant d'atteindre le seuil BCEAO de 33%. Calcul: 33 - debtRatio. Positive = sous le seuil (bon). Négative = au-dessus du seuil (alerte). Exemple: margin = 8% signifie qu'il reste 8% de marge avant le plafond réglementaire.",
+    category: 'metrique',
+  },
+  {
+    term: 'MonthlyIncome (revenus mensuels)',
+    def: "Revenus mensuels moyens calculés sur la période d'analyse (défaut: 6 mois). Inclut les crédits récurrents (salaire, pensions) et les entrées régulières. Source: transactions bancaires historiques. Exprimé en FCFA.",
+    category: 'metrique',
+  },
+  {
+    term: 'MonthlyExpenses (dépenses mens.)',
+    def: "Dépenses mensuelles moyennes calculées sur la période d'analyse. Inclut toutes les sorties de fonds: prélèvements, paiements, retraits, virements. Exprimé en FCFA.",
+    category: 'metrique',
+  },
+  {
+    term: 'MonthlyDebtPayments (mensualités)',
+    def: 'Total des mensualités de remboursement de dettes détectées. Calculé en analysant les transactions récurrentes identifiées comme des remboursements de crédit. Exprimé en FCFA.',
+    category: 'metrique',
+  },
+  {
+    term: 'SavingsRate (taux épargne)',
+    def: "Taux d'épargne = (revenus - dépenses - dettes) / revenus × 100. Le seuil Garman & Forgue recommande ≥ 10%. Labels: ≥ 20% = EXCELLENT, ≥ 10% = BIEN, ≥ 5% = MOYEN, &gt; 0% = FAIBLE, ≤ 0% = CRITIQUE.",
+    category: 'metrique',
+  },
+  {
+    term: 'Garman-Forgue Threshold',
+    def: "Seuil de référence de 10% pour le taux d'épargne, issu des travaux des économistes Garman & Forgue. Constante: GARMAN_FORGUE_SAVINGS_RATE_THRESHOLD = 10. En dessous de ce seuil, l'épargne est considérée insuffisante.",
+    category: 'metrique',
+  },
+  {
+    term: 'NetSavings (épargne nette)',
+    def: "Épargne nette mensuelle = monthlyIncome - monthlyExpenses - monthlyDebtPayments. Montant réellement disponible pour l'épargne après toutes les dépenses et dettes. Si négatif = déficit mensuel (désépargne).",
+    category: 'metrique',
+  },
+  {
+    term: 'RegularityRate (régularité)',
+    def: "Taux de régularité (0-100%) mesurant la constance d'un comportement financier. Utilisé pour: la régularité des remboursements (paiements à temps), la régularité de l'épargne (dépôts mensuels), la régularité des revenus.",
+    category: 'metrique',
+  },
+  {
+    term: 'AverageRetentionDays (rétention)',
+    def: "Nombre moyen de jours pendant lesquels les revenus restent sur le compte avant d'être dépensés ou transférés. Un nombre élevé (≥ 30 jours) indique une bonne capacité de rétention. Faible (&lt; 7 jours): les revenus sont dépensés rapidement.",
+    category: 'metrique',
+  },
+  {
+    term: 'OverdraftLabel (label découvert)',
+    def: 'Étiquette qualitative du taux de découvert: EXCELLENT (0%), SAIN (&lt;10%), ATTENTION (&lt;25%), PRUDENCE (&lt;50%), CRITIQUE (≥50%). Chaque niveau correspond à un区间 de risque pour la banque.',
+    category: 'metrique',
+  },
+  {
+    term: 'RatioLabel (label ratio)',
+    def: 'Étiquette qualitative du ratio dépenses/revenus: EXCELLENT (≤ 50%), SAIN (≤ 75%), ATTENTION (≤ 90%), CRITIQUE (&gt; 90%). Utilisée dans les réponses API pour donner un jugement lisible sans calcul.',
+    category: 'metrique',
+  },
+  {
+    term: 'Frequency (fréquence)',
+    def: "Périodicité détectée d'une dépense récurrente. Actuellement toujours MONTHLY (mensuel). Patterns détectés: écart de 25-35 jours entre occurrences, montant variant de moins de 10%. Futures fréquences possibles: WEEKLY, BIWEEKLY, QUARTERLY, YEARLY.",
+    category: 'metrique',
+  },
+  {
+    term: 'NextExpectedDate',
+    def: "Date estimée de la prochaine occurrence d'une dépense récurrente. Calculée en ajoutant l'intervalle moyen aux dates d'occurrences passées. Format: ISO date (YYYY-MM-DD). Utilisé pour anticiper les flux de trésorerie.",
+    category: 'metrique',
+  },
+  {
+    term: 'DailyBalance (solde quotidien)',
+    def: 'Solde du compte bancaire à la fin de chaque journée civile. Calculé à partir des transactions (crédits, débits) et du solde initial. Utilisé pour calculer la moyenne, les extrêmes, et la volatilité du solde.',
+    category: 'metrique',
+  },
+  {
+    term: 'BalanceRange (étendue solde)',
+    def: 'Différence entre le solde maximum et le solde minimum sur une période: Range = MaxBalance - MinBalance. Exprimé en FCFA. Une étendue élevée indique de fortes fluctuations et potentiellement une gestion de trésorerie instable.',
+    category: 'metrique',
+  },
+  {
+    term: 'NegativePeriod (période négative)',
+    def: 'Période continue pendant laquelle le solde du compte est négatif (inférieur à zéro). Caractérisée par: date de début (from), date de fin (to), durée en jours, et solde minimum observé pendant la période.',
+    category: 'metrique',
+  },
+  {
+    term: 'AverageDuration (durée moyenne)',
+    def: 'Durée moyenne des périodes de découvert (jours). Calcul: somme des durées de toutes les périodes négatives / nombre de périodes. Complète le nombre total de jours de découvert en donnant le pattern: périodes longues ou fréquentes?',
+    category: 'metrique',
+  },
+  {
+    term: 'PaymentsOnTime (paiements à temps)',
+    def: 'Nombre de mensualités de crédit remboursées dans les délais (à la date attendue ou avant). Utilisé pour calculer le regularityRate des remboursements. Plus le nombre est élevé, meilleure est la fiabilité du client.',
+    category: 'metrique',
+  },
+  {
+    term: 'MonthsAnalyzed (mois analysés)',
+    def: "Nombre de mois civils utilisés pour l'analyse financière. Valeur par défaut: 6 (constante DEFAULT_LOOKBACK_MONTHS). Impacte la fiabilité de toutes les métriques: plus de mois = meilleure précision, mais données plus anciennes = moins représentatives.",
     category: 'metrique',
   },
   {
@@ -443,6 +610,36 @@ export const glossary: GlossaryEntry[] = [
     category: 'score',
   },
   {
+    term: 'PersonalAdvice (conseil perso.)',
+    def: "Conseil personnalisé généré par le moteur d'advice (GET /analytics/:customerId/advice). Champs: type (ex: SPENDING_SPIKE, INCOME_DROP, GOOD_HABIT), severity (INFO/WARNING/CRITICAL), title, message, action, metric (current, previous, change, threshold).",
+    category: 'score',
+  },
+  {
+    term: 'AdviceIntentKind (type intention)',
+    def: "Enum des types d'intentions de conseil: LOGEMENT_CRITICAL, LOGEMENT_HIGH, LOGEMENT_OK, CREDIT_HIGH, CREDIT_NEAR_LIMIT, CREDIT_INCREASE, ALIMENTATION_SPIKE, ALIMENTATION_HIGH, TRANSPORT_SPIKE, TRANSPORT_HIGH, COMMERCE_SPIKE, CARBURANT_SPIKE, SANTE_HIGH, MOBILE_MONEY_HIGH, FEES_HIGH, INCOME_DROP, GOOD_HABIT (17 valeurs).",
+    category: 'score',
+  },
+  {
+    term: 'ScoreHistory (historique score)',
+    def: "Historique des scores financiers mensuels. Chaque entrée: month (YYYY-MM), score (0-100), label (EXCELLENT/GOOD/FRAGILE/CRITICAL). Retourne aussi: trend (UP/DOWN/STABLE), improvement (texte résumant l'évolution, ex: '+5 points sur 6 mois').",
+    category: 'score',
+  },
+  {
+    term: 'EligibilityResult (résultat élig.)',
+    def: "Résultat complet d'évaluation d'éligibilité à un produit. Champs: productCode, productName, globalScore, maxScore, scorePercent, status (ELIGIBLE/PARTIAL/NOT_ELIGIBLE), ruleResults[], infoRules[], passedRules[], failedRules[], partialRules[]. Retourné par POST /eligibility/evaluate.",
+    category: 'score',
+  },
+  {
+    term: 'RuleResult (résultat règle)',
+    def: "Résultat d'évaluation d'une règle individuelle. Champs: ruleId, ruleCode, label, status (PASS/FAIL/PARTIAL), valueSource (analytics/input/not_found), clientValue, threshold, thresholdMin/Max, scoreEarned, scoreMax, message, advice. Permet de comprendre précisément pourquoi une règle a réussi/échoué.",
+    category: 'score',
+  },
+  {
+    term: 'ValueSource (source valeur)',
+    def: "Indique d'où provient la valeur du client utilisée pour évaluer une règle: analytics (calculée par le moteur analytics), input (saisie manuelle), not_found (non trouvée → la règle échoue automatiquement). Trace la provenance des données dans le résultat d'évaluation.",
+    category: 'score',
+  },
+  {
     term: 'Score éligibilité (détail)',
     def: "Le score est calculé par la fonction calculateScore(rules, metrics). Pour chaque règle: si PASS → weight, si PARTIAL → weight × 0.4, si FAIL → 0. Score final = (sum obtenus / sum poids) × 100. Arrondi à l'entier.",
     category: 'score',
@@ -470,8 +667,103 @@ export const glossary: GlossaryEntry[] = [
 
   // ─── IA & Analytics ─────────────────────────────────────────────
   {
-    term: 'Feature Vector',
-    def: "Vecteur numérique de 21 dimensions (features de base) ou 321 dimensions (21 features + 300 embeddings) qui représente le contexte financier d'un client. Chaque dimension correspond à une feature : montant, ratio, variation, catégorie one-hot, etc. Construit par ContextVectorBuilder.",
+    term: 'GlobalScore (score global)',
+    def: 'Score financier global (0-100) calculé à partir de 4 composantes pondérées: dépenses (25%), endettement (25%), épargne (25%), stabilité (25%). Labels: ≥ 80 = EXCELLENT, ≥ 60 = GOOD, ≥ 40 = FRAGILE, &lt; 40 = CRITICAL. Retourné par GET /analytics/:customerId/score.',
+    category: 'ia',
+  },
+  {
+    term: 'ScoreComponent (composante)',
+    def: 'Chacune des 4 dimensions du score global: C1_expenses, C2_debt, C3_savings, C4_stability. Chaque composante a: score (0-100), weight (poids, toujours 0.25), contribution (score × weight). La somme des contributions = globalScore.',
+    category: 'ia',
+  },
+  {
+    term: 'Interpretation (interprétation)',
+    def: "Objet JSON contenant pour chaque composante du score: level (CRITIQUE/FAIBLE/MOYEN/BON/EXCELLENT), label (titre lisible), message (explication détaillée), priorities[] (actions prioritaires suggérées). Généré par l'InterpreterEngine.",
+    category: 'ia',
+  },
+  {
+    term: 'ScoreIndicator (indicateur)',
+    def: "Indicateur détaillé du score contenant: name (nom lisible), value (valeur formatée, ex: '45%'), score (0-100), impact (POSITIF/NÉGATIF/NEUTRE). Retourné par GET /analytics/:customerId/score/explanation pour expliquer les forces et faiblesses.",
+    category: 'ia',
+  },
+  {
+    term: 'Recommendation (recommandation)',
+    def: "Conseil personnalisé généré par le RecommendationEngine. Champs: priority (HIGH/MEDIUM/LOW), component (C1-C4), trigger (condition déclencheuse, ex: 'Taux epargne < 5%'), title, message, actionAmount (montant suggéré en FCFA), source.",
+    category: 'ia',
+  },
+  {
+    term: 'Verdict (décision SMS)',
+    def: "Décision finale du filtre SMS: INSERT (le SMS sera inséré en base) ou SKIP (le SMS sera ignoré). Retourné par l'endpoint POST /admin/sms/debug. Basé sur l'analyse du parseSms, de la validation de date, et du classifieur.",
+    category: 'ia',
+  },
+  {
+    term: 'ParseSms (analyse SMS)',
+    def: "Étape de diagnostic qui extrait les champs d'un SMS bancaire: operator (opérateur mobile détecté), direction (credit/débit), amount (montant parsé), sender (expéditeur). Si le parse échoue, le verdict est SKIP avec raison parseEmpty ou noId.",
+    category: 'ia',
+  },
+  {
+    term: 'DateValidation (validation date)',
+    def: 'Étape de diagnostic qui vérifie si la date extraite du SMS est valide. Champs: raw (chaîne brute), valid (boolean). Si la date est invalide ou absente, le verdict est SKIP avec raison invalidDate.',
+    category: 'ia',
+  },
+  {
+    term: 'Classifier Debug (test classifieur)',
+    def: 'Résultat détaillé du test du classifieur sur une description SMS. Champs: exact (match exact + score), fuse (fuzzy match + score), embedding (similarité cosinus + catégorie), embeddingTop3 (top-3 catégories), bayes (catégorie probabiliste), winner (catégorie gagnante).',
+    category: 'ia',
+  },
+  {
+    term: 'ExactMatchScore',
+    def: "Score du match exact textuel. Valeur fixe = 10 (ou 0 si aucun mot-clé exact trouvé). Priorité maximale dans l'ordre des méthodes de classification. Si match exact trouvé, les autres méthodes ne sont pas consultées.",
+    category: 'ia',
+  },
+  {
+    term: 'FuseScore',
+    def: "Score de la recherche approximative Fuse.js (0-10). Un score ≥ 4 est considéré fiable. Tolère les fautes de frappe et les variations orthographiques (distance de Levenshtein). Deuxième méthode dans l'ordre de priorité du classifieur.",
+    category: 'ia',
+  },
+  {
+    term: 'EmbeddingTop3',
+    def: 'Top 3 des catégories les plus proches par similarité cosinus (embedding). Retourné sous forme de tableau: [{category: string, score: number}]. Score ≥ 0.5 = correspondance significative. Affiche la marge entre la 1ʳᵉ et la 2ᵉ catégorie.',
+    category: 'ia',
+  },
+  {
+    term: 'ConfusionMatrix (matrice confusion)',
+    def: "Matrice de confusion du module d'évaluation d'entraînement. Structure: { [expected: string]: { [predicted: string]: count } }. Chaque ligne = intention attendue, chaque colonne = intention prédite. La diagonale = prédictions correctes. Les hors-diagonale = erreurs.",
+    category: 'ia',
+  },
+  {
+    term: 'TrainingMetrics (métriques train)',
+    def: "Métriques enregistrées à chaque époque d'entraînement: epoch (numéro), loss (erreur), accuracy (précision %), top3Accuracy (bonne réponse dans le top 3 %). Permet de tracer la courbe d'apprentissage et détecter le surapprentissage.",
+    category: 'ia',
+  },
+  {
+    term: 'TrainingConfig (config train)',
+    def: "Configuration de l'entraînement: epochs (nombre d'époques, défaut: 100), learningRate (taux d'apprentissage, défaut: 0.01), margin (marge loss, défaut: 0.5), dataFile (chemin fichier données), layers (1 ou 2 couches). Renvoyée par POST /admin/training/run.",
+    category: 'ia',
+  },
+  {
+    term: 'FinalAccuracy (accuracy finale)',
+    def: "Précision finale après la dernière époque d'entraînement. Pourcentage de classifications correctes sur l'ensemble des données d'entraînement. Une accuracy ≥ 90% est considérée comme un bon modèle. Affichée dans l'interface Entraînement.",
+    category: 'ia',
+  },
+  {
+    term: 'ScoredCategory (catégorie scorée)',
+    def: 'Paire { category: ExpenseCategory, score: number } représentant une catégorie avec son score de similarité cosinus (0-1). Utilisée par EmbeddingClassifier et retournée dans embeddingTop3. Plus le score est proche de 1, plus la correspondance est forte.',
+    category: 'ia',
+  },
+  {
+    term: 'ScoredIntent (intention scorée)',
+    def: "Paire { kind: AdviceIntentKind, score: number } représentant une intention d'alerte avec son score numérique. Utilisée dans ScoringEngine et dans les erreurs de classification (errors[].scores) de la matrice de confusion. Score ≥ 0.8 = seuil de rétention.",
+    category: 'ia',
+  },
+  {
+    term: 'EvaluationReport (rapport éval.)',
+    def: "Rapport complet d'évaluation d'un modèle entraîné. Champs: total (nombre d'exemples), accuracy (%), top3Accuracy (%), confusionMatrix, errors[] (liste des erreurs avec id, expected, predicted, scores). Retourné après chaque entraînement.",
+    category: 'ia',
+  },
+  {
+    term: 'SyncResult (résultat synchro)',
+    def: 'Résultat de la synchronisation SMS: synced (nombre de SMS insérés), duplicates (doublons ignorés), skipped (SMS non financiers ignorés). Retourné par POST /sms/sync. Les skip reasons sont tracées par catégorie dans les logs.',
     category: 'ia',
   },
   {
@@ -486,7 +778,7 @@ export const glossary: GlossaryEntry[] = [
   },
   {
     term: 'Feature Index',
-    def: "Mapping des noms de features (cat_LOGEMENT, percent, change, amount_ratio, expense_ratio…) vers leur position (0-20) dans le vecteur. Défini dans context-vector.builder.ts.",
+    def: 'Mapping des noms de features (cat_LOGEMENT, percent, change, amount_ratio, expense_ratio…) vers leur position (0-20) dans le vecteur. Défini dans context-vector.builder.ts.',
     category: 'ia',
   },
   {
@@ -506,7 +798,7 @@ export const glossary: GlossaryEntry[] = [
   },
   {
     term: 'ScoringEngine',
-    def: "Calcule le score de chaque intention en multipliant le Feature Vector par la Weight Matrix (produit scalaire). Version 1-layer : score = W × v. Version deep : score = softmax(ReLU(W1 × v) × W2). Seuil à 0.8.",
+    def: 'Calcule le score de chaque intention en multipliant le Feature Vector par la Weight Matrix (produit scalaire). Version 1-layer : score = W × v. Version deep : score = softmax(ReLU(W1 × v) × W2). Seuil à 0.8.',
     category: 'ia',
   },
   {
@@ -526,7 +818,7 @@ export const glossary: GlossaryEntry[] = [
   },
   {
     term: 'Cosine Similarity',
-    def: "Mesure de similarité entre deux vecteurs : cos(θ) = (A·B) / (|A| × |B|). Résultat entre -1 (opposé) et 1 (identique). 0 = orthogonal (aucun rapport). Utilisée par EmbeddingClassifier pour classer une description dans la catégorie la plus proche.",
+    def: 'Mesure de similarité entre deux vecteurs : cos(θ) = (A·B) / (|A| × |B|). Résultat entre -1 (opposé) et 1 (identique). 0 = orthogonal (aucun rapport). Utilisée par EmbeddingClassifier pour classer une description dans la catégorie la plus proche.',
     category: 'ia',
   },
   {
@@ -546,7 +838,7 @@ export const glossary: GlossaryEntry[] = [
   },
   {
     term: 'EmbeddingClassifier',
-    def: "Classifieur basé sur les embeddings : calcule le centroïde de chaque ExpenseCategory, vectorise la description via TextVectorizer, puis trouve la catégorie dont le centroïde est le plus proche (cosine similarity ≥ 0.5). Peut retourner le top-N des catégories les plus proches.",
+    def: 'Classifieur basé sur les embeddings : calcule le centroïde de chaque ExpenseCategory, vectorise la description via TextVectorizer, puis trouve la catégorie dont le centroïde est le plus proche (cosine similarity ≥ 0.5). Peut retourner le top-N des catégories les plus proches.',
     category: 'ia',
   },
   {
@@ -556,12 +848,12 @@ export const glossary: GlossaryEntry[] = [
   },
   {
     term: 'EmbeddingLoader',
-    def: "Charge le fichier fastText cc.fr.300.vec en mémoire. Limité à 50 000 mots les plus fréquents pour rester sous 60 Mo RAM. Affiche une barre de progression animée. Si le fichier est absent, le système fonctionne sans embeddings (mode 21 features only).",
+    def: 'Charge le fichier fastText cc.fr.300.vec en mémoire. Limité à 50 000 mots les plus fréquents pour rester sous 60 Mo RAM. Affiche une barre de progression animée. Si le fichier est absent, le système fonctionne sans embeddings (mode 21 features only).',
     category: 'ia',
   },
   {
     term: 'cc.fr.300.vec',
-    def: "Fichier de plongements lexicaux fastText pour le français. Chaque ligne = un mot + 300 nombres flottants (ses coordonnées vectorielles). Contient ~2M mots (2.4 Go), limité à 50 000. À télécharger via scripts/download-embeddings.sh (non commité dans git).",
+    def: 'Fichier de plongements lexicaux fastText pour le français. Chaque ligne = un mot + 300 nombres flottants (ses coordonnées vectorielles). Contient ~2M mots (2.4 Go), limité à 50 000. À télécharger via scripts/download-embeddings.sh (non commité dans git).',
     category: 'ia',
   },
   {
@@ -591,7 +883,7 @@ export const glossary: GlossaryEntry[] = [
   },
   {
     term: 'Margin Loss',
-    def: "Fonction de perte avec marge : loss = max(0, marge - score_bonne_classe + score_mauvaise_classe). Encourage le modèle à être confiant dans ses prédictions en imposant un écart minimum (margin) entre le bon score et les mauvais. Valeur par défaut : 0.5.",
+    def: 'Fonction de perte avec marge : loss = max(0, marge - score_bonne_classe + score_mauvaise_classe). Encourage le modèle à être confiant dans ses prédictions en imposant un écart minimum (margin) entre le bon score et les mauvais. Valeur par défaut : 0.5.',
     category: 'ia',
   },
   {
@@ -611,7 +903,7 @@ export const glossary: GlossaryEntry[] = [
   },
   {
     term: '1 couche (linéaire)',
-    def: "Architecture simple : 21 features → 17 intentions. Calcul direct : score = W × v. Pas de non-linéarité. Reproduit exactement les 16 règles if/else. Sûre, rapide, mais moins expressive que la version 2 couches.",
+    def: 'Architecture simple : 21 features → 17 intentions. Calcul direct : score = W × v. Pas de non-linéarité. Reproduit exactement les 16 règles if/else. Sûre, rapide, mais moins expressive que la version 2 couches.',
     category: 'ia',
   },
   {
@@ -641,7 +933,7 @@ export const glossary: GlossaryEntry[] = [
   },
   {
     term: 'DbSource',
-    def: "Ancien TransactionFetcher, devenu une source comme les autres. Lit les transactions depuis la base PostgreSQL (historique bancaire). Toujours actif et prioritaire.",
+    def: 'Ancien TransactionFetcher, devenu une source comme les autres. Lit les transactions depuis la base PostgreSQL (historique bancaire). Toujours actif et prioritaire.',
     category: 'ia',
   },
   {
@@ -661,22 +953,22 @@ export const glossary: GlossaryEntry[] = [
   },
   {
     term: 'Classifieur (Classifier)',
-    def: "Service central de classification des descriptions bancaires. Combine 4 méthodes dans cet ordre : 1) Exact Match (mots-clés stricts), 2) Fuse.js (fuzzy), 3) Embedding (cosinus), 4) Bayes (probabiliste). Priorité : la première méthode qui trouve un résultat gagne.",
+    def: 'Service central de classification des descriptions bancaires. Combine 4 méthodes dans cet ordre : 1) Exact Match (mots-clés stricts), 2) Fuse.js (fuzzy), 3) Embedding (cosinus), 4) Bayes (probabiliste). Priorité : la première méthode qui trouve un résultat gagne.',
     category: 'ia',
   },
   {
     term: 'scripts/download-embeddings.sh',
-    def: "Script shell qui télécharge le fichier cc.fr.300.vec depuis le site fastText (~2.4 Go). À exécuter une fois pour activer les embeddings. Le fichier est stocké dans data/embeddings/ et ne doit pas être commité.",
+    def: 'Script shell qui télécharge le fichier cc.fr.300.vec depuis le site fastText (~2.4 Go). À exécuter une fois pour activer les embeddings. Le fichier est stocké dans data/embeddings/ et ne doit pas être commité.',
     category: 'ia',
   },
   {
     term: 'MATRIX_MODULE.md',
-    def: "Documentation détaillée du module matriciel à la racine du projet. Explique le calcul des scores, la structure des matrices, et donne des exemples concrets pour chaque intention.",
+    def: 'Documentation détaillée du module matriciel à la racine du projet. Explique le calcul des scores, la structure des matrices, et donne des exemples concrets pour chaque intention.',
     category: 'ia',
   },
   {
     term: 'Classifieur Admin (page)',
-    def: "Interface de test interactif du classifieur. Permet de saisir une description bancaire et de voir le résultat de chaque méthode (Exact, Fuse.js, Embedding, Bayes) avec leurs scores. Affiche le top-3 des similarités cosinus.",
+    def: 'Interface de test interactif du classifieur. Permet de saisir une description bancaire et de voir le résultat de chaque méthode (Exact, Fuse.js, Embedding, Bayes) avec leurs scores. Affiche le top-3 des similarités cosinus.',
     category: 'ia',
   },
   {

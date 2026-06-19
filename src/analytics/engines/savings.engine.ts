@@ -97,6 +97,7 @@ export class SavingsEngine {
       const monthEntries = filterEntries(entries, {
         year: targetDate.getUTCFullYear(),
         month: targetDate.getUTCMonth() + 1,
+        includeMobileMoney: true,
       });
 
       let monthSavedAmount = new Decimal(0);

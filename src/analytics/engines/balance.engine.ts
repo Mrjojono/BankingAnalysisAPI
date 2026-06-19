@@ -34,6 +34,7 @@ export class BalanceEngine {
     const monthEntries = filterEntries(entries, {
       year,
       month,
+      includeMobileMoney: true,
     }).sort(
       (a, b) =>
         new Date(a.transaction.transactionDate).getTime() -

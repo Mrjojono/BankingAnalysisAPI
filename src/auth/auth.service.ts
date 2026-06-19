@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as jwt from 'jsonwebtoken';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { RefreshTokenDto } from './dto/auth-response.dto';
 import {
   generateOtp,
   comparePassword,
@@ -17,8 +18,11 @@ import {
   parseState,
   registerOtpKey,
   RegisterState,
+  signAccessToken,
+  signRefreshToken,
   signToken,
   validateToken,
+  validateRefreshToken,
   forgotPasswordOtpKey,
   logAuth,
   forgotPasswordKey,
@@ -306,7 +310,7 @@ export class AuthService {
         return {
           step: 'complete',
           message: 'Compte activé avec succès.',
-          token: signToken({ id: user.id, email: user.email }),
+          token: signToken({ id: user.id, email: user.email, role: user.role }),
         };
       } catch (error) {
         await logAuth(
@@ -388,7 +392,14 @@ export class AuthService {
     return { message: 'Nouveau code OTP envoyé.' };
   }
 
-  async login(dto: LoginDto, req?: any): Promise<string> {
+  async login(
+    dto: LoginDto,
+    req?: any,
+  ): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    user: { id: string; email: string; role: string; username?: string };
+  }> {
     const { ipAddress, userAgent } = req
       ? this.extractRequestInfo(req)
       : { ipAddress: null, userAgent: null };
@@ -458,7 +469,135 @@ export class AuthService {
 
     this.logger.log(`Connexion réussie : ${user.email}`);
 
-    return signToken({ id: user.id, email: user.email });
+    const accessToken = signAccessToken({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    const session = await this.prisma.session.create({
+      data: {
+        userId: user.id,
+        token: signRefreshToken({ sessionId: 'tmp' }),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        userAgent: userAgent ?? undefined,
+        ipAddress: ipAddress ?? undefined,
+      },
+    });
+
+    const refreshToken = signRefreshToken({ sessionId: session.id });
+
+    await this.prisma.session.update({
+      where: { id: session.id },
+      data: { token: refreshToken },
+    });
+
+    const username = user.bankConnections[0]?.bankCustomer
+      ? `${user.bankConnections[0].bankCustomer.firstName} ${user.bankConnections[0].bankCustomer.lastName ?? ''}`.trim()
+      : undefined;
+
+    return {
+      accessToken,
+      refreshToken,
+      user: { id: user.id, email: user.email, role: user.role, username },
+    };
+  }
+
+  async me(
+    userId: string,
+  ): Promise<{ id: string; email: string; role: string; username?: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { bankConnections: { include: { bankCustomer: true } } },
+    });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    const username = user.bankConnections[0]?.bankCustomer
+      ? `${user.bankConnections[0].bankCustomer.firstName} ${user.bankConnections[0].bankCustomer.lastName ?? ''}`.trim()
+      : undefined;
+    return { id: user.id, email: user.email, role: user.role, username };
+  }
+
+  async refreshToken(
+    dto: RefreshTokenDto,
+    req?: any,
+  ): Promise<{
+    accessToken: string;
+    refreshToken: string;
+  }> {
+    const { ipAddress, userAgent } = req
+      ? this.extractRequestInfo(req)
+      : { ipAddress: null, userAgent: null };
+
+    let payload: jwt.JwtPayload;
+    try {
+      payload = validateRefreshToken(dto.refreshToken);
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const sessionId = payload.sessionId as string;
+    if (!sessionId) {
+      throw new UnauthorizedException('Invalid refresh token payload');
+    }
+
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+      include: { user: true },
+    });
+
+    if (!session || session.isRevoked || session.expiresAt < new Date()) {
+      throw new UnauthorizedException('Session expired or revoked');
+    }
+
+    // Revoke old session
+    await this.prisma.session.update({
+      where: { id: session.id },
+      data: { isRevoked: true },
+    });
+
+    // Create new session
+    const newSession = await this.prisma.session.create({
+      data: {
+        userId: session.userId,
+        token: 'pending',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        userAgent: userAgent ?? session.userAgent ?? undefined,
+        ipAddress: ipAddress ?? session.ipAddress ?? undefined,
+      },
+    });
+
+    const accessToken = signAccessToken({
+      id: session.user.id,
+      email: session.user.email,
+      role: session.user.role,
+    });
+    const refreshToken = signRefreshToken({ sessionId: newSession.id });
+
+    await this.prisma.session.update({
+      where: { id: newSession.id },
+      data: { token: refreshToken },
+    });
+
+    return { accessToken, refreshToken };
+  }
+
+  async logout(dto: RefreshTokenDto): Promise<void> {
+    let payload: jwt.JwtPayload;
+    try {
+      payload = validateRefreshToken(dto.refreshToken);
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const sessionId = payload.sessionId as string;
+    if (sessionId) {
+      await this.prisma.session.updateMany({
+        where: { id: sessionId, isRevoked: false },
+        data: { isRevoked: true },
+      });
+    }
   }
 
   /**

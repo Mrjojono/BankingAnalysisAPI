@@ -15,7 +15,7 @@ export type BankAccount = {
   id: string;
   customerId: string;
   accountId: string;
-  accountType: 'CHECKING' | 'SAVINGS' | 'LOAN' | 'CORPORATE';
+  accountType: 'CHECKING' | 'SAVINGS' | 'LOAN' | 'CORPORATE' | 'MOBILE_MONEY';
   currency: string;
 };
 

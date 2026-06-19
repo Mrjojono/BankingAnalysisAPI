@@ -1,30 +1,39 @@
 /**
  * Fait le lien entre le controller et le moteur d'éligibilité.
- * Ajoute des méthodes utilitaires (liste des produits, détails des règles).
+ * Utilise le moteur matriciel par défaut (MatrixEligibilityEngine).
+ * Le moteur à base de règles (EligibilityEngine) reste accessible
+ * avec mode='rules' pour comparaison.
  */
 
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EligibilityEngine } from './engines/eligibility.engine';
+import { MatrixEligibilityEngine } from './matrix/matrix-eligibility.engine';
 import type { EligibilityResult } from './types';
 
 @Injectable()
 export class EligibilityService {
   constructor(
-    private readonly engine: EligibilityEngine,
+    private readonly ruleEngine: EligibilityEngine,
+    private readonly matrixEngine: MatrixEligibilityEngine,
     private readonly prisma: PrismaService,
   ) {}
 
   /**
-   * Évalue l'éligibilité d'un client pour un produit
-   * Délègue à EligibilityEngine après avoir passé les paramètres
+   * Évalue l'éligibilité d'un client pour un produit.
+   * Par défaut utilise le moteur matriciel (mode 'matrix').
+   * Passer mode='rules' pour utiliser le moteur à base de règles.
    */
   async evaluateEligibility(
     customerId: string,
     productCode: string,
     inputs?: Record<string, number | boolean | string>,
+    mode: 'matrix' | 'rules' = 'matrix',
   ): Promise<EligibilityResult> {
-    return this.engine.evaluate(customerId, productCode, inputs ?? {});
+    if (mode === 'rules') {
+      return this.ruleEngine.evaluate(customerId, productCode, inputs ?? {});
+    }
+    return this.matrixEngine.evaluate(customerId, productCode, inputs ?? {});
   }
 
   /**

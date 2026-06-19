@@ -1,8 +1,12 @@
 <script lang="ts">
-  import { Plus, Pencil, Trash2, Search, Info } from '@lucide/svelte';
+  import { Plus, Pencil, Trash2, Search, Info, GitGraph } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
   import Drawer from '../lib/components/Drawer.svelte';
+
+  let {
+    onNavigate = undefined as ((p: string, id?: string | null) => void) | undefined,
+  } = $props();
 
   let rules = $state<any[]>([]);
   let products = $state<any[]>([]);
@@ -108,8 +112,13 @@
   }
 
   onMount(async () => {
-    try { [rules, products] = await Promise.all([api.listRules(), api.listProducts()]); }
-    catch { error = 'Erreur chargement des règles'; }
+    try {
+      [rules, products] = await Promise.all([api.listRules(), api.listProducts()]);
+      console.log(`[Rules] ${rules.length} règles, ${products.length} produits chargés`);
+    } catch (e: any) {
+      error = 'Erreur chargement des règles';
+      console.error(`[Rules] chargement échoué:`, e.message);
+    }
   });
 
 
@@ -469,7 +478,12 @@
           </td>
           <td class="px-4 py-3 text-sm font-semibold">{r.product?.code ?? productName(r.productId)}</td>
           <td class="px-4 py-3 text-sm"><code class="bg-surface-container px-1.5 py-0.5 rounded text-xs font-mono font-semibold">{r.code}</code></td>
-          <td class="px-4 py-3 text-sm max-w-[220px] truncate" title={r.description ?? r.label}>{r.label}</td>
+          <td class="px-4 py-3 text-sm max-w-[220px] truncate" title={r.description ?? r.label}>
+            <button onclick={() => onNavigate?.('graph', r.productId, r.id)}
+              class="bg-transparent border-none p-0 text-inherit font-inherit cursor-pointer hover:underline text-left">
+              {r.label}
+            </button>
+          </td>
           <td class="px-4 py-3 text-sm leading-relaxed">
             {#if r.value != null}
               <span class="font-semibold">{formatValue(r.value, r.operator, r.currency)}</span>
@@ -508,6 +522,9 @@
           </td>
           <td class="px-4 py-3">
             <div class="flex gap-1">
+              <button onclick={() => onNavigate?.('graph', r.productId, r.id)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-primary-container hover:text-primary transition-all cursor-pointer border-none text-on-surface-variant" title="Voir dans le graphe">
+                <GitGraph size={18} />
+              </button>
               <button onclick={() => openForm(r)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container transition-all cursor-pointer border-none text-on-surface-variant">
                 <Pencil size={18} />
               </button>

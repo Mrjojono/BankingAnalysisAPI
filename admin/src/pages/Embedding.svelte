@@ -136,7 +136,7 @@
         {#each Object.entries(stats.wordsPerCategory ?? {}) as [cat, count]}
           <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-surface-container-low">
             <span class="text-sm font-medium text-on-surface">{cat}</span>
-            <span class="text-sm font-mono px-2 py-0.5 rounded {count >= 10 ? 'bg-green-100 text-green-800' : count >= 5 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}">
+            <span class="text-sm font-mono px-2 py-0.5 rounded {(count as number) >= 10 ? 'bg-green-100 text-green-800' : (count as number) >= 5 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}">
               {count}
             </span>
           </div>

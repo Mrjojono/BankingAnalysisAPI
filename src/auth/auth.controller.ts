@@ -1,5 +1,17 @@
-import { Controller, Post, Body, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Body,
+  Req,
+  Headers,
+  UnauthorizedException,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -7,8 +19,12 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import {
   AuthResponseDto,
   LoginResponseDto,
+  RefreshTokenDto,
+  RefreshResponseDto,
+  MeResponseDto,
   MessageResponseDto,
 } from './dto/auth-response.dto';
+import { validateToken } from './auth.utils';
 
 import type { Request } from 'express';
 
@@ -50,12 +66,55 @@ export class AuthController {
   @ApiOperation({ summary: "Connexion d'un utilisateur" })
   @ApiResponse({
     status: 200,
-    description: 'Connexion réussie, retourne un token JWT',
+    description:
+      'Connexion réussie, retourne accessToken + refreshToken + user',
     type: LoginResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Identifiants invalides' })
   async login(@Body() loginDto: LoginDto, @Req() req: Request) {
     return this.authService.login(loginDto, req);
+  }
+
+  @Post('me')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Récupérer l'utilisateur connecté" })
+  @ApiResponse({
+    status: 200,
+    description: 'Utilisateur trouvé',
+    type: MeResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Token invalide ou expiré' })
+  async me(@Headers('authorization') authHeader?: string) {
+    if (!authHeader) {
+      throw new UnauthorizedException('Authorization header missing');
+    }
+    const [type, token] = authHeader.split(' ');
+    if (type !== 'Bearer' || !token) {
+      throw new UnauthorizedException('Invalid authorization header');
+    }
+    const payload = validateToken(token);
+    return this.authService.me(payload.id as string);
+  }
+
+  @Post('refresh')
+  @ApiOperation({ summary: 'Rafraîchir le token accès' })
+  @ApiResponse({
+    status: 200,
+    description: 'Nouveaux tokens générés',
+    type: RefreshResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Refresh token invalide ou expiré' })
+  async refresh(@Body() dto: RefreshTokenDto, @Req() req: Request) {
+    return this.authService.refreshToken(dto, req);
+  }
+
+  @Post('logout')
+  @ApiOperation({ summary: 'Déconnexion (révoque la session)' })
+  @ApiResponse({ status: 200, description: 'Déconnexion réussie' })
+  @ApiResponse({ status: 401, description: 'Refresh token invalide' })
+  async logout(@Body() dto: RefreshTokenDto) {
+    await this.authService.logout(dto);
+    return { message: 'Déconnecté avec succès' };
   }
 
   @Post('resend-otp')

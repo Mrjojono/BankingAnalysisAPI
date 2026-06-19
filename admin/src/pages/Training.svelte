@@ -59,8 +59,10 @@
       const res = await api.trainingExamples();
       examples = res.examples;
       count = res.count;
+      console.log(`[Training] ${count} exemples chargés`);
     } catch (e: any) {
       error = e.message;
+      console.error(`[Training] chargement échoué:`, e.message);
     } finally {
       loading = false;
     }

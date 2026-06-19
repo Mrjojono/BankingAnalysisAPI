@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FlaskConical, Search, AlertCircle, Info, CheckCheck, ArrowRight, Layers, Brain, Hash, Scale, Crosshair } from '@lucide/svelte';
+  import { FlaskConical, Search, AlertCircle, Info, CheckCheck, ArrowRight, Layers, Brain, Hash, Scale, Crosshair, MessageSquare, Smartphone } from '@lucide/svelte';
   import { api } from '../lib/api';
   import InfoDrawer from '../lib/components/InfoDrawer.svelte';
 
@@ -8,6 +8,12 @@
   let result = $state<any | null>(null);
   let error = $state('');
   let infoOpen = $state(false);
+
+  let smsAddress = $state('');
+  let smsBody = $state('');
+  let smsLoading = $state(false);
+  let smsResult = $state<any | null>(null);
+  let smsError = $state('');
 
   const CATEGORY_COLORS: Record<string, string> = {
     LOGEMENT: 'bg-green-50 text-green-700 ring-green-200',
@@ -45,6 +51,23 @@
       error = e.message;
     } finally {
       loading = false;
+    }
+  }
+
+  async function testSmsFilter() {
+    if (!smsBody.trim()) return;
+    smsLoading = true;
+    smsError = '';
+    smsResult = null;
+    try {
+      smsResult = await api.debugSmsFilter({
+        address: smsAddress.trim() || 'ORABANK',
+        body: smsBody,
+      });
+    } catch (e: any) {
+      smsError = e.message;
+    } finally {
+      smsLoading = false;
     }
   }
 </script>
@@ -250,6 +273,129 @@
           </div>
         </div>
       {/if}
+    </div>
+  {/if}
+
+  <hr class="my-10 border-mint-subtle" />
+
+  <div class="flex items-center gap-3 mb-6">
+    <Smartphone size={24} class="text-primary" />
+    <h2 class="text-2xl font-bold text-on-surface">Test Filtrage SMS</h2>
+  </div>
+
+  <div class="bg-white border border-mint-subtle rounded-2xl p-6">
+    <label for="sms-address" class="block text-sm font-semibold text-on-surface mb-2">
+      Expéditeur (address)
+    </label>
+    <input
+      id="sms-address"
+      bind:value={smsAddress}
+      placeholder="ORABANK (laisser vide pour défaut)"
+      class="w-full mb-4 px-4 py-2.5 rounded-xl border border-mint-subtle bg-surface text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+    />
+    <label for="sms-body" class="block text-sm font-semibold text-on-surface mb-2">
+      Corps du SMS
+    </label>
+    <div class="flex gap-3">
+      <input
+        id="sms-body"
+        bind:value={smsBody}
+        placeholder="Ex: Virement TMoney de 5000 CFA de M. Kodjo"
+        onkeydown={(e) => e.key === 'Enter' && testSmsFilter()}
+        class="flex-1 px-4 py-2.5 rounded-xl border border-mint-subtle bg-surface text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+      />
+      <button
+        onclick={testSmsFilter}
+        disabled={smsLoading || !smsBody.trim()}
+        class="flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl font-semibold text-sm hover:bg-primary-700 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-none"
+      >
+        <Search size={18} />
+        Tester
+      </button>
+    </div>
+  </div>
+
+  {#if smsLoading}
+    <div class="mt-6 p-8 text-center text-outline">
+      <div class="animate-pulse flex flex-col items-center gap-2">
+        <div class="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+        Analyse en cours...
+      </div>
+    </div>
+  {/if}
+
+  {#if smsError}
+    <div class="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center gap-2">
+      <AlertCircle size={18} /> {smsError}
+    </div>
+  {/if}
+
+  {#if smsResult && !smsLoading}
+    <div class="mt-6 space-y-4">
+      <div class="bg-white border border-mint-subtle rounded-2xl p-4 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <Crosshair size={18} class="text-primary" />
+          <span class="text-sm font-semibold text-on-surface">Verdict</span>
+        </div>
+        <span class="px-4 py-2 rounded-full text-sm font-bold ring-1 {smsResult.verdict === 'INSERT' ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-700 ring-red-200'}">
+          {smsResult.verdict}
+        </span>
+      </div>
+
+      <div class="bg-white border border-mint-subtle rounded-2xl p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <Info size={16} class="text-primary" />
+          <h3 class="text-sm font-semibold text-on-surface">Raison</h3>
+        </div>
+        <p class="text-sm text-on-surface">{smsResult.reason}</p>
+      </div>
+
+      <div class="bg-white border border-mint-subtle rounded-2xl overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-surface-container-low border-b border-mint-subtle">
+              <th class="text-left px-4 py-3 font-semibold text-on-surface">Étape</th>
+              <th class="text-left px-4 py-3 font-semibold text-on-surface">Détail</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b border-mint-subtle">
+              <td class="px-4 py-3 font-medium text-on-surface">parseSms</td>
+              <td class="px-4 py-3 text-sm text-outline">
+                opérateur: {smsResult.steps.parseSms.operator ?? '—'} |
+                direction: {smsResult.steps.parseSms.direction ?? '—'} |
+                montant: {smsResult.steps.parseSms.amount ?? '—'} |
+                expéditeur: {smsResult.steps.parseSms.sender ?? '—'}
+              </td>
+            </tr>
+            <tr class="border-b border-mint-subtle">
+              <td class="px-4 py-3 font-medium text-on-surface">Date</td>
+              <td class="px-4 py-3 text-sm text-outline">
+                {smsResult.steps.dateValidation.raw ?? 'non fournie'}
+                {#if smsResult.steps.dateValidation.valid === true}
+                  <span class="text-green-600">✓ valide</span>
+                {:else if smsResult.steps.dateValidation.valid === false}
+                  <span class="text-red-600">✗ invalide</span>
+                {:else}
+                  <span class="text-outline">—</span>
+                {/if}
+              </td>
+            </tr>
+            <tr class="border-b border-mint-subtle">
+              <td class="px-4 py-3 font-medium text-on-surface">Classifier</td>
+              <td class="px-4 py-3 text-sm text-outline">
+                {#if smsResult.steps.classifier.error}
+                  <span class="text-red-600">Erreur: {smsResult.steps.classifier.error}</span>
+                {:else if smsResult.steps.classifier}
+                  vainqueur: {smsResult.steps.classifier.winner ?? '—'}
+                {:else}
+                  non exécuté
+                {/if}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   {/if}
 </div>

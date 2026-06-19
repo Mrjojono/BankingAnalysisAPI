@@ -5,6 +5,11 @@ import { existsSync } from 'fs';
 
 @Controller()
 export class AppController {
+  @Get('ping')
+  ping() {
+    return 'pong';
+  }
+
   @Get('dashboard')
   getDashboard(@Res() res: Response) {
     const paths = [

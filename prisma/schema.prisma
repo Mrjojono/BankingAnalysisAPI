@@ -31,6 +31,7 @@ enum AccountType {
   SAVINGS
   LOAN
   CORPORATE
+  MOBILE_MONEY
 }
 
 enum GLAccountType {
@@ -642,6 +643,23 @@ model Rule {
   @@index([productId])
   @@index([type])
   @@map("rules")
+}
+
+model SmsTransaction {
+  id         Int      @id @default(autoincrement())
+  customerId String
+  smsId      Int
+  address    String
+  body       String
+  amount     Int?
+  direction  String?
+  operator   String?
+  sender     String?
+  dateSent   DateTime
+  createdAt  DateTime @default(now())
+
+  @@unique([customerId, smsId])
+  @@map("sms_transactions")
 }
 
 enum RuleType {

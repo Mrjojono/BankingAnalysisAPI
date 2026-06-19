@@ -13,5 +13,5 @@ export { TransactionSourceRegistry } from './registry/transaction-source-registr
 export { TransactionSourcesModule } from './sources.module';
 export { DbSource } from './db-source/db-source.service';
 export { DbSourceModule } from './db-source/db-source.module';
-export { TMoneySource } from './tmoney/tmoney-source.service';
-export { TMoneySourceModule } from './tmoney/tmoney-source.module';
+export { SmsSource } from './sms/sms-source.service';
+export { SmsSourceModule } from './sms/sms-source.module';

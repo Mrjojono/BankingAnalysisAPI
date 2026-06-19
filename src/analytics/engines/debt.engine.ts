@@ -42,6 +42,7 @@ export class DebtEngine {
     const debits = filterEntries(entries, {
       direction: 'DEBIT',
       accountType: 'CHECKING',
+      includeMobileMoney: true,
       year,
       month,
       from,
@@ -271,6 +272,7 @@ export class DebtEngine {
     const debits = filterEntries(entries, {
       direction: 'DEBIT',
       accountType: 'CHECKING',
+      includeMobileMoney: true,
     });
 
     const creditEntries: Entry[] = [];

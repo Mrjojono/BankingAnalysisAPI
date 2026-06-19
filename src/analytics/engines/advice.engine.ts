@@ -51,24 +51,28 @@ export class AdviceEngine {
     const currentDebits = filterEntries(allEntries, {
       direction: 'DEBIT',
       accountType: 'CHECKING',
+      includeMobileMoney: true,
       from: currentStart,
       to: currentEnd,
     });
     const prevDebits = filterEntries(allEntries, {
       direction: 'DEBIT',
       accountType: 'CHECKING',
+      includeMobileMoney: true,
       from: prevStart,
       to: prevEnd,
     });
     const currentCredits = filterEntries(allEntries, {
       direction: 'CREDIT',
       accountType: 'CHECKING',
+      includeMobileMoney: true,
       from: currentStart,
       to: currentEnd,
     });
     const prevCredits = filterEntries(allEntries, {
       direction: 'CREDIT',
       accountType: 'CHECKING',
+      includeMobileMoney: true,
       from: prevStart,
       to: prevEnd,
     });

@@ -41,6 +41,7 @@ export class ExpenseEngine {
     const debits = filterEntries(entries, {
       direction: 'DEBIT',
       accountType: 'CHECKING',
+      includeMobileMoney: true,
       year,
       month,
       from,
@@ -102,6 +103,7 @@ export class ExpenseEngine {
     const debits = filterEntries(entries, {
       direction: 'DEBIT',
       accountType: 'CHECKING',
+      includeMobileMoney: true,
       year,
       month,
       from,
@@ -192,6 +194,7 @@ export class ExpenseEngine {
     const debits = filterEntries(entries, {
       direction: 'DEBIT',
       accountType: 'CHECKING',
+      includeMobileMoney: true,
       from: cutoffDate,
       to: analysisDate,
     });
@@ -304,6 +307,7 @@ export class ExpenseEngine {
     const periodDebits = filterEntries(entries, {
       direction: 'DEBIT',
       accountType: 'CHECKING',
+      includeMobileMoney: true,
       year,
       month,
       from,

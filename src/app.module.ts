@@ -8,6 +8,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { EligibilityModule } from './eligibility/eligibility.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { AdminModule } from './admin/admin.module';
+import { SmsModule } from './sms/sms.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -20,6 +21,7 @@ import { AppController } from './app.controller';
     EligibilityModule,
     GatewayModule,
     AdminModule,
+    SmsModule,
   ],
   controllers: [AppController],
   providers: [PrismaService],

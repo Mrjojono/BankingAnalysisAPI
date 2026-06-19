@@ -83,13 +83,23 @@ export const forgotPasswordKey = (contact: string) => `forgot:${contact}`;
 export const forgotPasswordOtpKey = (contact: string) =>
   `forgot:${contact}:otp`;
 /**
- * Signe un token JWT avec un payload donné
- * @param payload - Les données à inclure dans le token
- * @returns Le token JWT signé
+ * Signe un access token JWT (court, 15min)
  */
-export const signToken = (payload: object): string => {
-  return jwt.sign(payload, process.env.JWT_SECRET ?? '', { expiresIn: '1h' });
+export const signAccessToken = (payload: object): string => {
+  return jwt.sign(payload, process.env.JWT_SECRET ?? '', { expiresIn: '15m' });
 };
+
+/**
+ * Signe un refresh token JWT (long, 7 jours)
+ */
+export const signRefreshToken = (payload: object): string => {
+  return jwt.sign(payload, process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET ?? '', { expiresIn: '7d' });
+};
+
+/**
+ * Signe un token JWT avec un payload donné (alias — gardé pour compatibilité)
+ */
+export const signToken = signAccessToken;
 
 /**
  *
@@ -101,6 +111,14 @@ export const validateToken = (token: string): jwt.JwtPayload => {
     return jwt.verify(token, process.env.JWT_SECRET ?? '') as jwt.JwtPayload;
   } catch {
     throw new UnauthorizedException('Invalid or expired token');
+  }
+};
+
+export const validateRefreshToken = (token: string): jwt.JwtPayload => {
+  try {
+    return jwt.verify(token, process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET ?? '') as jwt.JwtPayload;
+  } catch {
+    throw new UnauthorizedException('Invalid or expired refresh token');
   }
 };
 

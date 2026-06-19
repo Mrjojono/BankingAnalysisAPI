@@ -41,8 +41,13 @@
   ];
 
   onMount(async () => {
-    try { catalog = await api.getCatalog(); }
-    catch (e: any) { error = 'Erreur chargement catalogue : ' + e.message; }
+    try {
+      catalog = await api.getCatalog();
+      console.log(`[Catalog] chargé`);
+    } catch (e: any) {
+      error = 'Erreur chargement catalogue : ' + e.message;
+      console.error(`[Catalog] chargement échoué:`, e.message);
+    }
   });
 
   function openEditor(section: string, pattern: string) {
@@ -185,7 +190,7 @@
       <li><span class="font-semibold">partial</span> — condition partiellement remplie (écart ≤ 20%)</li>
       <li><span class="font-semibold">advice</span> — conseil personnalisé pour aider le client</li>
     </ul>
-    <p>Le moteur détecte automatiquement le pattern à utiliser selon le champ et le label de la règle, puis remplit les placeholders (<code>{value}</code>, <code>{threshold}</code>, <code>{unit}</code>, etc.) avec les valeurs réelles du client.</p>
+    <p>Le moteur détecte automatiquement le pattern à utiliser selon le champ et le label de la règle, puis remplit les placeholders (<code>{'{value}'}</code>, <code>{'{threshold}'}</code>, <code>{'{unit}'}</code>, etc.) avec les valeurs réelles du client.</p>
 
     <h4 class="font-bold text-base mt-2">2. Section Conseils (advice_templates)</h4>
     <p>Alertes financières déclenchées par des comportements détectés (ex: pic de dépenses <code>SPENDING_SPIKE</code>, catégorie dominante <code>TOP_CATEGORY</code>). Chaque clé contient un tableau de messages possibles.</p>

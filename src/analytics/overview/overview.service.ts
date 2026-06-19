@@ -59,7 +59,7 @@ export class OverviewService {
   }
 
   /**
-   * R\u00e9sout une p\u00e9riode (from/to) bas\u00e9e sur les param\u00e8tres ou la derni\u00e8re activit\u00e9.
+   * Résout une période (from/to) basée sur les paramètres ou la dernière activité.
    */
   private async resolveRange(
     customerId: string,

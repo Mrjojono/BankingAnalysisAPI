@@ -1,16 +1,16 @@
 import { Module } from '@nestjs/common';
 import { DbSourceModule } from './db-source/db-source.module';
-import { TMoneySourceModule } from './tmoney/tmoney-source.module';
+import { SmsSourceModule } from './sms/sms-source.module';
 import { TransactionSourceRegistry } from './registry/transaction-source-registry';
 import { DbSource } from './db-source/db-source.service';
-import { TMoneySource } from './tmoney/tmoney-source.service';
+import { SmsSource } from './sms/sms-source.service';
 import { TRANSACTION_SOURCE_PROVIDER } from './interfaces/transaction-source-provider.interface';
 
 /**
  * Module racine des sources de transactions.
  *
  * Rôle :
- * 1. Importer tous les modules de sources (DbSourceModule, TMoneySourceModule, etc.)
+ * 1. Importer tous les modules de sources (DbSourceModule, SmsSourceModule, etc.)
  * 2. Collecter toutes les sources dans un tableau via le token TRANSACTION_SOURCE_PROVIDER
  * 3. Fournir TransactionSourceRegistry qui orchestre l'agrégation
  *
@@ -26,21 +26,21 @@ import { TRANSACTION_SOURCE_PROVIDER } from './interfaces/transaction-source-pro
  * providers: [
  *   {
  *     provide: TRANSACTION_SOURCE_PROVIDER,
- *     useFactory: (db, tmoney, moov) => [db, tmoney, moov],
- *     inject: [DbSource, TMoneySource, MoovSource],
+ *     useFactory: (db, sms, moov) => [db, sms, moov],
+ *     inject: [DbSource, SmsSource, MoovSource],
  *   },
  * ]
  * ```
  */
 @Module({
-  imports: [DbSourceModule, TMoneySourceModule],
+  imports: [DbSourceModule, SmsSourceModule],
   providers: [
     {
       provide: TRANSACTION_SOURCE_PROVIDER,
-      useFactory: (dbSource: DbSource, tmoneySource: TMoneySource) => {
-        return [dbSource, tmoneySource];
+      useFactory: (dbSource: DbSource, smsSource: SmsSource) => {
+        return [dbSource, smsSource];
       },
-      inject: [DbSource, TMoneySource],
+      inject: [DbSource, SmsSource],
     },
     TransactionSourceRegistry,
   ],

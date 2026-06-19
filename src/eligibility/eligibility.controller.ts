@@ -43,14 +43,17 @@ export class EligibilityController {
   @ApiOperation({
     summary: "Évaluer l'éligibilité d'un client pour un produit",
     description:
-      'Utilise les métriques analytics du client (calculees automatiquement) ' +
-      'et les inputs fournis (ex: montant souhaite) pour evaluer chaque regle du produit.',
+      'Utilise le moteur matriciel (mode=matrix) par defaut. ' +
+      'Les métriques analytics du client sont calculees automatiquement. ' +
+      'Les inputs fournis (ex: montant souhaite) sont combines aux metriques ' +
+      'pour le calcul vectoriel.',
   })
   async evaluate(@Body() dto: EvaluateEligibilityDto) {
     return this.service.evaluateEligibility(
       dto.customerId,
       dto.productCode,
       dto.inputs,
+      dto.mode,
     );
   }
 

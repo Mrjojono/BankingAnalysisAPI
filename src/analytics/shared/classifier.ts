@@ -194,9 +194,7 @@ export class Classifier implements OnModuleInit {
    * Teste toutes les méthodes de classification et retourne les scores détaillés.
    * Utilisé par l'interface admin.
    */
-  testAll(
-    description: string,
-  ): {
+  testAll(description: string): {
     exact: { category: ExpenseCategory; score: number } | null;
     fuse: { category: ExpenseCategory; score: number } | null;
     embedding: ScoredCategory | null;
@@ -209,9 +207,7 @@ export class Classifier implements OnModuleInit {
     // Exact
     const exact = this.matchExact(desc);
     const exactResult =
-      exact !== ExpenseCategory.DIVERS
-        ? { category: exact, score: 10 }
-        : null;
+      exact !== ExpenseCategory.DIVERS ? { category: exact, score: 10 } : null;
 
     // Fuse
     let fuseResult: { category: ExpenseCategory; score: number } | null = null;
