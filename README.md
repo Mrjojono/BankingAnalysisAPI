@@ -1,640 +1,764 @@
-# Backend Orabank App — Documentation Analytique
+# API Orabank — Backend
 
-## Score Global
+Backend NestJS de l'application Orabank. Authentification JWT, analytics financiers, éligibilité produits, synchronisation SMS Mobile Money.
 
-```
-GlobalScore = (C1 × 0.25) + (C2 × 0.25) + (C3 × 0.25) + (C4 × 0.25)
-```
-
-Arrondi à l'entier. Chaque composant a le même poids (25%).
-
-**Réf :** [CFPB Financial Well-Being Scale](https://www.consumerfinance.gov/data-research/financial-well-being-survey/) — échelle 0-100.
-**Note :** Le CFPB utilise une modélisation IRT (Item Response Theory) calibrée sur 6000+ répondants, pas une moyenne arithmétique.
-
-### Label du score
-
-| Score | Label | Réf. CFPB |
-|-------|-------|---|
-| ≥ 80 | EXCELLENT | ≥ 78 = "high" |
-| ≥ 60 | GOOD | ≥ 62 = "moderate" |
-| ≥ 40 | FRAGILE | < 62 = "low" |
-| < 40 | CRITICAL | — |
+**Base URL:** `http://localhost:4000`  
+**Swagger:** `GET /api/docs`
 
 ---
 
-## Composants du score
+## Authentification
 
-### C1 — Dépenses (poids 25%)
-
-```
-C1 = (expenseRatioScore × 0.50) + (paymentRegularityScore × 0.50)
-```
-
-**expenseRatioScore** (`classifier.ts` `interpretRatio()`)
-
-| Ratio dépenses/revenus | Label | Score | Référence |
-|---|---|---|---|
-| < 50% | EXCELLENT | 100 | [FHN](https://www.financialhealthnetwork.org/) — "Spend" pillar : dépenses < 50% des revenus = excellente santé |
-| < 75% | SAIN | 75 | [FHN](https://www.financialhealthnetwork.org/) — "Spend" pillar : seuil de vigilance à 75% |
-| < 90% | ATTENTION | 50 | [FHN](https://www.financialhealthnetwork.org/) — approche du seuil critique |
-| ≥ 90% | CRITIQUE | 10 | [FHN](https://www.financialhealthnetwork.org/) — "financially fragile" à 90%+ |
-
-**paymentRegularityScore** (`debt.engine.ts` `calculateRepaymentHistory()`)
-- Analyse 6 mois d'historique
-- Vérifie la présence d'un paiement dans les 5 jours autour du 5 de chaque mois
-- Score = `(paiements à temps / mois analysés) × 100`
-- **Réf :** [FICO](https://www.myfico.com/credit-education/whats-in-your-credit-score) — l'historique des paiements représente 35% du score FICO
-
-### C2 — Endettement (poids 25%)
-
-```
-C2 = (debtRatioScore × 0.40) + (repaymentRegularityScore × 0.35) + (creditUtilizationScore × 0.25)
-```
-
-**debtRatioScore** (`debt.engine.ts` `calculateDebtRatio()`)
-- Ratio = `(total mensualités dette / revenus mensuels) × 100`
-
-| Ratio | Label | Score | Référence |
-|---|---|---|---|
-| ≤ 15% | EXCELLENT | 100 | Seuil arbitraire (non sourcé) |
-| ≤ 33% | SAIN | 80 | [BCEAO](https://www.bceao.int/fr) — Instruction n°008-09-2015, seuil réglementaire maximum d'endettement |
-| ≤ 45% | ATTENTION | 40 | Seuil arbitraire (non sourcé) |
-| > 45% | CRITIQUE | 10 | Seuil arbitraire (non sourcé) |
-
-**repaymentRegularityScore** — même valeur que `paymentRegularityScore` (historique remboursements)
-- **Réf :** [FICO](https://www.myfico.com/credit-education/whats-in-your-credit-score) — même logique que l'historique paiements FICO (35% du score)
-
-**creditUtilizationScore** (`overview.service.ts` `gatherMetrics()`)
-
-| Ratio endettement | Score | Référence |
-|---|---|---|
-| 0% | 100 | [FICO](https://www.myfico.com/credit-education/whats-in-your-credit-score) — "amounts owed" = 30% du score FICO |
-| ≤ 15% | 80 | [FICO](https://www.myfico.com/credit-education/whats-in-your-credit-score) — taux d'utilisation < 30% recommandé |
-| ≤ 33% | 60 | [BCEAO](https://www.bceao.int/fr) — seuil réglementaire |
-| ≤ 45% | 30 | Seuil arbitraire (non sourcé) |
-| > 45% | 10 | Seuil arbitraire (non sourcé) |
-
-### C3 — Épargne (poids 25%)
-
-```
-C3 = (savingsRateScore × 0.50) + (emergencyFundScore × 0.30) + (savingsRegularityScore × 0.20)
-```
-
-**savingsRateScore** (`savings.engine.ts` `calculateSavingsRate()`)
-- Taux = `(revenus − dépenses − remboursements dette) / revenus × 100`
-
-| Taux d'épargne | Label | Score | Référence |
-|---|---|---|---|
-| ≥ 20% | EXCELLENT | 100 | [Garman & Forgue](https://www.cengage.com/c/personal-finance-13e-garman/9781337099752/) — objectif idéal |
-| ≥ 10% | BIEN | 75 | [Garman & Forgue](https://www.cengage.com/c/personal-finance-13e-garman/9781337099752/) — taux recommandé minimum |
-| ≥ 5% | MOYEN | 45 | Seuil arbitraire (non sourcé) |
-| > 0% | FAIBLE | 20 | Seuil arbitraire (non sourcé) |
-| ≤ 0% | CRITIQUE | 0 | Aucune épargne |
-
-**emergencyFundScore** (`overview.service.ts` `gatherMetrics()`)
-- Mois couverts = `solde moyen / dépenses mensuelles`
-
-| Mois couverts | Score | Référence |
-|---|---|---|
-| ≥ 3 | 100 | [Garman & Forgue](https://www.cengage.com/c/personal-finance-13e-garman/9781337099752/) + [FHN](https://www.financialhealthnetwork.org/) — fonds d'urgence 3-6 mois |
-| ≥ 1 | 50 | Seuil arbitraire (non sourcé) |
-| < 1 | 20 | Seuil arbitraire (non sourcé) |
-
-**savingsRegularityScore** (`savings.engine.ts` `calculateSavingsFrequency()`)
-- Vérifie les crédits entrants sur comptes épargne ou contenant "EPARGNE"/"SAVINGS"
-
-| Régularité | Score | Référence |
-|---|---|---|
-| ≥ 80% | 100 | Seuil arbitraire (non sourcé) |
-| ≥ 60% | 70 | Seuil arbitraire (non sourcé) |
-| ≥ 40% | 35 | Seuil arbitraire (non sourcé) |
-| < 40% | 10 | Seuil arbitraire (non sourcé) |
-
-### C4 — Stabilité (poids 25%)
-
-```
-C4 = (overdraftScore × 0.40) + (revenueVolatilityScore × 0.35) + (balanceVolatilityScore × 0.25)
-```
-
-**overdraftScore** (`balance.engine.ts` `calculateOverdraftFrequency()`)
-- Pourcentage de jours avec solde < 0 dans le mois
-
-| Jours négatifs | Score | Référence |
-|---|---|---|
-| 0% | 100 | Aucun découvert = situation idéale |
-| ≤ 5% | 85 | Seuil arbitraire (non sourcé) |
-| ≤ 15% | 70 | Seuil arbitraire (non sourcé) |
-| ≤ 30% | 40 | Seuil arbitraire (non sourcé) |
-| > 30% | 10 | Seuil arbitraire (non sourcé) |
-
-**revenueVolatilityScore** (`revenue.engine.ts` `computeRevenueVariation()`)
-- Coefficient de variation (CV) des revenus mensuels = `(écart-type / moyenne) × 100`
-
-| CV | Score | Référence |
-|---|---|---|
-| < 10% | 100 | [CFPB](https://www.consumerfinance.gov/) — stabilité des revenus = bien-être financier |
-| < 25% | 70 | Seuil arbitraire (non sourcé) |
-| < 50% | 35 | Seuil arbitraire (non sourcé) |
-| ≥ 50% | 0 | Haute volatilité |
-
-**balanceVolatilityScore** (`balance.engine.ts` `calculateVolatility()`)
-- CV des soldes quotidiens = `(écart-type solde / |solde moyen|) × 100`
-
-| CV | Label | Score | Référence |
-|---|---|---|---|
-| ≤ 10 | TRES STABLE | 100 | Seuil arbitraire (non sourcé) |
-| ≤ 25 | STABLE | 80 | Seuil arbitraire (non sourcé) |
-| ≤ 50 | MODERE | 60 | Seuil arbitraire (non sourcé) |
-| ≤ 80 | INSTABLE | 35 | Seuil arbitraire (non sourcé) |
-| > 80 | TRES INSTABLE | 15 | Seuil arbitraire (non sourcé) |
+| Type | Détail |
+|------|--------|
+| **Méthode** | JWT Bearer Token |
+| **Header** | `Authorization: Bearer <token>` |
+| **Access Token** | 15 min |
+| **Refresh Token** | 7 jours |
+| **Rôles** | `CLIENT`, `AGENT`, `ADMIN`, `SUPER_ADMIN` |
 
 ---
 
-## Endpoints
+## Santé & Documentation
 
-### Score
+| Méthode | Path | Auth | Description |
+|---------|------|------|-------------|
+| `GET` | `/ping` | ❌ | Health check → `"pong"` |
+| `GET` | `/dashboard` | ❌ | Serve le dashboard HTML statique |
+| `GET` | `/admin/*path` | ❌ | Serve l'admin SPA |
+| `GET` | `/api/docs` | ❌ | Interface Swagger / Scalar |
 
-| Méthode | Endpoint | Résultat |
-|---|---|---|
-| GET | `:customerId/score` | Score global + composants + interprétations |
-| GET | `:customerId/score/explanation` | Forces et faiblesses détaillées |
-| GET | `:customerId/score/history?months=N` | Historique sur N mois |
-| GET | `:customerId/score/recommendations` | Recommandations personnalisées |
+---
+
+## Auth — `/auth`
+
+### `POST /auth/register` — ❌ Public
+
+Inscription en **4 étapes**. Chaque appel avance d'une étape.
+
+**Étape 1 — Vérification du compte**
+```json
+// Request
+{ "accountNumber": "4443185208" }
+
+// Response 200
+{ "step": "verify_contact", "message": "Compte trouvé. Entrez votre email ou téléphone." }
+```
+
+**Étape 2 — Envoi OTP**
+```json
+// Request
+{
+  "accountNumber": "4443185208",
+  "contact": "joan@gmail.com",
+  "contactType": "email"
+}
+
+// Response 200
+{ "step": "verify_otp", "message": "Code OTP envoyé." }
+```
+
+**Étape 3 — Validation OTP**
+```json
+// Request
+{ "accountNumber": "4443185208", "otp": "847291" }
+
+// Response 200
+{ "step": "set_password", "message": "OTP validé. Créez votre mot de passe." }
+```
+
+**Étape 4 — Création mot de passe**
+```json
+// Request
+{ "accountNumber": "4443185208", "password": "motdepasse123" }
+
+// Response 201
+{
+  "step": "complete",
+  "message": "Compte activé avec succès.",
+  "token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+---
+
+### `POST /auth/login` — ❌ Public
+
+```json
+// Request
+{ "contact": "joan@gmail.com", "password": "motdepasse123" }
+
+// Response 200
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIs...",
+  "user": {
+    "id": "clx...",
+    "email": "user@example.com",
+    "role": "CLIENT",
+    "username": "Joan Doe"
+  }
+}
+```
+
+---
+
+### `POST /auth/me` — ✅ Bearer
+
+```json
+// Response 200
+{
+  "id": "clx...",
+  "email": "user@example.com",
+  "role": "CLIENT",
+  "username": "Joan Doe"
+}
+```
+
+---
+
+### `POST /auth/refresh` — ❌ Public
+
+```json
+// Request
+{ "refreshToken": "eyJhbGciOiJIUzI1NiIs..." }
+
+// Response 200
+{ "accessToken": "...", "refreshToken": "..." }
+```
+
+---
+
+### `POST /auth/logout` — ❌ Public
+
+```json
+// Request
+{ "refreshToken": "eyJhbGciOiJIUzI1NiIs..." }
+
+// Response 200
+{ "message": "Déconnecté avec succès" }
+```
+
+---
+
+### `POST /auth/resend-otp` — ❌ Public
+
+```json
+// Request
+{ "accountNumber": "4443185208" }
+
+// Response 200
+{ "message": "Nouveau code OTP envoyé." }
+```
+
+---
+
+### `POST /auth/forgot-password` — ❌ Public
+
+**3 étapes :**
+
+**Étape 1**
+```json
+// Request
+{ "contact": "joan@gmail.com" }
+
+// Response
+{ "step": "verify_otp", "message": "Code OTP envoyé." }
+```
+
+**Étape 2**
+```json
+// Request
+{ "contact": "joan@gmail.com", "otp": "847291" }
+
+// Response
+{ "step": "reset_password", "message": "OTP validé. Entrez votre nouveau mot de passe." }
+```
+
+**Étape 3**
+```json
+// Request
+{ "contact": "joan@gmail.com", "newPassword": "password123" }
+
+// Response
+{ "step": "complete", "message": "Mot de passe réinitialisé avec succès." }
+```
+
+---
+
+## Admin — `/api/admin` — ✅ Bearer + Rôle `ADMIN` / `SUPER_ADMIN`
+
+### Produits bancaires
+
+| Méthode | Path | Description |
+|---------|------|-------------|
+| `GET` | `/api/admin/products` | Liste tous les produits |
+| `GET` | `/api/admin/products/:id` | Produit par UUID |
+| `POST` | `/api/admin/products` | Créer un produit |
+| `PUT` | `/api/admin/products/:id` | Modifier un produit |
+| `PUT` | `/api/admin/products/:id/rules` | Lier des règles à un produit |
+| `DELETE` | `/api/admin/products/:id` | Supprimer un produit |
+
+**`PUT /api/admin/products/:id/rules`**
+```json
+// Request
+{ "ruleIds": ["uuid1", "uuid2"] }
+
+// Response
+{ "cleared": 2, "updated": 3 }
+```
+
+### Règles
+
+| Méthode | Path | Description |
+|---------|------|-------------|
+| `GET` | `/api/admin/rules` | Liste toutes les règles |
+| `GET` | `/api/admin/rules/:id` | Règle par UUID |
+| `POST` | `/api/admin/rules` | Créer une règle |
+| `PUT` | `/api/admin/rules/:id` | Modifier une règle |
+| `DELETE` | `/api/admin/rules/:id` | Supprimer une règle |
+
+### Catalogue des messages
+
+| Méthode | Path | Description |
+|---------|------|-------------|
+| `GET` | `/api/admin/catalog` | Récupérer le catalogue |
+| `PUT` | `/api/admin/catalog` | Mettre à jour le catalogue |
+
+### Classifieur / Embeddings / Training
+
+| Méthode | Path | Description |
+|---------|------|-------------|
+| `GET` | `/api/admin/classifier/test?desc=` | Tester le classifieur |
+| `GET` | `/api/admin/embedding/stats` | Stats embeddings |
+| `GET` | `/api/admin/embedding/neighbors?desc=&n=` | Plus proches voisins |
+| `GET` | `/api/admin/training/examples` | Liste exemples d'entraînement |
+| `PUT` | `/api/admin/training/examples/:id` | Modifier un exemple |
+| `POST` | `/api/admin/training/examples` | Créer un exemple |
+| `DELETE` | `/api/admin/training/examples/:id` | Supprimer un exemple |
+| `POST` | `/api/admin/training/run` | Lancer l'entraînement |
+
+**`POST /api/admin/training/run`**
+```json
+// Request (optionnel)
+{ "epochs": 50, "lr": 0.001, "layers": 1, "margin": 0.1 }
+
+// Response
+{ "config": { "...": "..." }, "finalAccuracy": 0.95, "metrics": [...] }
+```
+
+**`POST /api/admin/sms/debug`**
+```json
+// Request
+{ "address": "MTN", "body": "Vous avez recu 5000 FCFA de...", "dateSent": "2024-01-15T10:30:00Z" }
+
+// Response
+{
+  "steps": {
+    "parseSms": { "operator": "MTN", "direction": "CREDIT", "amount": 5000, "sender": "XXXXX" },
+    "dateValidation": { "raw": "...", "valid": true },
+    "classifier": { "...": "..." }
+  },
+  "verdict": "INSERT",
+  "reason": "parseSms OK (amount + direction)"
+}
+```
+
+---
+
+## Analytics — `/analytics/:customerId` — ✅ Bearer
+
+**Paramètres query communs :** `?from=YYYY-MM-DD&to=YYYY-MM-DD&year=2024&month=1`
 
 ### Revenus
 
-| Méthode | Endpoint | Calcul |
-|---|---|---|
-| GET | `:customerId/revenues/cashflow` | Total crédits, débits, flux net sur période |
-| GET | `:customerId/revenues/monthly` | Revenus mois courant + mois précédent |
-| GET | `:customerId/revenues/summary` | Moyenne 6 mois, variation %, tendance |
-| GET | `:customerId/revenues/frequency` | Intervalle moyen entre revenus, stabilité |
-| GET | `:customerId/revenues/sources` | Répartition par catégorie (SALAIRE, etc.) |
-| GET | `:customerId/revenues/variation` | Mois par mois + volatilité (CV) |
+| Méthode | Path | Description |
+|---------|------|-------------|
+| `GET` | `/analytics/:customerId/overview` | Vue complète (tous les indicateurs) |
+| `GET` | `/analytics/:customerId/revenues/cashflow` | Flux de trésorerie |
+| `GET` | `/analytics/:customerId/revenues/monthly` | Revenus mensuels |
+| `GET` | `/analytics/:customerId/revenues/summary` | Résumé mensuel |
+| `GET` | `/analytics/:customerId/revenues/frequency` | Fréquence des revenus |
+| `GET` | `/analytics/:customerId/revenues/sources` | Sources de revenus |
+| `GET` | `/analytics/:customerId/revenues/variation` | Variation des revenus (défaut 6 mois) |
+
+**`GET .../revenues/cashflow`**
+```json
+{
+  "period": { "from": "2024-01-01", "to": "2024-06-30" },
+  "totalCredits": { "count": 5, "amount": 1500000 },
+  "totalDebits": { "count": 20, "amount": 800000 },
+  "netFlow": 700000
+}
+```
+
+**`GET .../revenues/monthly`** ou **`.../revenues/summary`**
+```json
+{
+  "currentMonth": { "total": 1500000, "month": "2024-05" },
+  "previousMonth": { "total": 1450000, "month": "2024-04" },
+  "averageLast6Months": 1450000,
+  "variationPercent": 3.45,
+  "trend": "UP",
+  "rolling30Days": 1200000
+}
+```
+
+**`GET .../revenues/frequency`**
+```json
+{
+  "entriesPerMonth": 4,
+  "entriesPerWeek": 1,
+  "averageIntervalDays": 7.5,
+  "stabilityStdDev": 1.2,
+  "coefficientOfVariation": 15.5,
+  "stabilityLabel": "STABLE",
+  "stabilityScore": 70
+}
+```
+
+**`GET .../revenues/sources`**
+```json
+{
+  "source": [{ "category": "SALARY", "amount": 1200000, "percent": 80, "count": 1 }],
+  "totalAmount": 1500000,
+  "dominantSource": "SALARY"
+}
+```
+
+**`GET .../revenues/variation`**
+```json
+{
+  "monthlyRevenues": [{ "month": "2024-05", "amount": 1500000, "variationPercent": 5.2 }],
+  "averageVariationPercent": 2.1,
+  "stdDev": 50000,
+  "coefficientOfVariation": 12.5,
+  "trend": "UP",
+  "volatilityScore": 85
+}
+```
 
 ### Dépenses
 
-| Méthode | Endpoint | Calcul |
-|---|---|---|
-| GET | `:customerId/expenses/detect` | Total dépenses, nombre, moyenne, plus grosse |
-| GET | `:customerId/expenses/categories` | Regroupement par catégorie (classifieur) |
-| GET | `:customerId/expenses/recurring` | Détection des dépenses récurrentes |
-| GET | `:customerId/expenses/variable` | Split variable vs récurrent |
-| GET | `:customerId/expenses/ratio` | Ratio dépenses/revenus + score |
+| Méthode | Path | Description |
+|---------|------|-------------|
+| `GET` | `/analytics/:customerId/expenses/detect` | Détection des dépenses |
+| `GET` | `/analytics/:customerId/expenses/categories` | Dépenses par catégorie |
+| `GET` | `/analytics/:customerId/expenses/recurring?months=3` | Dépenses récurrentes |
+| `GET` | `/analytics/:customerId/expenses/variable` | Variables vs récurrentes |
+| `GET` | `/analytics/:customerId/expenses/ratio` | Ratio dépenses/revenus |
+
+**`GET .../expenses/detect`**
+```json
+{
+  "totalExpenses": 210000,
+  "count": 18,
+  "averageTransactionAmount": 11666,
+  "largestExpense": { "amount": 80000, "description": "LOYER", "date": "2024-01-01" }
+}
+```
+
+**`GET .../expenses/categories`**
+```json
+{
+  "categories": [{ "category": "LOGEMENT", "amount": 80000, "percent": 38.1, "count": 1 }],
+  "totalExpenses": 210000
+}
+```
+
+**`GET .../expenses/recurring`**
+```json
+{
+  "recurringExpenses": [{
+    "description": "LOYER", "averageAmount": 80000, "frequency": "MONTHLY",
+    "occurrences": 3, "nextExpectedDate": "2024-04-01", "category": "LOGEMENT"
+  }],
+  "totalRecurringAmount": 125000,
+  "totalRecurringCount": 2
+}
+```
+
+**`GET .../expenses/variable`**
+```json
+{
+  "totalExpenses": 210000,
+  "recurringExpenses": 125000,
+  "variableExpenses": 85000,
+  "variablePercent": 40.5,
+  "variableTransactions": [{ "description": "RETRAIT GAB", "amount": 20000, "date": "2024-01-10" }]
+}
+```
+
+**`GET .../expenses/ratio`**
+```json
+{
+  "totalRevenues": 275000,
+  "totalExpenses": 210000,
+  "ratio": 76.4,
+  "ratioLabel": "ATTENTION",
+  "score": 50,
+  "interpretation": "Vous dépensez 76% de vos revenus ce mois"
+}
+```
 
 ### Solde
 
-| Méthode | Endpoint | Calcul |
-|---|---|---|
-| GET | `:customerId/balance/average` | Solde moyen du mois |
-| GET | `:customerId/balance/extremes` | Solde min, max, amplitude |
-| GET | `:customerId/balance/overdrafts` | Jours de découvert, taux, score |
-| GET | `:customerId/balance/negative-periods` | Périodes négatives consécutives |
-| GET | `:customerId/balance/volatility` | Volatilité du solde (CV) |
+| Méthode | Path | Description |
+|---------|------|-------------|
+| `GET` | `/analytics/:customerId/balance/average` | Solde moyen mensuel |
+| `GET` | `/analytics/:customerId/balance/extremes` | Solde min/max |
+| `GET` | `/analytics/:customerId/balance/overdrafts` | Analyse des découverts |
+| `GET` | `/analytics/:customerId/balance/negative-periods` | Périodes négatives |
+| `GET` | `/analytics/:customerId/balance/volatility` | Volatilité du solde |
 
-### Endettement
+**`GET .../balance/average`**
+```json
+{
+  "month": "2024-01",
+  "averageBalance": 125000,
+  "dailyBalances": [{ "date": "2024-01-01", "balance": 180000 }]
+}
+```
 
-| Méthode | Endpoint | Calcul |
-|---|---|---|
-| GET | `:customerId/debts/detect` | Détection des crédits en cours |
-| GET | `:customerId/debt/total` | Estimation dette restante totale |
-| GET | `:customerId/debt/monthly-payments` | Détail mensualités |
-| GET | `:customerId/debt/ratio` | Taux d'endettement + score BCEAO |
-| GET | `:customerId/debt/repayment-history` | Ponctualité des remboursements (6 mois) |
+**`GET .../balance/extremes`**
+```json
+{
+  "minimum": { "amount": 5000, "date": "2024-01-20" },
+  "maximum": { "amount": 300000, "date": "2024-01-01" },
+  "range": 295000
+}
+```
+
+**`GET .../balance/overdrafts`**
+```json
+{
+  "overdraftDays": 3, "totalDays": 31, "overdraftRate": 9.7,
+  "overdraftLabel": "ATTENTION", "score": 70,
+  "overdraftDates": ["2024-01-20", "2024-01-21", "2024-01-22"]
+}
+```
+
+**`GET .../balance/negative-periods`**
+```json
+{
+  "negativePeriods": [{ "from": "2024-01-20", "to": "2024-01-22", "durationDays": 3, "minBalance": -15000 }],
+  "totalNegativeDays": 3, "averageDuration": 3, "maxDuration": 3,
+  "longestPeriod": { "from": "2024-01-20", "to": "2024-01-22" }
+}
+```
+
+**`GET .../balance/volatility`**
+```json
+{
+  "averageBalance": 125000, "stdDev": 48000,
+  "coefficientOfVariation": 38.4, "score": 35
+}
+```
+
+### Dettes
+
+| Méthode | Path | Description |
+|---------|------|-------------|
+| `GET` | `/analytics/:customerId/debts/detect` | Détection dettes |
+| `GET` | `/analytics/:customerId/debt/total` | Estimation dette totale |
+| `GET` | `/analytics/:customerId/debt/monthly-payments` | Paiements mensuels |
+| `GET` | `/analytics/:customerId/debt/ratio` | Ratio d'endettement |
+| `GET` | `/analytics/:customerId/debt/repayment-history?months=6` | Historique remboursements |
+
+**`GET .../debts/detect`**
+```json
+{
+  "detectedCredits": [{
+    "description": "REMBOURSEMENT PRET", "monthlyAmount": 45000,
+    "firstDetected": "2024-01-05", "occurences": 3, "confidence": "HIGH"
+  }],
+  "totalMonthlyDebt": 45000
+}
+```
+
+**`GET .../debt/total`**
+```json
+{
+  "debts": [{ "description": "REMBOURSEMENT CREDIT HABITAT", "monthlyAmount": 45000, "estimatedRemainingMonths": 18, "estimatedRemainingDebt": 810000 }],
+  "totalEstimatedDebt": 810000,
+  "totalMonthlyCommitments": 45000
+}
+```
+
+**`GET .../debt/monthly-payments`**
+```json
+{
+  "totalMonthlyPayments": 45000,
+  "breakdown": [{ "description": "CREDIT HABITAT", "amount": 45000, "percent": 100 }]
+}
+```
+
+**`GET .../debt/ratio`**
+```json
+{
+  "monthlyIncome": 250000, "monthlyDebtPayments": 45000,
+  "debtRatio": 18, "bceaoThreshold": 33, "label": "SAIN",
+  "score": 100, "margin": 15,
+  "interpretation": "Vous etes en dessous du seuil BCEAO de 33%"
+}
+```
+
+**`GET .../debt/repayment-history`**
+```json
+{
+  "monthsAnalyzed": 6, "paymentsOnTime": 6, "regularityRate": 100, "score": 100,
+  "history": [{ "month": "2024-01", "paid": true, "daysFromExpected": 0 }]
+}
+```
+
+### Score financier
+
+| Méthode | Path | Description |
+|---------|------|-------------|
+| `GET` | `/analytics/:customerId/score` | Score global |
+| `GET` | `/analytics/:customerId/score/explanation` | Détail du score |
+| `GET` | `/analytics/:customerId/score/history?months=6` | Historique |
+| `GET` | `/analytics/:customerId/score/recommendations` | Recommandations |
+
+**`GET .../score`**
+```json
+{ "globalScore": 75, "label": "BON", "breakdown": { "...": "..." } }
+```
+Labels possibles : `EXCELLENT`, `BON`, `MOYEN`, `FAIBLE`, `CRITIQUE`
+
+**`GET .../score/explanation`**
+```json
+{
+  "globalScore": 75, "label": "BON",
+  "indicators": [{ "name": "Ratio dépenses/revenus", "value": "45%", "score": 80, "impact": "POSITIF" }]
+}
+```
+
+**`GET .../score/history`**
+```json
+{
+  "history": [{ "month": "2024-01", "score": 65, "label": "MOYEN" }],
+  "trend": "UP", "average": 72
+}
+```
+
+**`GET .../score/recommendations`**
+```json
+{ "recommendations": ["..."] }
+```
 
 ### Épargne
 
-| Méthode | Endpoint | Calcul |
-|---|---|---|
-| GET | `:customerId/savings/rate` | Taux d'épargne + score |
-| GET | `:customerId/savings/frequency` | Régularité des dépôts épargne |
-| GET | `:customerId/savings/retention` | Capacité de rétention des revenus |
+| Méthode | Path | Description |
+|---------|------|-------------|
+| `GET` | `/analytics/:customerId/savings/rate` | Taux d'épargne mensuel |
+| `GET` | `/analytics/:customerId/savings/frequency?months=6` | Fréquence des dépôts |
+| `GET` | `/analytics/:customerId/savings/retention?months=3` | Capacité de rétention |
 
-### Conseils
+### Divers
 
-| Méthode | Endpoint | Calcul |
-|---|---|---|
-| GET | `:customerId/advice` | 10+ règles d'interprétation catégories |
+| Méthode | Path | Description |
+|---------|------|-------------|
+| `GET` | `/analytics/:customerId/advice` | Conseils personnalisés |
+| `GET` | `/analytics/classifier/preview?customerId=&from=&to=` | Aperçu classification |
+| `POST` | `/analytics/classifier/feedback` | Enregistrer un feedback |
+
+**`POST /analytics/classifier/feedback`**
+```json
+// Request
+{
+  "customerId": "550e8400-e29b-41d4-a716-446655440000",
+  "description": "VIR SALAIRE MARS 2024",
+  "correctCategory": "SALAIRE"
+}
+
+// Response
+{ "success": true }
+```
+
+Catégories valides : `LOGEMENT`, `ALIMENTATION`, `TRANSPORT`, `SANTE`, `MOBILE_MONEY`, `CARBURANT`, `COMMERCE`, `FRAIS_BANCAIRES`, `VIREMENTS`, `RETRAITS`, `DEPOTS`, `INTERETS`, `CREDIT`, `SALAIRE`, `DIVERS`
 
 ---
 
-## ScoreMetrics — Les 11 sous-scores
-
-| Champ | Source | Plage | Réf. |
-|---|---|---|---|
-| `expenseRatioScore` | Ratio dépenses/revenus → `interpretRatio()` | 10-100 | [FHN] — Spend pillar |
-| `paymentRegularityScore` | Historique remboursements 6 mois | 0-100 | [FICO] — Payment history (35%) |
-| `debtRatioScore` | Taux endettement vs seuils | 10-100 | [BCEAO] — Seuil 33% |
-| `repaymentRegularityScore` | Même que `paymentRegularityScore` | 0-100 | [FICO] — Payment history |
-| `creditUtilizationScore` | Ratio endettement → seuils | 10-100 | [FICO] — Amounts owed (30%) |
-| `savingsRateScore` | Taux d'épargne mensuel | 0-100 | [G&F] — ≥ 10% recommandé |
-| `emergencyFundScore` | Mois de dépenses couverts par solde | 20-100 | [G&F] + [FHN] — 3-6 mois |
-| `savingsRegularityScore` | % mois avec dépôt épargne | 10-100 | Aucune |
-| `overdraftScore` | % jours négatifs dans le mois | 10-100 | Aucune |
-| `revenueVolatilityScore` | CV des revenus mensuels | 0-100 | [CFPB] — Stabilité = bien-être |
-| `balanceVolatilityScore` | CV des soldes quotidiens | 15-100 | Aucune |
-
----
-
-## Classifieur
-
-Les transactions sont classifiées en 15 catégories : `LOGEMENT`, `ALIMENTATION`, `TRANSPORT`, `SANTE`, `MOBILE_MONEY`, `CARBURANT`, `COMMERCE`, `FRAIS_BANCAIRES`, `VIREMENTS`, `RETRAITS`, `DEPOTS`, `INTERETS`, `CREDIT`, `SALAIRE`, `DIVERS`.
-
-Ordre de résolution :
-1. **Règles globales** (Redis) — corrections admin
-2. **Cache utilisateur** (Redis) — corrections individuelles
-3. **Exact match** — mots-clés dans la description
-4. **Fuzzy match** — Fuse.js (seuil 0.35) + Bayes classifier
-
----
-
-## Constantes clés
-
-| Constante | Valeur | Source | Réf. |
-|---|---|---|---|
-| Seuil endettement BCEAO | 33% | BCEAO | Instruction n°008-09-2015 |
-| Taux épargne recommandé | 10% | Garman & Forgue | Personal Finance, 13th ed. |
-| Ratio dépenses sain | ≤ 75% | Financial Health Network | Spend pillar |
-| Ratio dépenses critique | ≥ 90% | Financial Health Network | Financially fragile threshold |
-| Jours pour dépense récurrente | 25-35 jours | — | Interne |
-| Variation montant récurrent | < 10% | — | Interne |
-| Occurrences min récurrent | 2 | — | Interne |
-
----
-
-## Références aux méthodologies revendiquées
-
-Le score se réclame de 5 cadres de référence. Voici ce que chacun préconise réellement et comment le code s'y conforme.
-
-### 1. BCEAO — Banque Centrale des États de l'Afrique de l'Ouest
-
-**Principe :** Taux d'endettement maximal de 33% (seuil réglementaire pour l'octroi de crédit).
-
-| Dans le code | Conforme ? |
-|---|---|
-| `debtRatioScore` : seuil 33% pour score 80 | ✅ Seuil exact |
-| `debt_ratio` < 33% → label `SAIN` | ✅ |
-| Règle `RATE_MAX` dans `catalog.json` : `{threshold}` = 33% | ✅ |
-| **Pb :** Aucune distinction entre crédit consommation et crédit immobilier (la BCEAO applique des règles différentes) | ⚠️ |
-| **Pb :** Pas de prise en compte du reste à vivre après endettement | ⚠️ |
-
-**Référence :** *Instruction BCEAO n°008-09-2015 relative aux conditions de banque et de crédit*
-
----
-
-### 2. Financial Health Network (ex-Center for Financial Services Innovation)
-
-**Principe :** 4 piliers de la santé financière :
-1. Dépenser ≤ 75% des revenus (**Spend**)
-2. Épargne ≥ 3 mois de dépenses (**Save**)
-3. Endettement soutenable (**Borrow**)
-4. Planifier à long terme (**Plan**)
-
-| Dans le code | Conforme ? |
-|---|---|
-| Ratio dépenses ≤ 75% → score 75 (`interpretRatio`) | ✅ Aligné sur "Spend" |
-| Seuil critique ≥ 90% → score 10 | ✅ FHN définit 90%+ comme "financially fragile" |
-| Fonds d'urgence ≥ 3 mois → score 100 (`emergencyFundScore`) | ✅ Aligné sur "Save" |
-| **Pb :** FHN met l'accent sur l'assurance et la planification retraite — aucun équivalent | ⚠️ |
-| **Pb :** Les 4 piliers FHN sont censés être indépendants — le score les agrège avec des poids arbitraires | ⚠️ |
-| **Pb :** FHN préconise une échelle ordinale (faible/moyen/élevé), pas un score 0-100 | ⚠️ |
-
-**Référence :** *Financial Health Network. « U.S. Financial Health Pulse: 2024 Trends Report. »* + *« The Financial Health Score » methodology*
-
----
-
-### 3. FICO Score (Fair Isaac Corporation)
-
-**Principe :** Score de crédit 300-850 basé sur 5 composants pondérés :
-- Historique paiements (35%)
-- Montants dus (30%)
-- Ancienneté crédit (15%)
-- Nouveaux crédits (10%)
-- Types crédits (10%)
-
-| Dans le code | Conforme ? |
-|---|---|
-| `paymentRegularityScore` → historiques sur 6 mois | ✅ Similaire à l'historique paiements FICO |
-| `creditUtilizationScore` → taux d'utilisation du crédit | ✅ Similaire au "amounts owed" FICO |
-| **Pb :** FICO pèse l'historique paiements à 35%, le code le met à part égale | ⚠️ |
-| **Pb :** FICO prend en compte l'ancienneté du crédit — absent ici | ❌ |
-| **Pb :** FICO scale ses scores avec une calibration actuarielle (probabilité de défaut) — ici c'est arbitraire | ❌ |
-| **Pb :** FICO normalise par régression logistique, pas par paliers | ❌ |
-| **Pb :** FICO combine tout en un seul score — ici on sépare en 4 composants puis on recombine (double agrégation) | ⚠️ |
-| **Pb :** FICO exclut les données bancaires courantes (découverts, volatilité) — le code les inclut (C4) ce qui n'est pas FICO-compatible | ⚠️ |
-
-**Référence :** *Fair Isaac Corporation. « FICO Score: A Comprehensive Guide. » myfico.com* + *« How FICO Scores Are Calculated »*
-
----
-
-### 4. CFPB — Consumer Financial Protection Bureau (Financial Well-Being Scale)
-
-**Principe :** Questionnaire à 10 items mesurant le sentiment de sécurité financière. Les scores (0-100) sont issus d'une analyse IRT (Item Response Theory).
-
-| Dans le code | Conforme ? |
-|---|---|
-| Échelle 0-100 | ✅ Même plage que CFPB |
-| 4 catégories de score (EXCELLENT, GOOD, FRAGILE, CRITICAL) | ✅ Similaire aux quartiles CFPB |
-| **Pb :** CFPB mesure le *sentiment subjectif* par questionnaire, pas des données objectives | ❌ Approche fondamentalement différente |
-| **Pb :** Les scores CFPB sont issus d'une modélisation IRT avec calibration sur 6000+ répondants — ici c'est une agrégation arithmétique | ❌ |
-| **Pb :** CFPB ne combine pas de métriques objectives (taux d'endettement, épargne) — il mesure la perception | ❌ |
-| **Pb :** Les seuils CFPB (≥ 80, ≥ 60, ≥ 40, < 40) sont ceux du code | ✅ Mais l'échelle CFPB originale est : ≥ 78 « high », ≥ 62 « moderate », < 62 « low » |
-| **Pb :** Le label « EXCELLENTE SANTÉ FINANCIÈRE » est proche du vocabulaire CFPB | ✅ |
-
-**Référence :** *CFPB. « Measuring financial well-being: A guide to using the CFPB Financial Well-Being Scale. » 2015 + 2017 update* + *CFPB Financial Well-Being Scale scoring worksheet*
-
----
-
-### 5. Garman & Forgue (Personal Finance)
-
-**Principe :** Règles de base de finances personnelles tirées du manuel universitaire « Personal Finance » :
-- Taux d'épargne recommandé : ≥ 10% des revenus
-- Ratio logement : ≤ 35% des revenus
-- Fonds d'urgence : 3-6 mois de dépenses
-- Règle des 20/30/50 (besoins/envies/épargne)
-
-| Dans le code | Conforme ? |
-|---|---|
-| `savingsRateScore` : seuil 10% → score 75 | ✅ Aligné sur G&F |
-| `emergencyFundScore` : 3 mois → score 100 | ✅ Aligné sur G&F |
-| `savingsRateScore` : 20% → 100 | ✅ G&F recommande 20% comme objectif idéal |
-| **Pb :** G&F recommande 20/30/50 (besoins 50%, envies 30%, épargne 20%) — pas de règle similaire | ❌ |
-| **Pb :** G&F a des seuils spécifiques logement (35%) et transport (15%) — partiellement dans `interpreter.engine.ts` | ⚠️ |
-| **Pb :** G&F préconise un fonds d'urgence de 3 à 6 mois — le code ne score que 3 mois max | ⚠️ |
-| **Pb :** Les seuils du code (≥ 10% → 75, ≥ 5% → 45, > 0% → 20) ne viennent d'aucune source académique | ❌ Seuils arbitraires |
-
-**Référence :** *Garman, E. T., & Forgue, R. E. « Personal Finance. » 13th ed., Cengage Learning, 2018* + *Chapitres : Budgeting, Savings, Credit Management*
-
----
-
-## Analyse des écarts méthodologiques
-
-| Méthodologie | Ce qu'elle apporte | Ce qui manque dans le code |
-|---|---|---|
-| **BCEAO** | Cadre réglementaire endettement | Distinction types crédit, reste à vivre |
-| **FHN** | Piliers santé financière | Assurance, planification long terme |
-| **FICO** | Pondération validée, calibration actuarielle | Ancienneté crédit, normalisation logistique, exclusion des données bancaires courantes |
-| **CFPB** | Échelle subjective de bien-être perçu | Approche basée sur questionnaire, modélisation IRT |
-| **G&F** | Règles pratiques de budget | Règle 50/30/20, fonds d'urgence 3-6 mois |
-
-### Synthèse des problèmes identifiés
-
-1. **Poids égaux (25%)** — Aucune des 5 méthodologies ne justifie une pondération uniforme des composants
-2. **Seuils arbitraires** — La plupart des paliers de score (`≤ 15% → 100`, `≤ 45% → 40`, etc.) n'ont pas de source documentée
-3. **Pas de calibration actuarielle** — Contrairement à FICO, les scores ne sont pas liés à une probabilité de défaut observée
-4. **Double agrégation** — Les sous-scores sont d'abord combinés en C1-C4, puis C1-C4 en score global — ajoute une couche de pondération injustifiée
-5. **Pas d'intervalle de confiance** — Aucune indication de fiabilité du score malgré les données partielles
-6. **Tendance sur 2 points** — Premier et dernier mois seulement, ignore la courbe complète
-
----
-
-## Schéma de calcul
-
-```
-Transactions brutes
-        ↓
-   Classifieur (catégorisation)
-        ↓
-   Engines spécialisés (dépenses, revenus, dette, épargne, solde)
-        ↓
-   ScoreMetrics (11 sous-scores 0-100)
-        ↓
-   Score Engine (C1 × 0.25 + C2 × 0.25 + C3 × 0.25 + C4 × 0.25)
-   ↓
-    GlobalScoreResponse (score + label + composants + interprétations)
-```
-
----
-
-## Module Matriciel — Système de Scoring par Matrice de Poids
-
-Remplace les `if/else` de l'ancien `InterpreterEngine` par un calcul vectoriel.
-Le principe : **vecteur × matrice = scores → intentions classées**.
-
-### Architecture
-
-```
-    RuleContext (catégorie, percent, change, amount...)
-         ↓
-    buildFeatureVector()          ← one-hot encoding + normalisation
-         ↓
-    FeatureVector (21 nombres)
-         ↓
-    computeScores()               ← vecteur × matrice de poids
-         ↓
-    ScoredIntent[] (17 scores, 1 par intention)
-         ↓
-    selectActiveIntents()         ← filtre ≥ 0.8, tri décroissant
-         ↓
-    scoredIntentToAdvice()        ← conversion en AdviceIntent
-         ↓
-    Realizer → texte lisible
-```
-
-### Feature Vector (21 dimensions)
-
-| Index | Feature | Description | Normalisation |
-|-------|---------|-------------|---------------|
-| 0-15 | cat_LOGEMENT → cat_LOISIRS | One-hot encoding de la catégorie | 0 ou 1 |
-| 16 | percent | Ratio dépense/revenu de la catégorie | ÷ 100 |
-| 17 | change | Variation vs mois précédent | ÷ 100 |
-| 18 | amount_ratio | Montant absolu | ÷ 1 000 000 |
-| 19 | expense_ratio | Ratio dépenses totales/revenus | ÷ 100 |
-| 20 | prev_amount_ratio | Montant mois précédent | ÷ 1 000 000 |
-
-### Intents (17 sorties)
-
-`LOGEMENT_CRITICAL`, `LOGEMENT_HIGH`, `LOGEMENT_OK`, `CREDIT_HIGH`, `CREDIT_NEAR_LIMIT`, `CREDIT_INCREASE`, `ALIMENTATION_SPIKE`, `ALIMENTATION_HIGH`, `TRANSPORT_SPIKE`, `TRANSPORT_HIGH`, `COMMERCE_SPIKE`, `CARBURANT_SPIKE`, `SANTE_HIGH`, `MOBILE_MONEY_HIGH`, `FEES_HIGH`, `INCOME_DROP`, `GOOD_HABIT`
-
-### Le calcul matriciel
-
-```typescript
-// Pour chaque intention j :
-score[j] = feature[0]×W[0][j] + feature[1]×W[1][j] + ... + feature[20]×W[20][j]
-```
-
-**Exemple concret — contexte LOGEMENT, percent=55 :**
-
-```
-featureVector = [1, 0, 0, ..., 0.55, 0.1, 0]
-                 ↑                    ↑
-           cat_LOGEMENT=1          percent=0.55
-
-score LOGEMENT_CRITICAL = 1×1.5 + 0.55×1.0 + 0.1×0.1 = 2.05  ← activé (≥ 0.8)
-score ALIMENTATION_SPIKE = 0×1.5 + 0.1×1.0           = 0.10  ← ignoré
-score INCOME_DROP        = 0×1.5 + 0.1×(-1.0)        = -0.10 ← ignoré
-```
-
-### Architecture 2 couches (NLP)
-
-Quand les descriptions de transactions sont disponibles, le système passe automatiquement en mode 2 couches :
-
-```
-FeatureVector (321 : 21 base + 300 embeddings)
-    ↓
-W1 (321 × 32 neurones)  ← couche cachée
-    ↓
-ReLU                    ← activation non-linéaire
-    ↓
-W2 (32 × 17 intents)    ← couche de sortie
-    ↓
-ScoredIntent[]
-```
-
-Les embeddings sont chargés depuis `data/embeddings/cc.fr.300.vec` (fastText français, 2M mots, 300 dimensions). Téléchargement via `scripts/download-embeddings.sh`.
-
-### Fichiers du module
-
-```
-src/analytics/matrix/
-├── types.ts                          # FeatureVector, WeightMatrix, DeepWeightMatrices
-├── activation.ts                     # ReLU, softmax
-├── context-vector.builder.ts         # RuleContext → vecteur (21 ou 321 dimensions)
-├── intent-matrix.ts                  # Poids 21×17 + 321×32 + 32×17
-├── scoring-engine.ts                 # computeScores (1 couche) + computeScoresDeep (2 couches)
-├── matrix-interpreter.engine.ts      # Interpréteur (même interface que l'ancien)
-├── matrix.module.ts                  # Module NestJS
-└── index.ts                          # Barrel
-```
-
----
-
-## Module d'Entraînement — Descente de Gradient
-
-Permet d'ajuster automatiquement les poids de la matrice à partir d'exemples `RuleContext → intention_validée`.
-
-### Principe
-
-L'algorithme utilise une **margin loss** (perte de marge) :
-
-```
-L = max(0, score_mauvaise - score_correcte + marge)
-
-Si L > 0 :
-  W[i][correcte] += learningRate × feature[i]   ← renforcer la bonne
-  W[i][mauvaise]  -= learningRate × feature[i]   ← affaiblir la mauvaise
-```
-
-### Usage
-
-```bash
-# Entraînement 1 couche (poids par défaut)
-npx ts-node src/scripts/train.ts --epochs 100
-
-# Entraînement 2 couches (architecture NLP)
-npx ts-node src/scripts/train.ts --epochs 200 --layers 2
-
-# Paramètres custom
-npx ts-node src/scripts/train.ts --epochs 50 --lr 0.05 --margin 1.0
-```
-
-### Format des données d'entraînement (`training-data.json`)
+## Éligibilité — `/eligibility` — ✅ Bearer
+
+| Méthode | Path | Description |
+|---------|------|-------------|
+| `POST` | `/eligibility/evaluate` | Évaluer l'éligibilité d'un client |
+| `GET` | `/eligibility/products` | Liste des produits actifs |
+| `GET` | `/eligibility/products/:code/rules` | Règles d'un produit |
+
+### `POST /eligibility/evaluate`
 
 ```json
-[
-  {
-    "id": "ex-001",
-    "context": {
-      "category": "LOGEMENT",
-      "percent": 55,
-      "change": 10,
-      "amount": 150000,
-      "expenseRatio": 75,
-      "prevAmount": 120000,
-      "totalRevenue": 300000,
-      "totalExpenses": 200000,
-      "label": "Logement"
-    },
-    "expected": "LOGEMENT_CRITICAL"
-  }
-]
+// Request
+{
+  "customerId": "3dc5213d-c382-4028-9d09-9472934b791c",
+  "productCode": "COMPTES_PART",
+  "inputs": { "dat_montant_min": 10000000, "dat_duree_min_mois": 12 },
+  "mode": "matrix"
+}
+
+// Response
+{
+  "productCode": "COMPTES_PART",
+  "productName": "Comptes — Particuliers",
+  "productDescription": "...",
+  "hasEligibilityRules": true,
+  "globalScore": 85,
+  "maxScore": 100,
+  "scorePercent": 85,
+  "status": "ELIGIBLE",
+  "ruleResults": [{
+    "ruleId": "uuid", "ruleCode": "REVENU_MIN", "label": "Revenu minimum",
+    "status": "PASS", "valueSource": "analytics",
+    "clientValue": 250000, "threshold": 200000,
+    "thresholdMin": null, "thresholdMax": null,
+    "scoreEarned": 50, "scoreMax": 50,
+    "message": "Revenu minimum : 250000 FCFA ≥ 200000 FCFA",
+    "advice": null
+  }],
+  "infoRules": [], "passedRules": [], "failedRules": [], "partialRules": []
+}
 ```
 
-36 exemples pré-chargés couvrant les 17 intentions.
+Statuts possibles : `ELIGIBLE`, `PARTIAL`, `NOT_ELIGIBLE`  
+Statuts par règle : `PASS`, `FAIL`, `PARTIAL`
 
-### Sortie
+### `GET /eligibility/products`
 
-Le script modifie `src/analytics/matrix/trained-weights.ts` et affiche :
-
-```
-Étape    0 | Loss: 0.3736 | Accuracy: 75.0%
-Étape   10 | Loss: 0.2548 | Accuracy: 83.3%
-Étape   50 | Loss: 0.1241 | Accuracy: 91.7%
-Étape  100 | Loss: 0.0845 | Accuracy: 94.4%
-
-✅ Poids sauvegardés dans src/analytics/matrix/trained-weights.ts
+```json
+[{
+  "code": "COMPTES_PART", "name": "Comptes — Particuliers",
+  "description": "...", "category": "ACCOUNT",
+  "_count": { "rules": 5 }
+}]
 ```
 
-### Fichiers du module
+### `GET /eligibility/products/:code/rules`
 
-```
-src/analytics/training/
-├── types.ts                    # TrainingExample, TrainingConfig, TrainingResult
-├── data-loader.ts              # Lecture/écriture de training-data.json
-├── gradient-descent.ts         # Margin loss (1 ou 2 couches)
-├── model-evaluator.ts          # Accuracy, Top-3, matrice de confusion
-├── train-command.ts            # CLI NestJS
-├── training.module.ts          # Module NestJS
-└── src/scripts/train.ts        # Point d'entrée
+Retourne le produit complet avec son tableau `rules`.
+
+---
+
+## SMS — `/sms` — ✅ Bearer
+
+| Méthode | Path | Description |
+|---------|------|-------------|
+| `POST` | `/sms/sync` | Synchroniser les SMS Mobile Money |
+
+### `POST /sms/sync`
+
+`customerId` résolu automatiquement depuis le JWT.
+
+```json
+// Request
+{
+  "messages": [{
+    "id": 12345,
+    "address": "MTN",
+    "body": "Vous avez recu 5000 FCFA de...",
+    "dateSent": "2024-01-15T10:30:00Z"
+  }]
+}
+
+// Response
+{ "synced": 5, "duplicates": 2, "skipped": 1 }
 ```
 
 ---
 
-## Module Embeddings — NLP sur les descriptions de transactions
+## Mail — `/mail`
 
-### Principe
+| Méthode | Path | Auth | Description |
+|---------|------|------|-------------|
+| `GET` | `/mail` | ❌ | Test email (hardcodé vers `joan@gmail.com`) |
 
-Chaque description de transaction (ex: "Paiement Orange Money", "Loyer novembre") est convertie en un vecteur de 300 nombres via fastText. Ces vecteurs s'ajoutent au vecteur de features (21 → 321) pour enrichir l'analyse.
-
-### Téléchargement
-
-```bash
-chmod +x scripts/download-embeddings.sh
-./scripts/download-embeddings.sh
-```
-
-Télécharge `cc.fr.300.vec` (~800MB) depuis [fastText](https://fasttext.cc/docs/en/crawl-vectors.html) vers `data/embeddings/`.
-
-### Fonctionnement
-
-- L'`EmbeddingLoader` charge le fichier `.vec` au démarrage de l'application
-- Le `TextVectorizer` moyenne les embeddings de tous les mots d'une catégorie
-- Les embeddings sont utilisés automatiquement si le fichier est présent
-
-### Fichiers du module
-
-```
-src/analytics/embeddings/
-├── embedding-loader.ts       # Chargement du .vec en mémoire
-├── text-vectorizer.ts       # Descriptions → embedding moyen
-└── embeddings.module.ts     # Module NestJS (Global)
+```json
+// Response
+{ "message": "Email envoyé avec succès" }
 ```
 
 ---
 
-## Vue d'ensemble de l'architecture analytique
+## WebSocket — Socket.IO
 
-```
-┌──────────────────┐     ┌──────────────┐     ┌──────────────────────┐     ┌─────────────┐
-│   Transaction    │     │              │     │  MatrixInterpreter   │     │             │
-│   Sources        │────▶│  AdviceEngine│────▶│  21→17 ou 321→32→17 │────▶│   Realizer  │
-│   (DbSource,     │     │              │     │  + seuil 0.8         │     │  → Texte    │
-│    TMoneySource) │     │              │     │                      │     │             │
-└──────────────────┘     └──────────────┘     └──────────────────────┘     └─────────────┘
-                                                         │
-                                            ┌────────────▼───────────┐
-                                            │   Training CLI          │
-                                            │   npx ts-node .../train │
-                                            │   ─ epochs 100          │
-                                            │   ─ layers 1|2          │
-                                            │   ─ lr 0.01             │
-                                            └─────────────────────────┘
-```
+**Namespace :** root `/`  
+**URL :** `http://localhost:4000`
 
-### Flow complet
+| Événement | Direction | Fréquence | Données |
+|-----------|-----------|-----------|---------|
+| `connection` | Client → Serveur | — | — |
+| `disconnect` | Client → Serveur | — | — |
+| `heartbeat` | Serveur → Tous | Toutes les 10s | `{ time: "HH:MM:SS", status: "UP" }` |
+| `analytics_requested` | Serveur → Tous | Sur appel analytics | `{ type, customerId }` |
+| `feedback_saved` | Serveur → Tous | Sur feedback | `{ customerId, description, correctCategory }` |
 
-1. **Sources** : `DbSource` + `TMoneySource` récupèrent les transactions
-2. **AdviceEngine** : agrège par catégorie, calcule les métriques (percent, change...), crée les `RuleContext`
-3. **MatrixInterpreter** : `RuleContext` → vecteur (21 ou 321 dimensions) → scores (17 intentions) → classement
-4. **Realizer** : `AdviceIntent` → message humanisé (JSON catalog + templates)
-5. **Training** (optionnel) : ajuste les poids de la matrice via descente de gradient sur des données labellisées
+---
+
+## Modèles principaux (Prisma)
+
+### BankCustomer
+| Champ | Type |
+|-------|------|
+| `id` | UUID |
+| `email` | String |
+| `firstName` | String |
+| `lastName` | String? |
+| `telephone` | String |
+| `accountNumber` | String (unique, 10 chiffres) |
+| `customerCode` | String (unique) |
+| `kycStatus` | Enum |
+
+### BankAccount
+| Champ | Type |
+|-------|------|
+| `id` | UUID |
+| `customerId` | UUID |
+| `accountId` | UUID (ref Account) |
+| `iban` | String? |
+| `accountType` | Enum (`CHECKING`, `SAVINGS`, `LOAN`, ...) |
+| `currency` | Enum |
+| `isActive` | Boolean |
+| `isBlocked` | Boolean |
+| `dailyLimit` | Float |
+| `monthlyLimit` | Float |
+
+### Transaction
+| Champ | Type |
+|-------|------|
+| `id` | UUID |
+| `amount` | BigInt |
+| `currency` | Enum |
+| `transactionType` | Enum |
+| `status` | Enum |
+| `description` | String? |
+| `senderCustomerId` | UUID? |
+| `receiverCustomerId` | UUID? |
+| `journalId` | UUID |
+| `ledgerId` | UUID |
+| `version` | Int |
+
+### User
+| Champ | Type |
+|-------|------|
+| `id` | UUID |
+| `email` | String (unique) |
+| `password` | String? |
+| `role` | Enum (`CLIENT`, `AGENT`, `ADMIN`, `SUPER_ADMIN`) |
+| `mfaEnabled` | Boolean |
+
+---
+
+## Codes de status
+
+| Code | Signification |
+|------|---------------|
+| `200` | Succès |
+| `201` | Créé (register final step) |
+| `401` | Non authentifié |
+| `403` | Accès refusé (rôle insuffisant) |
+| `404` | Ressource non trouvée |
+| `409` | Conflit (ex. email déjà utilisé) |
+| `429` | Trop de requêtes |
+| `500` | Erreur serveur |
