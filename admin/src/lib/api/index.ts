@@ -148,4 +148,25 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(params),
     }),
+
+  notificationStats: () => request<any>('/notifications/stats'),
+  listCustomers: (q?: string, page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (page) params.set('page', String(page));
+    if (limit) params.set('limit', String(limit));
+    return request<any>(`/customers?${params.toString()}`);
+  },
+  broadcastNotification: (data: {
+    title: string;
+    body: string;
+    type?: string;
+    severity?: string;
+    target?: string | string[];
+    customerTargets?: string[];
+  }) =>
+    request<any>('/notifications/broadcast', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
