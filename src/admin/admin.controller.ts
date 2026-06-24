@@ -22,6 +22,9 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { SmsService } from '../sms/sms.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PushService } from '../notifications/push.service';
+import { BroadcastDto } from '../notifications/dto/broadcast.dto';
 import { Role } from '../../generated/prisma/client';
 
 @ApiTags('Admin')
@@ -33,6 +36,8 @@ export class AdminController {
   constructor(
     private prisma: PrismaService,
     private readonly smsService: SmsService,
+    private readonly notificationsService: NotificationsService,
+    private readonly pushService: PushService,
     @Optional() private readonly classifier?: Classifier,
     @Optional() private readonly embeddingLoader?: EmbeddingLoader,
     @Optional() private readonly embeddingClassifier?: EmbeddingClassifier,
@@ -260,5 +265,125 @@ export class AdminController {
     @Body() body: { address: string; body: string; dateSent?: string },
   ) {
     return this.smsService.debugFilter(body.address, body.body, body.dateSent);
+  }
+
+  @Get('customers')
+  @ApiOperation({ summary: 'Rechercher des clients bank' })
+  async listCustomers(
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const take = Math.min(Math.max(parseInt(limit || '10', 10) || 10, 1), 50);
+    const skip = (Math.max(parseInt(page || '1', 10) || 1, 1) - 1) * take;
+
+    const where: any = { deletedAt: null };
+    if (q && q.trim()) {
+      const term = q.trim();
+      where.OR = [
+        { firstName: { contains: term, mode: 'insensitive' } },
+        { lastName: { contains: term, mode: 'insensitive' } },
+        { email: { contains: term, mode: 'insensitive' } },
+        { accountNumber: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.bankCustomer.findMany({
+        where,
+        select: { id: true, firstName: true, lastName: true, email: true, accountNumber: true },
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.bankCustomer.count({ where }),
+    ]);
+
+    return { data, total, page: Math.floor(skip / take) + 1, limit: take };
+  }
+
+  @Post('notifications/broadcast')
+  @ApiOperation({ summary: 'Diffuser une notification (all, userIds, ou customerTargets)' })
+  async broadcast(@Body() dto: BroadcastDto) {
+    const type = dto.type ?? 'ADMIN_BROADCAST';
+    const severity = dto.severity ?? 'INFO';
+
+    if (dto.customerTargets && dto.customerTargets.length > 0) {
+      const customers = await this.prisma.bankCustomer.findMany({
+        where: {
+          OR: [
+            { id: { in: dto.customerTargets.filter((c) => /^[0-9a-f-]{36}$/i.test(c)) } },
+            { email: { in: dto.customerTargets.filter((c) => !/^[0-9a-f-]{36}$/i.test(c)) } },
+          ],
+        },
+        include: { userConnection: { select: { userId: true } } },
+      });
+
+      const userIds = customers
+        .map((c) => c.userConnection?.userId)
+        .filter((id): id is string => !!id);
+
+      if (userIds.length > 0) {
+        await this.notificationsService.createMany(userIds, {
+          title: dto.title, body: dto.body, type: type as any, severity, link: '/',
+        });
+        await this.pushService.sendToMany(userIds, {
+          title: dto.title, body: dto.body, data: { type },
+        });
+      }
+
+      return { message: `Notification envoyée à ${userIds.length} clients` };
+    }
+
+    if (dto.target === 'all' || !dto.target) {
+      const users = await this.prisma.user.findMany({
+        where: { deletedAt: null },
+        select: { id: true },
+      });
+
+      await this.notificationsService.createMany(
+        users.map((u) => u.id),
+        { title: dto.title, body: dto.body, type: type as any, severity, link: '/' },
+      );
+
+      await this.pushService.sendToAll({
+        title: dto.title,
+        body: dto.body,
+        data: { type },
+      });
+
+      return { message: `Notification diffusée à ${users.length} utilisateurs` };
+    }
+
+    if (Array.isArray(dto.target)) {
+      await this.notificationsService.createMany(dto.target, {
+        title: dto.title, body: dto.body, type: type as any, severity, link: '/',
+      });
+
+      await this.pushService.sendToMany(dto.target, {
+        title: dto.title, body: dto.body, data: { type },
+      });
+
+      return { message: `Notification envoyée à ${dto.target.length} utilisateurs` };
+    }
+
+    return { message: 'Aucune cible valide' };
+  }
+
+  @Get('notifications/stats')
+  @ApiOperation({ summary: "Statistiques des notifications" })
+  async getNotificationStats() {
+    const [totalNotifications, totalPushTokens, unreadCount] =
+      await Promise.all([
+        this.prisma.notification.count(),
+        this.prisma.pushToken.count(),
+        this.prisma.notification.count({ where: { isRead: false } }),
+      ]);
+
+    return {
+      totalNotifications,
+      totalPushTokens,
+      unreadCount,
+    };
   }
 }
