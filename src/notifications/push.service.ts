@@ -78,6 +78,9 @@ export class PushService {
       priority: 'high',
     }));
 
+    this.logger.log(
+      `Push envoyé à user:${userId} — "${notification.title}" (${tokens.length} token${tokens.length > 1 ? 's' : ''})`,
+    );
     await this.deliver(messages);
   }
 
@@ -101,6 +104,9 @@ export class PushService {
       priority: 'high',
     }));
 
+    this.logger.log(
+      `Push broadcast à TOUS — "${notification.title}" (${tokens.length} tokens)`,
+    );
     await this.deliver(messages);
   }
 
@@ -127,6 +133,9 @@ export class PushService {
       priority: 'high',
     }));
 
+    this.logger.log(
+      `Push envoyé à ${userIds.length} utilisateur(s) — "${notification.title}" (${tokens.length} tokens)`,
+    );
     await this.deliver(messages);
   }
 
@@ -150,7 +159,16 @@ export class PushService {
         return;
       }
 
-      const tickets: ExpoPushTicket[] = await response.json();
+      const body = await response.json();
+      const tickets: ExpoPushTicket[] = Array.isArray(body) ? body : [];
+
+      if (tickets.length === 0) {
+        if (body.errors) {
+          this.logger.error('Expo Push API request error:', body.errors);
+        }
+        return;
+      }
+
       const errors = tickets.filter((t) => t.status === 'error');
 
       if (errors.length > 0) {

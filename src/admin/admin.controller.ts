@@ -21,6 +21,7 @@ import { EXPENSE_KEYWORDS } from '../analytics/config/expense-keywords';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { SkipThrottle } from '@nestjs/throttler';
 import { SmsService } from '../sms/sms.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushService } from '../notifications/push.service';
@@ -257,6 +258,7 @@ export class AdminController {
     };
   }
 
+  @SkipThrottle()
   @Post('sms/debug')
   @ApiOperation({
     summary: 'Diagnostiquer le filtrage SMS (parseSms + classifier)',

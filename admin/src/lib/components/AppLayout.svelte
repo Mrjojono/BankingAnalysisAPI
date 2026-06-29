@@ -32,6 +32,7 @@
     training: 'Entraînement',
     glossary: 'Lexique',
     docs: 'Documentation',
+    notifications: 'Notifications',
   };
 
   async function handleLogout() {

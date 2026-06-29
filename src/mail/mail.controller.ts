@@ -7,13 +7,14 @@ export class MailController {
 
   @Get()
   async sendMail() {
+    const appUrl = process.env.APP_URL || 'https://app.orabank.com';
     await this.mailService.sendMail({
       to: 'joan@gmail.com',
       subject: 'Welcome to the realm of NestJS',
       template: 'signup-confirmation-template',
       context: {
         name: 'Jhon Doe',
-        verificationLink: 'https://orabank.com/verify',
+        verificationLink: `${appUrl}/verify?token=test123`,
       },
     });
     return {

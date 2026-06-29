@@ -12,6 +12,9 @@ import { GatewayModule } from './gateway/gateway.module';
 import { AdminModule } from './admin/admin.module';
 import { SmsModule } from './sms/sms.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { EducationModule } from './education/education.module';
+import { QuizModule } from './quiz/quiz.module';
+import { SavingsModule } from './savings/savings.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -20,17 +23,17 @@ import { AppController } from './app.controller';
       {
         name: 'short',
         ttl: 1000,
-        limit: 3,
+        limit: 10,
       },
       {
         name: 'medium',
         ttl: 10000,
-        limit: 20,
+        limit: 50,
       },
       {
         name: 'long',
         ttl: 60000,
-        limit: 100,
+        limit: 200,
       },
     ]),
     AuthModule,
@@ -43,6 +46,9 @@ import { AppController } from './app.controller';
     AdminModule,
     SmsModule,
     NotificationsModule,
+    EducationModule,
+    QuizModule,
+    SavingsModule,
   ],
   controllers: [AppController],
   providers: [

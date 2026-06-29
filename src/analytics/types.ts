@@ -430,6 +430,7 @@ export type ScoreHistoryResponse = {
 };
 
 export type Recommendation = {
+  id?: string;
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
   component: string;
   trigger: string;

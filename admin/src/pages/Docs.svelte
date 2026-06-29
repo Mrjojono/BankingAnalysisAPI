@@ -5,11 +5,14 @@
   import matrixModuleGuide from '../lib/docs/MATRIX_MODULE.md?raw'
   import eligibilityMatrixModule from '../lib/docs/ELIGIBILITY_MATRIX_MODULE.md?raw'
   import technologies from '../lib/docs/TECHNOLOGIES.md?raw'
-
+  import conceptionDocument from '../lib/docs/DESIGN_UML.md?raw'
+  import diagrams from '../lib/docs/CLASS_DIAGRAM_REFERENCE.md?raw'
   const docs = [
     { id: 'technologies', label: 'Technologies utilisées', source: technologies },
     { id: 'matrix-module', label: 'Module Matriciel — Guide Complet', source: matrixModuleGuide },
     { id: 'eligibility-matrix', label: "Module d'Éligibilité Matricielle", source: eligibilityMatrixModule },
+    { id: 'conception-document', label: 'Conception du projet', source: conceptionDocument },
+    { id: 'diagrams', label: 'Diagrammes', source: diagrams },
   ]
 
   let selectedId = $state(docs[0].id)

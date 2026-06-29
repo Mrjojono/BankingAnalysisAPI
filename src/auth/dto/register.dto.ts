@@ -44,12 +44,17 @@ export class RegisterDto {
   readonly otp?: string;
 
   @ApiPropertyOptional({
-    example: 'motdepasse123',
-    description: 'Mot de passe (min 8 caractères)',
+    example: 'Motdepasse123!',
+    description:
+      'Mot de passe (min 8 caractères, 1 majuscule, 1 chiffre, 1 spécial)',
     minLength: 8,
   })
   @IsString()
   @IsOptional()
   @MinLength(8)
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{8,}$/, {
+    message:
+      'Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule, un chiffre et un caractère spécial',
+  })
   readonly password?: string;
 }

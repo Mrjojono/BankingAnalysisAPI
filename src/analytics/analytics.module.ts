@@ -47,6 +47,6 @@ import { AuthModule } from '../auth/auth.module';
       useClass: MatrixInterpreterEngine,
     },
   ],
-  exports: [OverviewService, Classifier],
+  exports: [OverviewService, Classifier, ScoreEngine],
 })
 export class AnalyticsModule {}

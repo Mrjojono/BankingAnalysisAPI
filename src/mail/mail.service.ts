@@ -1,43 +1,65 @@
-import { ISendMailOptions, MailerService } from '@nestjs-modules/mailer';
 import { Injectable, Logger } from '@nestjs/common';
+import { Resend } from 'resend';
+import * as pug from 'pug';
+import * as path from 'path';
 
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  constructor(private mailerService: MailerService) {}
+  private readonly resend: Resend;
+  private readonly from: string;
+
+  constructor() {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      this.logger.warn(
+        'RESEND_API_KEY non définie — les emails ne seront pas envoyés',
+      );
+    }
+    this.resend = new Resend(apiKey || 're_placeholder');
+    this.from = process.env.MAIL_FROM || 'noreply@orabank.com';
+  }
 
   async sendMail(params: {
     to: string | string[];
     subject: string;
     template: string;
-    context: ISendMailOptions['context'];
+    context: Record<string, any>;
   }) {
+    if (!process.env.RESEND_API_KEY) {
+      this.logger.warn('RESEND_API_KEY manquante — email non envoyé');
+      return;
+    }
+
     try {
-      const emailsList = Array.isArray(params.to) ? params.to : [params.to];
-      if (!emailsList) {
-        throw new Error(
-          `No recipients found in MAIL_TO env var, please check your .env file`,
-        );
-      }
-      const sendMailParams = {
-        to: emailsList,
-        from: process.env.MAIL_FROM,
+      const templatePath = path.join(
+        process.cwd(),
+        'src',
+        'templates',
+        `${params.template}.pug`,
+      );
+      const html = pug.compileFile(templatePath)(params.context);
+
+      const recipients = Array.isArray(params.to) ? params.to : [params.to];
+
+      const { data, error } = await this.resend.emails.send({
+        from: this.from,
+        to: recipients,
         subject: params.subject,
-        template: params.template,
-        context: params.context,
-      };
-      const response = await this.mailerService.sendMail(sendMailParams);
+        html,
+      });
+
+      if (error) {
+        this.logger.error(`Erreur Resend: ${error.message}`, error);
+        return;
+      }
+
       this.logger.log(
-        `Email sent successfully to recipients with the following parameters : ${JSON.stringify(
-          sendMailParams,
-        )}`,
-        response,
+        `Email envoyé à ${recipients.join(', ')} — id: ${data?.id}`,
       );
     } catch (error) {
       this.logger.error(
-        `Error while sending mail with the following parameters : ${JSON.stringify(
-          params,
-        )}`,
+        `Erreur envoi email (template: ${params.template})`,
         error,
       );
     }

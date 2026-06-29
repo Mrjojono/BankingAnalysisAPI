@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import * as jwt from 'jsonwebtoken';
+import type * as jwt from 'jsonwebtoken';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/auth-response.dto';
@@ -21,6 +21,8 @@ import {
   signAccessToken,
   signRefreshToken,
   signToken,
+  signMfaToken,
+  validateMfaToken,
   validateToken,
   validateRefreshToken,
   forgotPasswordOtpKey,
@@ -28,8 +30,10 @@ import {
   forgotPasswordKey,
 } from './auth.utils';
 import { RedisService } from '../redis/redis.service';
-import { MailerService } from '@nestjs-modules/mailer';
+import { MailService } from '../mail/mail.service';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { MfaLoginDto } from './dto/mfa.dto';
+import { authenticator, totp as totpClient } from '@otplib/preset-default';
 
 @Injectable()
 export class AuthService {
@@ -38,7 +42,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private redis: RedisService,
-    private mailer: MailerService,
+    private mailService: MailService,
   ) {}
 
   private extractRequestInfo(req: any) {
@@ -49,7 +53,7 @@ export class AuthService {
   }
 
   private sendOtp = async (contact: string, otp: string) => {
-    await this.mailer.sendMail({
+    await this.mailService.sendMail({
       to: contact,
       subject: 'Votre code de vérification',
       template: 'otp-code',
@@ -96,10 +100,31 @@ export class AuthService {
     }
   }
 
+  private async saveOtpToDb(userId: string, otp: string, type: string) {
+    try {
+      await this.prisma.otpCode.create({
+        data: {
+          userId,
+          code: otp,
+          type: type as any,
+          expiresAt: new Date(Date.now() + 300 * 1000),
+        },
+      });
+    } catch (error) {
+      this.logger.error(`Erreur sauvegarde OTP en DB:`, error);
+    }
+  }
+
   private async sendAndStoreOtp(accountNumber: string, contact: string) {
     const otp = generateOtp();
     await this.redis.set(registerOtpKey(accountNumber), otp, 300);
     await this.sendOtp(contact, otp);
+
+    const state = await this.getRegisterState(accountNumber);
+    if (state.userId) {
+      await this.saveOtpToDb(state.userId, otp, 'ACCOUNT_ACTIVATION');
+    }
+
     this.logger.log(`OTP envoyé à : ${contact}`);
   }
 
@@ -170,7 +195,7 @@ export class AuthService {
       const bankCustomer = await this.findBankCustomer(dto.accountNumber);
 
       if (bankCustomer.userConnection) {
-        await logAuth(
+        logAuth(
           this.prisma,
           'registration_verify_contact',
           false,
@@ -194,7 +219,7 @@ export class AuthService {
         600,
       );
 
-      await logAuth(
+      logAuth(
         this.prisma,
         'registration_verify_contact',
         true,
@@ -218,7 +243,7 @@ export class AuthService {
 
       await this.sendAndStoreOtp(dto.accountNumber, dto.contact);
 
-      await logAuth(
+      logAuth(
         this.prisma,
         'registration_send_otp',
         true,
@@ -249,7 +274,7 @@ export class AuthService {
       try {
         await this.checkOtp(dto.accountNumber, dto.otp);
 
-        await logAuth(
+        logAuth(
           this.prisma,
           'registration_verify_otp',
           true,
@@ -259,7 +284,7 @@ export class AuthService {
           userAgent,
         );
       } catch (error) {
-        await logAuth(
+        logAuth(
           this.prisma,
           'registration_verify_otp',
           false,
@@ -294,7 +319,7 @@ export class AuthService {
         const user = await this.createUser(state, dto.password);
         await this.redis.delete(registerKey(dto.accountNumber));
 
-        await logAuth(
+        logAuth(
           this.prisma,
           'account_created',
           true,
@@ -313,7 +338,7 @@ export class AuthService {
           token: signToken({ id: user.id, email: user.email, role: user.role }),
         };
       } catch (error) {
-        await logAuth(
+        logAuth(
           this.prisma,
           'account_creation_failed',
           false,
@@ -340,7 +365,7 @@ export class AuthService {
       : { ipAddress: null, userAgent: null };
 
     if (!state || !state.contact) {
-      await logAuth(
+      logAuth(
         this.prisma,
         'resend_otp',
         false,
@@ -358,7 +383,7 @@ export class AuthService {
 
     const existingOtp = await this.redis.get(registerOtpKey(accountNumber));
     if (existingOtp) {
-      await logAuth(
+      logAuth(
         this.prisma,
         'resend_otp',
         false,
@@ -378,7 +403,7 @@ export class AuthService {
     await this.redis.set(registerOtpKey(accountNumber), otp, 300);
     await this.sendOtp(state.contact, otp);
 
-    await logAuth(
+    logAuth(
       this.prisma,
       'resend_otp',
       true,
@@ -396,9 +421,11 @@ export class AuthService {
     dto: LoginDto,
     req?: any,
   ): Promise<{
-    accessToken: string;
-    refreshToken: string;
-    user: { id: string; email: string; role: string; username?: string };
+    accessToken?: string;
+    refreshToken?: string;
+    user?: { id: string; email: string; role: string; username?: string };
+    mfaRequired?: boolean;
+    mfaToken?: string;
   }> {
     const { ipAddress, userAgent } = req
       ? this.extractRequestInfo(req)
@@ -412,7 +439,7 @@ export class AuthService {
     });
 
     if (!user) {
-      await logAuth(
+      logAuth(
         this.prisma,
         'login',
         false,
@@ -426,7 +453,7 @@ export class AuthService {
     }
 
     if (!user.password) {
-      await logAuth(
+      logAuth(
         this.prisma,
         'login',
         false,
@@ -436,14 +463,13 @@ export class AuthService {
         userAgent,
         { reason: 'biometric_required' },
       );
-
       throw new UnauthorizedException('Authentification biométrique requise');
     }
 
     const isPasswordValid = await comparePassword(dto.password, user.password);
 
     if (!isPasswordValid) {
-      await logAuth(
+      logAuth(
         this.prisma,
         'login',
         false,
@@ -453,11 +479,27 @@ export class AuthService {
         userAgent,
         { reason: 'invalid_password' },
       );
-
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    await logAuth(
+    // Si MFA activé, retourner un token temporaire
+    if (user.mfaEnabled) {
+      const mfaToken = signMfaToken({ id: user.id, mfa: true });
+
+      logAuth(
+        this.prisma,
+        'login_mfa_pending',
+        true,
+        dto.contact,
+        user.id,
+        ipAddress,
+        userAgent,
+      );
+
+      return { mfaRequired: true, mfaToken };
+    }
+
+    logAuth(
       this.prisma,
       'login',
       true,
@@ -468,6 +510,95 @@ export class AuthService {
     );
 
     this.logger.log(`Connexion réussie : ${user.email}`);
+
+    const accessToken = signAccessToken({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    const session = await this.prisma.session.create({
+      data: {
+        userId: user.id,
+        token: signRefreshToken({ sessionId: 'tmp' }),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        userAgent: userAgent ?? undefined,
+        ipAddress: ipAddress ?? undefined,
+      },
+    });
+
+    const refreshToken = signRefreshToken({ sessionId: session.id });
+
+    await this.prisma.session.update({
+      where: { id: session.id },
+      data: { token: refreshToken },
+    });
+
+    const username = user.bankConnections[0]?.bankCustomer
+      ? `${user.bankConnections[0].bankCustomer.firstName} ${user.bankConnections[0].bankCustomer.lastName ?? ''}`.trim()
+      : undefined;
+
+    return {
+      accessToken,
+      refreshToken,
+      user: { id: user.id, email: user.email, role: user.role, username },
+    };
+  }
+
+  async loginMfa(
+    dto: MfaLoginDto,
+    req?: any,
+  ): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    user: { id: string; email: string; role: string; username?: string };
+  }> {
+    const { ipAddress, userAgent } = req
+      ? this.extractRequestInfo(req)
+      : { ipAddress: null, userAgent: null };
+
+    const payload = validateMfaToken(dto.mfaToken);
+
+    if (!payload.mfa || !payload.id) {
+      throw new UnauthorizedException('Token MFA invalide');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.id as string },
+      include: { bankConnections: { include: { bankCustomer: true } } },
+    });
+
+    if (!user || !user.mfaEnabled || !user.mfaSecret) {
+      throw new UnauthorizedException('MFA non configuré');
+    }
+
+    try {
+      totpClient.verify({ token: dto.code, secret: user.mfaSecret });
+    } catch {
+      logAuth(
+        this.prisma,
+        'login_mfa_verify',
+        false,
+        user.email,
+        user.id,
+        ipAddress,
+        userAgent,
+        { reason: 'invalid_totp' },
+      );
+      throw new UnauthorizedException('Code MFA invalide');
+    }
+
+    logAuth(
+      this.prisma,
+      'login_mfa_verify',
+      true,
+      user.email,
+      user.id,
+      ipAddress,
+      userAgent,
+    );
+
+    this.logger.log(`Connexion MFA réussie : ${user.email}`);
 
     const accessToken = signAccessToken({
       id: user.id,
@@ -551,13 +682,11 @@ export class AuthService {
       throw new UnauthorizedException('Session expired or revoked');
     }
 
-    // Revoke old session
     await this.prisma.session.update({
       where: { id: session.id },
       data: { isRevoked: true },
     });
 
-    // Create new session
     const newSession = await this.prisma.session.create({
       data: {
         userId: session.userId,
@@ -600,12 +729,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Fonction avec plusieurs étapes pour gérer le processus de récupération de mot de passe.
-   * @param dto
-   * @param req
-   * @returns
-   */
   async forgotPassword(
     dto: ForgotPasswordDto,
     req?: any,
@@ -614,12 +737,11 @@ export class AuthService {
       ? this.extractRequestInfo(req)
       : { ipAddress: null, userAgent: null };
 
-    //verification de l'existence de l'utilisateur dans la base de données
     const user = await this.prisma.user.findUnique({
       where: { email: dto.contact },
     });
     if (!user) {
-      await logAuth(
+      logAuth(
         this.prisma,
         'forgot_password',
         false,
@@ -632,7 +754,6 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    // ÉTAPE 1  Envoyer l'OTP , ici l'otp n'est pas envoyer a l'email entrer  par l'utilisateur mais on s'assure que l'email est envoyer a celui verfier dans la base de donneés
     if (!dto.otp && !dto.newPassword) {
       const existingOtp = await this.redis.get(
         forgotPasswordOtpKey(dto.contact),
@@ -657,7 +778,9 @@ export class AuthService {
       );
 
       await this.sendOtp(user.email, otp);
-      await logAuth(
+      await this.saveOtpToDb(user.id, otp, 'RESET_PASSWORD');
+
+      logAuth(
         this.prisma,
         'forgot_password',
         true,
@@ -671,7 +794,6 @@ export class AuthService {
       return { step: 'verify_otp', message: 'Code OTP envoyé.' };
     }
 
-    // ÉTAPE 2  Vérifier l'OTP
     if (dto.otp && !dto.newPassword) {
       const state = parseState(
         await this.redis.get(forgotPasswordKey(user.email)),
@@ -685,7 +807,7 @@ export class AuthService {
       }
 
       if (storedOtp !== dto.otp) {
-        await logAuth(
+        logAuth(
           this.prisma,
           'forgot_password_verify_otp',
           false,
@@ -705,7 +827,7 @@ export class AuthService {
         600,
       );
 
-      await logAuth(
+      logAuth(
         this.prisma,
         'forgot_password_verify_otp',
         true,
@@ -720,7 +842,6 @@ export class AuthService {
       };
     }
 
-    // ÉTAPE 3 — Réinitialiser le mot de passe
     if (dto.newPassword) {
       const state = parseState(
         await this.redis.get(forgotPasswordKey(user.email)),
@@ -736,7 +857,7 @@ export class AuthService {
       });
 
       await this.redis.delete(forgotPasswordKey(user.email));
-      await logAuth(
+      logAuth(
         this.prisma,
         'reset_password',
         true,
@@ -754,6 +875,100 @@ export class AuthService {
     }
 
     throw new UnauthorizedException('Requête invalide');
+  }
+
+  async enableMfa(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.mfaEnabled) {
+      throw new BadRequestException('Le MFA est déjà activé');
+    }
+
+    const secret = authenticator.generateSecret();
+    const serviceName = 'Orabank App';
+    const uri = totpClient.keyuri(user.email, serviceName, secret);
+
+    // Stocker le secret temporairement (pas encore activé)
+    await this.redis.set(`mfa_secret:${userId}`, secret, 600);
+
+    return { secret, uri };
+  }
+
+  async verifyMfa(userId: string, code: string) {
+    const secret = await this.redis.get(`mfa_secret:${userId}`);
+
+    if (!secret) {
+      throw new UnauthorizedException(
+        'Session expirée. Recommencez la configuration MFA.',
+      );
+    }
+
+    try {
+      totpClient.verify({ token: code, secret });
+    } catch {
+      throw new UnauthorizedException('Code TOTP invalide');
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { mfaEnabled: true, mfaSecret: secret },
+    });
+
+    await this.redis.delete(`mfa_secret:${userId}`);
+
+    this.logger.log(`MFA activé pour l'utilisateur : ${userId}`);
+    return { message: 'MFA activé avec succès' };
+  }
+
+  async disableMfa(userId: string, password: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.password) {
+      throw new BadRequestException(
+        'Mot de passe non défini. Impossible de désactiver le MFA.',
+      );
+    }
+
+    const isPasswordValid = await comparePassword(password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Mot de passe invalide');
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { mfaEnabled: false, mfaSecret: null },
+    });
+
+    this.logger.log(`MFA désactivé pour l'utilisateur : ${userId}`);
+    return { message: 'MFA désactivé avec succès' };
+  }
+
+  async mfaStatus(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { mfaEnabled: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return {
+      enabled: user.mfaEnabled,
+      method: user.mfaEnabled ? 'TOTP' : null,
+    };
   }
 
   validateToken(token: string): jwt.JwtPayload {

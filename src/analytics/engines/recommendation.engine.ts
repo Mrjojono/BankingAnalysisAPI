@@ -187,6 +187,20 @@ export class RecommendationEngine {
     const priorityOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
     return recommendations.sort(
       (a, b) => priorityOrder[a.priority] - priorityOrder[b.priority],
-    );
+    ).map((r) => ({
+      ...r,
+      id: this.fingerprint(r),
+    }));
+  }
+
+  private fingerprint(r: { title: string; message: string }): string {
+    const str = `reco|${r.title}|${r.message}`;
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash |= 0;
+    }
+    return `reco_${Math.abs(hash).toString(36)}`;
   }
 }

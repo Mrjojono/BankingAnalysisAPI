@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { TransactionSourceRegistry } from '../sources/registry/transaction-source-registry';
 import { BalanceReconstructor } from '../shared/balance.reconstructor';
 import { ExpenseEngine } from '../engines/expense.engine';
@@ -13,9 +13,13 @@ import { DashboardGateway } from '../../gateway/dashboard.gateway';
 import { Classifier } from '../shared/classifier';
 import { Entry } from '../types';
 import { ANALYTICS_CONSTANTS } from '../config/constants';
+import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 
 @Injectable()
 export class OverviewService {
+  private readonly logger = new Logger(OverviewService.name);
+
   constructor(
     private sourceRegistry: TransactionSourceRegistry,
     private balanceReconstructor: BalanceReconstructor,
@@ -29,6 +33,8 @@ export class OverviewService {
     private adviceEngine: AdviceEngine,
     private gateway: DashboardGateway,
     private classifier: Classifier,
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -837,6 +843,43 @@ export class OverviewService {
     const metrics = await this.gatherMetrics(customerId, year, month);
     const scoreRes = await this.scoreEngine.calculateGlobalScore(metrics);
 
+    const prevDate = new Date();
+    if (year && month) {
+      prevDate.setUTCFullYear(year, month - 2, 1);
+    } else {
+      prevDate.setMonth(prevDate.getMonth() - 1);
+    }
+    const prevYear = prevDate.getUTCFullYear();
+    const prevMonth = prevDate.getUTCMonth() + 1;
+
+    try {
+      const prevMetrics = await this.gatherMetrics(customerId, prevYear, prevMonth);
+      const prevScore = await this.scoreEngine.calculateGlobalScore(prevMetrics);
+      const delta = scoreRes.globalScore - prevScore.globalScore;
+
+      if (Math.abs(delta) >= 5) {
+        const bankCustomer = await this.prisma.bankCustomer.findUnique({
+          where: { id: customerId },
+          include: { userConnection: true },
+        });
+        const userId = bankCustomer?.userConnection?.userId;
+        if (userId) {
+          await this.notificationsService.create(userId, {
+            type: 'SCORE_CHANGE',
+            title: delta > 0
+              ? `Votre score financier a augmenté de ${delta} points`
+              : `Votre score financier a baissé de ${Math.abs(delta)} points`,
+            body: `Votre score est maintenant de ${scoreRes.globalScore}/100.`,
+            severity: delta > 0 ? 'INFO' : 'WARNING',
+            data: { score: scoreRes.globalScore, delta, previousScore: prevScore.globalScore },
+            link: '/analytics/score',
+          });
+        }
+      }
+    } catch {
+      // Ignorer si les données précédentes ne sont pas disponibles
+    }
+
     const indicators: any[] = [
       {
         name: 'Ratio dépenses/revenus',
@@ -926,7 +969,163 @@ export class OverviewService {
 
   async getPersonalAdvice(customerId: string): Promise<any> {
     const advice = await this.adviceEngine.generate(customerId);
-    return { advice };
+
+    const bankCustomer = await this.prisma.bankCustomer.findUnique({
+      where: { id: customerId },
+      include: { userConnection: true },
+    });
+    const userId = bankCustomer?.userConnection?.userId;
+
+    const criticalAdvice = advice.filter(
+      (a) => a.severity === 'WARNING' || a.severity === 'CRITICAL',
+    );
+
+    if (userId && criticalAdvice.length > 0) {
+      try {
+        for (const a of criticalAdvice.slice(0, 3)) {
+          await this.notificationsService.create(userId, {
+            type: 'ADVICE',
+            title: a.title,
+            body: a.message,
+            severity: a.severity,
+            data: { adviceType: a.type, category: a.category },
+            link: '/analytics/advice',
+          });
+        }
+      } catch (error) {
+        this.logger.error(
+          `Erreur création notification advice pour ${customerId}:`,
+          error,
+        );
+      }
+    }
+
+    const dismissedSet = new Set<string>();
+    if (userId) {
+      const dismissed = await this.prisma.dismissedItem.findMany({
+        where: { userId, kind: 'ADVICE' },
+        select: { fingerprint: true },
+      });
+      dismissed.forEach((d) => dismissedSet.add(d.fingerprint));
+    }
+
+    const enriched = advice.map((a) => ({
+      ...a,
+      fingerprint: this.computeAdviceFingerprint(a),
+    }));
+
+    return { advice: enriched.filter((a) => !dismissedSet.has(a.fingerprint)) };
+  }
+
+  async resolveUserIdFromCustomer(customerId: string): Promise<string | null> {
+    const bankCustomer = await this.prisma.bankCustomer.findUnique({
+      where: { id: customerId },
+      include: { userConnection: true },
+    });
+    return bankCustomer?.userConnection?.userId ?? null;
+  }
+
+  async dismissAdvice(userId: string, fingerprint: string, kind?: string) {
+    await this.prisma.dismissedItem.create({
+      data: {
+        userId,
+        fingerprint,
+        kind: kind ?? 'ADVICE',
+      },
+    });
+    return { success: true };
+  }
+
+  async getDashboardAlerts(customerId: string) {
+    const [overdraft, score, expenseRatio, savingsRate] = await Promise.all([
+      this.getOverdraftFrequency(customerId).catch(() => null),
+      this.getGlobalScore(customerId).catch(() => null),
+      this.getExpenseRatio(customerId).catch(() => null),
+      this.getSavingsRate(customerId).catch(() => null),
+    ]);
+
+    const alerts: {
+      title: string;
+      message: string;
+      cta: string;
+    }[] = [];
+
+    const overdraftDays = overdraft?.overdraftDays ?? 0;
+    if (overdraftDays > 0) {
+      alerts.push({
+        title: 'Risque de découvert',
+        message: `${overdraftDays} jour(s) à découvert ce mois`,
+        cta: 'Voir les détails →',
+      });
+    }
+
+    const expenseRatioValue = expenseRatio && 'ratio' in expenseRatio ? (expenseRatio as any).ratio ?? 0 : 0;
+    if (expenseRatioValue > 75) {
+      alerts.push({
+        title: 'Dépenses élevées',
+        message: `Vous dépensez ${expenseRatioValue}% de vos revenus`,
+        cta: 'Analyser →',
+      });
+    }
+
+    const globalScore = score && 'globalScore' in score ? (score as any).globalScore ?? 100 : 100;
+    if (globalScore < 40) {
+      alerts.push({
+        title: 'Score financier critique',
+        message: 'Consultez les recommandations pour améliorer votre santé financière',
+        cta: 'Voir le score →',
+      });
+    }
+
+    const savingsRateValue = savingsRate && 'savingsRate' in savingsRate ? (savingsRate as any).savingsRate ?? 100 : 100;
+    if (savingsRateValue < 5) {
+      alerts.push({
+        title: 'Épargne insuffisante',
+        message: `Vous épargnez seulement ${savingsRateValue}% de vos revenus`,
+        cta: 'Objectifs épargne →',
+      });
+    }
+
+    return alerts;
+  }
+
+  async getProfileStats(customerId: string) {
+    const entries = await this.getCertifiedEntries(customerId);
+
+    const totalDeposits = entries
+      .filter((e) => e.direction === 'CREDIT')
+      .reduce((sum, e) => sum + Number(e.amount), 0);
+
+    const [score, savingsRate, debtAnalytics] = await Promise.all([
+      this.getGlobalScore(customerId).catch(() => null),
+      this.getSavingsRate(customerId).catch(() => null),
+      this.getDebtAnalytics(customerId).catch(() => null),
+    ]);
+
+    const totalLoans = debtAnalytics?.totalMonthlyDebt
+      ? debtAnalytics.totalMonthlyDebt * 6
+      : 0;
+
+    const totalSavings = savingsRate?.netSavings ?? 0;
+    const globalScore = score?.globalScore ?? 0;
+
+    return [
+      { label: 'Dépôts', value: `${Math.round(totalDeposits / 1000)}K F` },
+      { label: 'Prêts', value: `${Math.round(totalLoans / 1000)}K F` },
+      { label: 'Épargne', value: `${Math.round(totalSavings / 1000)}K F` },
+      { label: 'Score', value: `${globalScore}/100` },
+    ];
+  }
+
+  private computeAdviceFingerprint(advice: { type: string; title: string; message: string }): string {
+    const str = `${advice.type}|${advice.title}|${advice.message}`;
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash |= 0;
+    }
+    return `adv_${Math.abs(hash).toString(36)}`;
   }
 
   async gatherMetrics(

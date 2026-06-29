@@ -12,6 +12,8 @@
   import Embedding from './pages/Embedding.svelte';
   import Training from './pages/Training.svelte';
   import Graph from './pages/Graph.svelte';
+  import Notifications from './pages/Notifications.svelte';
+  import Education from './pages/Education.svelte';
   import { getAuth, checkAuth } from './lib/stores/auth.svelte';
 
   const auth = getAuth();
@@ -67,6 +69,10 @@
       <Glossary />
     {:else if page === 'docs'}
       <Docs />
+    {:else if page === 'notifications'}
+      <Notifications />
+    {:else if page === 'education'}
+      <Education />
     {/if}
   </AppLayout>
 {/if}

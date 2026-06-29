@@ -4,6 +4,7 @@ import {
   Param,
   Query,
   Post,
+  Patch,
   Body,
   UseGuards,
   ParseUUIDPipe,
@@ -17,10 +18,12 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { UserId } from '../auth/user-id.decorator';
 import {
   AnalyticsQueryDto,
   RevenueVariationQueryDto,
   ClassifierFeedbackDto,
+  DismissAdviceDto,
 } from './dto/analytics-query.dto';
 import {
   CashFlowAnalyticsDto,
@@ -492,6 +495,35 @@ export class AnalyticsController {
     @Param('customerId', ParseUUIDPipe) customerId: string,
   ) {
     return this.overviewService.getPersonalAdvice(customerId);
+  }
+
+  @Post('advice/dismiss')
+  @ApiOperation({ summary: 'Ignorer un conseil' })
+  dismissAdvice(@UserId() userId: string, @Body() body: DismissAdviceDto) {
+    return this.overviewService.dismissAdvice(userId, body.fingerprint, body.kind);
+  }
+
+  @Get(':customerId/dashboard/alerts')
+  @ApiOperation({ summary: 'Alertes pour le tableau de bord mobile' })
+  async getDashboardAlerts(@Param('customerId', ParseUUIDPipe) customerId: string) {
+    return this.overviewService.getDashboardAlerts(customerId);
+  }
+
+  @Get(':customerId/profile/stats')
+  @ApiOperation({ summary: 'Statistiques du profil mobile' })
+  async getProfileStats(@Param('customerId', ParseUUIDPipe) customerId: string) {
+    return this.overviewService.getProfileStats(customerId);
+  }
+
+  @Patch(':customerId/recommendations/:fingerprint/dismiss')
+  @ApiOperation({ summary: 'Ignorer une recommandation' })
+  async dismissRecommendation(
+    @Param('customerId', ParseUUIDPipe) customerId: string,
+    @Param('fingerprint') fingerprint: string,
+  ) {
+    const userId = await this.overviewService.resolveUserIdFromCustomer(customerId);
+    if (!userId) return { success: false };
+    return this.overviewService.dismissAdvice(userId, fingerprint, 'RECOMMENDATION');
   }
 
   // --- ANALYSE DE L'ÉPARGNE (EPIC 05) ---

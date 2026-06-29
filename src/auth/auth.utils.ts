@@ -1,6 +1,9 @@
 import bcrypt from 'bcryptjs';
 import otpGenerator from 'otp-generator';
-import { UnauthorizedException } from '@nestjs/common';
+import {
+  UnauthorizedException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,12 +12,30 @@ import { Logger } from '@nestjs/common';
 const logger = new Logger('AuthUtils');
 
 export interface RegisterState {
-  otp: string;
   step: string;
   customerId: string;
+  accountNumber: string;
   contact: string;
   contactType: 'email' | 'phone';
   userId?: string;
+}
+
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new InternalServerErrorException('JWT_SECRET is not configured');
+  }
+  return secret;
+}
+
+function getJwtRefreshSecret(): string {
+  const secret = process.env.JWT_REFRESH_SECRET;
+  if (!secret) {
+    throw new InternalServerErrorException(
+      'JWT_REFRESH_SECRET is not configured',
+    );
+  }
+  return secret;
 }
 
 /**
@@ -86,29 +107,30 @@ export const forgotPasswordOtpKey = (contact: string) =>
  * Signe un access token JWT (court, 15min)
  */
 export const signAccessToken = (payload: object): string => {
-  return jwt.sign(payload, process.env.JWT_SECRET ?? '', { expiresIn: '15m' });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '15m' });
 };
 
-/**
- * Signe un refresh token JWT (long, 7 jours)
- */
 export const signRefreshToken = (payload: object): string => {
-  return jwt.sign(payload, process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET ?? '', { expiresIn: '7d' });
+  return jwt.sign(payload, getJwtRefreshSecret(), { expiresIn: '7d' });
 };
 
-/**
- * Signe un token JWT avec un payload donné (alias — gardé pour compatibilité)
- */
 export const signToken = signAccessToken;
 
-/**
- *
- * @param token
- * @returns le payload du token
- */
+export const signMfaToken = (payload: object): string => {
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '3m' });
+};
+
+export const validateMfaToken = (token: string): jwt.JwtPayload => {
+  try {
+    return jwt.verify(token, getJwtSecret()) as jwt.JwtPayload;
+  } catch {
+    throw new UnauthorizedException('Session MFA expirée. Reconnectez-vous.');
+  }
+};
+
 export const validateToken = (token: string): jwt.JwtPayload => {
   try {
-    return jwt.verify(token, process.env.JWT_SECRET ?? '') as jwt.JwtPayload;
+    return jwt.verify(token, getJwtSecret()) as jwt.JwtPayload;
   } catch {
     throw new UnauthorizedException('Invalid or expired token');
   }
@@ -116,7 +138,7 @@ export const validateToken = (token: string): jwt.JwtPayload => {
 
 export const validateRefreshToken = (token: string): jwt.JwtPayload => {
   try {
-    return jwt.verify(token, process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET ?? '') as jwt.JwtPayload;
+    return jwt.verify(token, getJwtRefreshSecret()) as jwt.JwtPayload;
   } catch {
     throw new UnauthorizedException('Invalid or expired refresh token');
   }
@@ -134,7 +156,7 @@ export const validateRefreshToken = (token: string): jwt.JwtPayload => {
  */
 // auth.utils.ts
 
-export async function logAuth(
+export function logAuth(
   prisma: PrismaService,
   action: string,
   success: boolean,
@@ -143,9 +165,9 @@ export async function logAuth(
   ipAddress: any,
   userAgent: any,
   metadata: any = null,
-): Promise<void> {
-  try {
-    await prisma.authLog.create({
+): void {
+  prisma.authLog
+    .create({
       data: {
         action,
         success,
@@ -155,8 +177,8 @@ export async function logAuth(
         userAgent: userAgent ?? null,
         metadata: metadata ?? null,
       },
+    })
+    .catch((error) => {
+      logger.error(`Erreur log auth (${action}):`, error);
     });
-  } catch (error) {
-    logger.error(`Erreur log auth (${action}):`, error);
-  }
 }

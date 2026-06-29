@@ -5,18 +5,24 @@
  * avec mode='rules' pour comparaison.
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EligibilityEngine } from './engines/eligibility.engine';
 import { MatrixEligibilityEngine } from './matrix/matrix-eligibility.engine';
+import { NotificationsService } from '../notifications/notifications.service';
+import { EducationService } from '../education/education.service';
 import type { EligibilityResult } from './types';
 
 @Injectable()
 export class EligibilityService {
+  private readonly logger = new Logger(EligibilityService.name);
+
   constructor(
     private readonly ruleEngine: EligibilityEngine,
     private readonly matrixEngine: MatrixEligibilityEngine,
     private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+    private readonly educationService: EducationService,
   ) {}
 
   /**
@@ -30,10 +36,55 @@ export class EligibilityService {
     inputs?: Record<string, number | boolean | string>,
     mode: 'matrix' | 'rules' = 'matrix',
   ): Promise<EligibilityResult> {
-    if (mode === 'rules') {
-      return this.ruleEngine.evaluate(customerId, productCode, inputs ?? {});
+    const result =
+      mode === 'rules'
+        ? await this.ruleEngine.evaluate(customerId, productCode, inputs ?? {})
+        : await this.matrixEngine.evaluate(customerId, productCode, inputs ?? {});
+
+    try {
+      if (result.status === 'ELIGIBLE' || result.status === 'PARTIAL') {
+        const bankCustomer = await this.prisma.bankCustomer.findUnique({
+          where: { id: customerId },
+          include: { userConnection: true },
+        });
+
+        const userId = bankCustomer?.userConnection?.userId;
+        if (userId) {
+          const product = await this.prisma.bankProduct.findUnique({
+            where: { code: productCode },
+          });
+
+          await this.notificationsService.create(userId, {
+            type: 'ELIGIBILITY',
+            title: result.status === 'ELIGIBLE' ? 'Vous êtes éligible !' : 'Éligibilité partielle',
+            body: `Le produit "${product?.name ?? productCode}" vous est accessible.`,
+            severity: result.status === 'ELIGIBLE' ? 'INFO' : 'WARNING',
+            data: { productCode, status: result.status, score: result.globalScore },
+            link: '/eligibility',
+          });
+
+          const lesson = await this.prisma.lesson.findFirst({
+            where: { relatedProductId: product?.id, status: 'PUBLISHED' },
+          });
+          if (lesson) {
+            await this.notificationsService.create(userId, {
+              type: 'LESSON_RECOMMENDED',
+              title: `Découvrez : ${lesson.title}`,
+              body: `Une leçon pour mieux comprendre ce produit.`,
+              severity: 'INFO',
+              link: `/education/lessons/${lesson.id}`,
+            });
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        `Erreur notification éligibilité pour ${customerId}:`,
+        error,
+      );
     }
-    return this.matrixEngine.evaluate(customerId, productCode, inputs ?? {});
+
+    return result;
   }
 
   /**

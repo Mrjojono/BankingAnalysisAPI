@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Landmark, FileCheck, MessageSquare, BookOpen, FileText, LogOut, FlaskConical, Layers, Brain, GitGraph } from '@lucide/svelte';
+  import { Landmark, FileCheck, MessageSquare, BookOpen, FileText, LogOut, FlaskConical, Layers, Brain, GitGraph, Bell, GraduationCap } from '@lucide/svelte';
   import { getAuth } from '../stores/auth.svelte';
 
   let {
@@ -25,6 +25,12 @@
       { id: 'classifier', icon: FlaskConical, label: 'Classifieur' },
       { id: 'embedding', icon: Layers, label: 'Embeddings' },
       { id: 'training', icon: Brain, label: 'Entraînement' },
+    ]},
+    { section: 'Communication', items: [
+      { id: 'notifications', icon: Bell, label: 'Notifications' },
+    ]},
+    { section: 'Éducation', items: [
+      { id: 'education', icon: GraduationCap, label: 'Éducation financière' },
     ]},
     { section: 'Documentation', items: [
       { id: 'glossary', icon: BookOpen, label: 'Lexique' },

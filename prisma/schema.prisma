@@ -113,6 +113,24 @@ enum UserBankConnectionRole {
   VIEWER
 }
 
+enum NotificationType {
+  ADVICE
+  SCORE_CHANGE
+  ELIGIBILITY
+  EDUCATIONAL
+  SYSTEM
+  ADMIN_BROADCAST
+  WEEKLY_DIGEST
+  LESSON_RECOMMENDED
+  PATH_COMPLETED
+}
+
+enum NotificationChannel {
+  PUSH
+  IN_APP
+  EMAIL
+}
+
 model User {
   id       String  @id @default(uuid()) @db.Uuid
   email    String  @unique
@@ -130,6 +148,16 @@ model User {
   authLogs    AuthLog[]
 
   bankConnections UserBankConnection[]
+
+  pushTokens             PushToken[]
+  notifications          Notification[]
+  notificationPreference NotificationPreference?
+
+  pathProgress   UserPathProgress[]
+  lessonProgress UserLessonProgress[]
+  quizAttempts   QuizAttempt[]
+  savingsGoals   SavingsGoal[]
+  dismissedItems DismissedItem[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -220,6 +248,52 @@ model AuthLog {
   @@index([userId])
   @@index([createdAt])
   @@map("auth_logs")
+}
+
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String   @db.Uuid
+  token     String   @unique
+  platform  String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_tokens")
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String              @db.Uuid
+  type      NotificationType
+  channel   NotificationChannel @default(IN_APP)
+  title     String
+  body      String
+  data      Json?
+  severity  String?
+  link      String?
+  isRead    Boolean             @default(false)
+  readAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id     String  @id @default(cuid())
+  userId String  @unique @db.Uuid
+  push   Boolean @default(true)
+  email  Boolean @default(false)
+  types  Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_prefs")
 }
 
 model BankCustomer {
@@ -592,7 +666,8 @@ model BankProduct {
 
   isActive Boolean @default(true)
 
-  rules Rule[]
+  rules         Rule[]
+  linkedLessons Lesson[] @relation("ProductLessons")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -662,12 +737,258 @@ model SmsTransaction {
   @@map("sms_transactions")
 }
 
+// ============================================================
+// EDUCATION
+// ============================================================
+
+enum LessonDifficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum LessonStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model LearningPath {
+  id          String           @id @default(uuid()) @db.Uuid
+  title       String
+  description String?
+  icon        String?
+  difficulty  LessonDifficulty
+  order       Int              @default(0)
+  isActive    Boolean          @default(true)
+
+  lessons  Lesson[]
+  progress UserPathProgress[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("learning_paths")
+}
+
+model Lesson {
+  id               String           @id @default(uuid()) @db.Uuid
+  learningPathId   String           @db.Uuid
+  title            String
+  content          String // Markdown
+  summary          String?
+  imageUrl         String?
+  videoUrl         String?
+  difficulty       LessonDifficulty
+  order            Int              @default(0)
+  estimatedMinutes Int?
+  status           LessonStatus     @default(DRAFT)
+  minScore         Int?
+  maxScore         Int?
+  relatedProductId String?          @db.Uuid
+
+  learningPath   LearningPath         @relation(fields: [learningPathId], references: [id])
+  relatedProduct BankProduct?         @relation("ProductLessons", fields: [relatedProductId], references: [id])
+  adviceLinks    LessonAdviceLink[]
+  progress       UserLessonProgress[]
+  quizLinks      QuizLessonLink[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([learningPathId])
+  @@index([minScore, maxScore])
+  @@map("lessons")
+}
+
+model LessonAdviceLink {
+  id         String @id @default(uuid()) @db.Uuid
+  lessonId   String @db.Uuid
+  adviceType String
+  priority   Int    @default(0)
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, adviceType])
+  @@index([adviceType])
+  @@map("lesson_advice_links")
+}
+
+model UserPathProgress {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @db.Uuid
+  learningPathId   String    @db.Uuid
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
+  lessonsCompleted Int       @default(0)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  learningPath LearningPath @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, learningPathId])
+  @@map("user_path_progress")
+}
+
+model UserLessonProgress {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @db.Uuid
+  lessonId    String    @db.Uuid
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  viewedAt    DateTime  @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@map("user_lesson_progress")
+}
+
 enum RuleType {
   ELIGIBILITY
   LIMIT
   FEE
   VALUE_DATE
   INTEREST
+}
+
+// ========== Quiz ==========
+
+enum QuizQuestionType {
+  MCQ
+  TRUE_FALSE
+}
+
+enum QuizStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Quiz {
+  id           String     @id @default(uuid()) @db.Uuid
+  title        String
+  description  String?
+  status       QuizStatus @default(DRAFT)
+  passingScore Int        @default(70)
+
+  questions   QuizQuestion[]
+  lessonLinks QuizLessonLink[]
+  attempts    QuizAttempt[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("quizzes")
+}
+
+model QuizQuestion {
+  id          String           @id @default(uuid()) @db.Uuid
+  quizId      String           @db.Uuid
+  question    String
+  type        QuizQuestionType @default(MCQ)
+  category    String?
+  explanation String?
+  order       Int              @default(0)
+
+  quiz    Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  choices QuizChoice[]
+  answers QuizAnswer[]
+
+  @@index([quizId])
+  @@map("quiz_questions")
+}
+
+model QuizChoice {
+  id         String  @id @default(uuid()) @db.Uuid
+  questionId String  @db.Uuid
+  text       String
+  isCorrect  Boolean @default(false)
+  order      Int     @default(0)
+
+  question QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers  QuizAnswer[]
+
+  @@index([questionId])
+  @@map("quiz_choices")
+}
+
+model QuizLessonLink {
+  id       String @id @default(uuid()) @db.Uuid
+  quizId   String @db.Uuid
+  lessonId String @db.Uuid
+
+  quiz   Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, lessonId])
+  @@map("quiz_lesson_links")
+}
+
+model QuizAttempt {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @db.Uuid
+  quizId      String    @db.Uuid
+  score       Int
+  total       Int
+  passed      Boolean
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz    Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  answers QuizAnswer[]
+
+  @@index([userId, quizId])
+  @@map("quiz_attempts")
+}
+
+model SavingsGoal {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  name         String
+  targetAmount Float
+  savedAmount  Float    @default(0)
+  targetDate   DateTime
+  status       String   @default("ACTIVE")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("savings_goals")
+}
+
+model DismissedItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  fingerprint String
+  kind        String   @default("ADVICE")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, fingerprint])
+  @@index([userId])
+  @@map("dismissed_items")
+}
+
+model QuizAnswer {
+  id         String  @id @default(uuid()) @db.Uuid
+  attemptId  String  @db.Uuid
+  questionId String  @db.Uuid
+  choiceId   String  @db.Uuid
+  isCorrect  Boolean
+
+  attempt  QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question QuizQuestion @relation(fields: [questionId], references: [id])
+  choice   QuizChoice   @relation(fields: [choiceId], references: [id])
+
+  @@index([attemptId])
+  @@map("quiz_answers")
 }
 
 enum RulePeriod {

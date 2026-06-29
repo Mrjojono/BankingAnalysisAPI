@@ -20,12 +20,14 @@ import {
   HttpStatus,
   Req,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SmsService } from './sms.service';
 
 @ApiTags('SMS Sync')
 @ApiBearerAuth()
+@SkipThrottle()
 @UseGuards(JwtAuthGuard)
 @Controller('sms')
 export class SmsController {

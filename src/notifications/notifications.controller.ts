@@ -9,6 +9,7 @@ import {
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { PushService } from './push.service';
@@ -19,6 +20,7 @@ import { RegisterPushTokenDto } from './dto/register-push-token.dto';
 
 @ApiTags('Notifications')
 @ApiBearerAuth()
+@SkipThrottle()
 @UseGuards(JwtAuthGuard)
 @Controller('notifications')
 export class NotificationsController {

@@ -133,7 +133,11 @@ describe('AuthController', () => {
       const fakeUser = { id: '123', email: 'joan@test.com', role: 'ADMIN' };
       mockAuthService.me.mockResolvedValue(fakeUser);
 
-      const validToken = jwt.sign({ id: '123', email: 'joan@test.com' }, process.env.JWT_SECRET!, { expiresIn: '5m' });
+      const validToken = jwt.sign(
+        { id: '123', email: 'joan@test.com' },
+        process.env.JWT_SECRET!,
+        { expiresIn: '5m' },
+      );
 
       const result = await controller.me(`Bearer ${validToken}`);
 
@@ -165,7 +169,10 @@ describe('AuthController', () => {
 
       const result = await controller.refresh(dto, mockRequest as Request);
 
-      expect(mockAuthService.refreshToken).toHaveBeenCalledWith(dto, mockRequest);
+      expect(mockAuthService.refreshToken).toHaveBeenCalledWith(
+        dto,
+        mockRequest,
+      );
       expect(result).toEqual(fakeResponse);
     });
   });

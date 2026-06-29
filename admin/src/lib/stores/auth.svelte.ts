@@ -187,7 +187,7 @@ export async function checkAuth(): Promise<boolean> {
       email: string;
       role: string;
       username?: string;
-    }>(`${AUTH_BASE}/me`, { method: 'POST' });
+    }>(`${AUTH_BASE}/me`, { method: 'GET' });
     auth.user = {
       id: data.id,
       email: data.email,

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from './push.service';
+import { MailService } from '../mail/mail.service';
 import type { NotificationType, NotificationChannel } from '../../generated/prisma/client';
 import type { UpdatePrefsDto } from './dto/update-prefs.dto';
 type NotificationInput = {
@@ -24,6 +25,7 @@ export class NotificationsService {
   constructor(
     private prisma: PrismaService,
     private pushService: PushService,
+    private mailService: MailService,
   ) {}
 
   async create(userId: string, input: NotificationInput) {
@@ -54,6 +56,26 @@ export class NotificationsService {
         body: input.body,
         data: { type: input.type, notificationId: notification.id, ...(input.data ?? {}) },
       });
+    }
+
+    if (prefs?.email === true && isTypeAllowed) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
+      if (user?.email) {
+        this.mailService.sendMail({
+          to: user.email,
+          subject: input.title,
+          template: 'notification',
+          context: {
+            title: input.title,
+            body: input.body,
+            type: input.type,
+            severity: input.severity ?? 'INFO',
+          },
+        });
+      }
     }
 
     return notification;

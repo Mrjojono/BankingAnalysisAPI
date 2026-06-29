@@ -24,12 +24,14 @@ import { MatrixEligibilityEngine } from './matrix/matrix-eligibility.engine';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthModule } from '../auth/auth.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
+import { EducationModule } from '../education/education.module';
 
 @Module({
   imports: [
     AuthModule,
     AnalyticsModule,
     EligibilityMatrixModule,
+    EducationModule,
   ],
   controllers: [EligibilityController],
   providers: [

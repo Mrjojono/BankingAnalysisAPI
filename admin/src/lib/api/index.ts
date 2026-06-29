@@ -79,6 +79,60 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 export const api = {
+  // ========== Education ==========
+  listEducationPaths: () => request<any[]>('/education/paths'),
+  listEducationLessons: (pathId?: string) => {
+    const params = pathId ? `?pathId=${pathId}` : '';
+    return request<any[]>(`/education/lessons${params}`);
+  },
+  createEducationPath: (data: any) =>
+    request<any>('/education/paths', { method: 'POST', body: JSON.stringify(data) }),
+  updateEducationPath: (id: string, data: any) =>
+    request<any>('/education/paths/' + id, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteEducationPath: (id: string) =>
+    request<any>('/education/paths/' + id, { method: 'DELETE' }),
+  getEducationLesson: (id: string) => request<any>('/education/lessons/' + id),
+  createEducationLesson: (data: any) =>
+    request<any>('/education/lessons', { method: 'POST', body: JSON.stringify(data) }),
+  updateEducationLesson: (id: string, data: any) =>
+    request<any>('/education/lessons/' + id, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteEducationLesson: (id: string) =>
+    request<any>('/education/lessons/' + id, { method: 'DELETE' }),
+  createEducationAdviceLink: (data: any) =>
+    request<any>('/education/advice-links', { method: 'POST', body: JSON.stringify(data) }),
+  deleteEducationAdviceLink: (id: string) =>
+    request<any>('/education/advice-links/' + id, { method: 'DELETE' }),
+  saveEducationCanvas: (edges: { source: string; target: string }[]) =>
+    request<any>('/education/canvas/save', { method: 'POST', body: JSON.stringify({ edges }) }),
+  // ========== Quiz ==========
+  listQuizzes: () => request<any[]>('/quiz'),
+  getQuiz: (id: string) => request<any>('/quiz/' + id),
+  createQuiz: (data: any) =>
+    request<any>('/quiz', { method: 'POST', body: JSON.stringify(data) }),
+  updateQuiz: (id: string, data: any) =>
+    request<any>('/quiz/' + id, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteQuiz: (id: string) =>
+    request<any>('/quiz/' + id, { method: 'DELETE' }),
+  addQuestion: (quizId: string, data: any) =>
+    request<any>('/quiz/' + quizId + '/questions', { method: 'POST', body: JSON.stringify(data) }),
+  updateQuestion: (qid: string, data: any) =>
+    request<any>('/quiz/questions/' + qid, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteQuestion: (qid: string) =>
+    request<any>('/quiz/questions/' + qid, { method: 'DELETE' }),
+  addChoice: (qid: string, data: any) =>
+    request<any>('/quiz/questions/' + qid + '/choices', { method: 'POST', body: JSON.stringify(data) }),
+  updateChoice: (cid: string, data: any) =>
+    request<any>('/quiz/choices/' + cid, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteChoice: (cid: string) =>
+    request<any>('/quiz/choices/' + cid, { method: 'DELETE' }),
+  linkQuizToLesson: (quizId: string, lessonId: string) =>
+    request<any>('/quiz/' + quizId + '/lessons/' + lessonId, { method: 'POST' }),
+  unlinkQuizFromLesson: (quizId: string, lessonId: string) =>
+    request<any>('/quiz/' + quizId + '/lessons/' + lessonId, { method: 'DELETE' }),
+
+  getEducationPathStats: () => request<any>('/education/stats/paths'),
+  getEducationLessonStats: () => request<any>('/education/stats/lessons'),
+
   listProducts: () => request<any[]>('/products'),
   getProduct: (id: string) => request<any>('/products/' + id),
   createProduct: (data: any) =>

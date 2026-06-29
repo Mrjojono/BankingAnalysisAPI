@@ -98,6 +98,18 @@ export class RevenueVariationQueryDto {
   month?: number;
 }
 
+export class DismissAdviceDto {
+  @ApiProperty({ description: 'Empreinte du conseil à ignorer' })
+  @IsNotEmpty()
+  @IsString()
+  fingerprint: string;
+
+  @ApiPropertyOptional({ description: 'Type d\'élément (ADVICE par défaut)', default: 'ADVICE' })
+  @IsOptional()
+  @IsString()
+  kind?: string;
+}
+
 export class ClassifierFeedbackDto {
   @ApiProperty({
     description: 'ID du client',
