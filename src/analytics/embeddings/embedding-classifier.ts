@@ -55,6 +55,10 @@ export class EmbeddingClassifier implements OnApplicationBootstrap {
    * Un centroid = moyenne des embeddings de tous les mots-clés de la catégorie.
    */
   private buildCentroids(): void {
+    // Train TF-IDF weights from all keywords across all categories
+    const allKeywords = Object.values(EXPENSE_KEYWORDS).flat();
+    this.vectorizer.fit(allKeywords);
+
     let totalCategories = 0;
     let totalKeywordsUsed = 0;
 
