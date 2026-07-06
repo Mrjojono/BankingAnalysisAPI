@@ -14,7 +14,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OverviewService } from '../../analytics/overview/overview.service';
 import { RuleEvaluator } from './rule-evaluator';
 import type { EligibilityResult, RuleResult } from '../types';
-import { ANALYTICS_FIELD_MAP } from '../types';
+import { ANALYTICS_FIELD_MAP, ELIGIBLE_THRESHOLD, PARTIAL_THRESHOLD } from '../types';
 
 @Injectable()
 export class EligibilityEngine {
@@ -80,9 +80,9 @@ export class EligibilityEngine {
     const status: EligibilityResult['status'] =
       eligibilityRules.length === 0
         ? 'ELIGIBLE'
-        : scorePercent >= 80
+        : scorePercent >= ELIGIBLE_THRESHOLD * 100
           ? 'ELIGIBLE'
-          : scorePercent >= 50
+          : scorePercent >= PARTIAL_THRESHOLD * 100
             ? 'PARTIAL'
             : 'NOT_ELIGIBLE';
 

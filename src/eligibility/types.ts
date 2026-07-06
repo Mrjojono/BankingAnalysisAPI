@@ -51,6 +51,9 @@ export type RuleResult = {
 //   2. Ajouter l'entrée ici
 //   3. Créer une règle en base avec field = nom de la clé
 //
+export const ELIGIBLE_THRESHOLD = 0.7;
+export const PARTIAL_THRESHOLD = 0.4;
+
 export const ANALYTICS_FIELD_MAP: Record<string, string> = {
   monthlyIncome: 'monthlyIncome', // Revenu mensuel moyen
   debtRatio: 'debtRatio', // Taux d'endettement (%)

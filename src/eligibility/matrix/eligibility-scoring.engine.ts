@@ -1,7 +1,7 @@
 import type { EligibilityMetrics } from './types';
 import type { MatrixProduct } from './types';
 import { computeRuleSatisfaction } from './eligibility-context.builder';
-import { ANALYTICS_FIELD_MAP } from '../types';
+import { ANALYTICS_FIELD_MAP, ELIGIBLE_THRESHOLD, PARTIAL_THRESHOLD } from '../types';
 import type { RuleResult } from '../types';
 
 export type ProductScore = {
@@ -93,7 +93,7 @@ function resolveMetricValue(
 export function normalizedScoreToStatus(
   score: number,
 ): 'ELIGIBLE' | 'PARTIAL' | 'NOT_ELIGIBLE' {
-  if (score >= 0.7) return 'ELIGIBLE';
-  if (score >= 0.4) return 'PARTIAL';
+  if (score >= ELIGIBLE_THRESHOLD) return 'ELIGIBLE';
+  if (score >= PARTIAL_THRESHOLD) return 'PARTIAL';
   return 'NOT_ELIGIBLE';
 }
