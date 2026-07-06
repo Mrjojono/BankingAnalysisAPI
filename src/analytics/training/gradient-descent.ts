@@ -140,12 +140,19 @@ export function trainSingleLayer(
 
       if (correctScore > wrongScore) correct++;
 
+      // L2 weight decay on ALL weights (always applied, even when margin loss is 0)
+      for (let i = 0; i < W.length; i++) {
+        for (let j = 0; j < W[i].length; j++) {
+          W[i][j] = (W[i][j] ?? 0) - currentLR * lambda * (W[i][j] ?? 0);
+        }
+      }
+
       if (loss > 0) {
         for (let i = 0; i < vector.length; i++) {
           const deltaCorrect = Math.max(-1.0, Math.min(1.0, currentLR * vector[i]));
           const deltaWrong = Math.max(-1.0, Math.min(1.0, -currentLR * vector[i]));
-          W[i][correctIdx] = (W[i][correctIdx] ?? 0) + deltaCorrect - currentLR * lambda * (W[i][correctIdx] ?? 0);
-          W[i][wrongIdx] = (W[i][wrongIdx] ?? 0) + deltaWrong - currentLR * lambda * (W[i][wrongIdx] ?? 0);
+          W[i][correctIdx] = (W[i][correctIdx] ?? 0) + deltaCorrect;
+          W[i][wrongIdx] = (W[i][wrongIdx] ?? 0) + deltaWrong;
         }
       }
     }
@@ -269,6 +276,18 @@ export function trainTwoLayer(
       totalLoss += loss + l2Term;
       if (correctScore > wrongScore) correct++;
 
+      // L2 weight decay on ALL W1 and W2 weights
+      for (let i = 0; i < W1.length; i++) {
+        for (let j = 0; j < W1[i].length; j++) {
+          W1[i][j] = (W1[i][j] ?? 0) - currentLR * lambda * (W1[i][j] ?? 0);
+        }
+      }
+      for (let i = 0; i < W2.length; i++) {
+        for (let j = 0; j < W2[i].length; j++) {
+          W2[i][j] = (W2[i][j] ?? 0) - currentLR * lambda * (W2[i][j] ?? 0);
+        }
+      }
+
       if (loss > 0) {
         // Gradients sur W2
         //dL/dW2[i][j] = hidden[i] * (j === correctIdx ? -1 : j === wrongIdx ? +1 : 0)
@@ -279,8 +298,8 @@ export function trainTwoLayer(
         for (let i = 0; i < hiddenSize; i++) {
           const deltaCorrectW2 = Math.max(-1.0, Math.min(1.0, currentLR * hidden[i]));
           const deltaWrongW2 = Math.max(-1.0, Math.min(1.0, -currentLR * hidden[i]));
-          W2[i][correctIdx] = (W2[i][correctIdx] ?? 0) + deltaCorrectW2 - currentLR * lambda * (W2[i][correctIdx] ?? 0);
-          W2[i][wrongIdx] = (W2[i][wrongIdx] ?? 0) + deltaWrongW2 - currentLR * lambda * (W2[i][wrongIdx] ?? 0);
+          W2[i][correctIdx] = (W2[i][correctIdx] ?? 0) + deltaCorrectW2;
+          W2[i][wrongIdx] = (W2[i][wrongIdx] ?? 0) + deltaWrongW2;
         }
 
         // Gradient sur la couche cachée : dL/dhidden = dL/dscores × W2^T
@@ -296,7 +315,7 @@ export function trainTwoLayer(
           for (let j = 0; j < hiddenSize; j++) {
             const grad = dLdhidden[j] * reluDeriv(hidden[j]) * vector[i];
             const deltaW1 = Math.max(-1.0, Math.min(1.0, currentLR * grad));
-            W1[i][j] = (W1[i][j] ?? 0) - deltaW1 - currentLR * lambda * (W1[i][j] ?? 0);
+            W1[i][j] = (W1[i][j] ?? 0) - deltaW1;
           }
         }
       }
