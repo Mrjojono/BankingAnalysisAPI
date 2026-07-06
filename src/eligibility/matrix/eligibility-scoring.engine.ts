@@ -33,6 +33,7 @@ export function scoreProduct(
       rule.value ?? 0,
       rule.valueMin ?? undefined,
       rule.valueMax ?? undefined,
+      rule.field,
     );
 
     const earned = satisfaction * weight;

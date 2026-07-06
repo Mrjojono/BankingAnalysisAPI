@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Rule } from '../../../generated/prisma/client';
 import type { RuleResult } from '../types';
 import { realizeEligibilityIntent } from '../../messages/realizer';
+import { getFieldMargin } from '../matrix/eligibility-context.builder';
 import type {
   EligibilityPatternKind,
   EligibilityStatus,
@@ -214,6 +215,7 @@ export class RuleEvaluator {
     const v = Number(clientValue);
     const t = rule.value;
     const gap = Math.abs(v - t);
-    return gap <= Math.abs(t) * 0.2;
+    const margin = getFieldMargin(rule.field ?? '', t);
+    return gap <= margin;
   }
 }
