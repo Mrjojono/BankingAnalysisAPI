@@ -15,6 +15,7 @@ export class TextVectorizer {
   fit(descriptions: string[]): void {
     const N = descriptions.length;
     if (N === 0) return;
+    this.idfWeights.clear();
 
     const df = new Map<string, number>();
     for (const desc of descriptions) {
