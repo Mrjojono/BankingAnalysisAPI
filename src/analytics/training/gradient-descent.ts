@@ -1,7 +1,7 @@
 import type { WeightMatrix, ScoredIntent } from '../matrix/types';
 import { INTENT_INDEX } from '../matrix/intent-matrix';
 import { buildFeatureVector } from '../matrix/context-vector.builder';
-import { computeScores } from '../matrix/scoring-engine';
+import { computeScores, computeScoresDeep } from '../matrix/scoring-engine';
 import type { TrainingExample, TrainingMetrics } from './types';
 
 const relu = (x: number) => Math.max(0, x);
@@ -167,7 +167,16 @@ export function trainSingleLayer(
       );
     }
 
-    metrics.push({ epoch, loss: avgLoss, accuracy, top3Accuracy: accuracy });
+    let top3Correct = 0;
+    for (const ex of examples) {
+      const vector = buildFeatureVector(ex.context);
+      const scores = computeScores(vector, W);
+      const sorted = scores.sort((a, b) => b.score - a.score);
+      const inTop3 = sorted.slice(0, 3).some((s) => s.kind === ex.expected);
+      if (inTop3) top3Correct++;
+    }
+    const top3AccuracyVal = examples.length > 0 ? (top3Correct / examples.length) * 100 : 0;
+    metrics.push({ epoch, loss: avgLoss, accuracy, top3Accuracy: top3AccuracyVal });
 
     if (valExamples && valExamples.length > 0 && patience) {
       const valLoss = computeValLossSingle(valExamples, W, margin);
@@ -331,7 +340,16 @@ export function trainTwoLayer(
       );
     }
 
-    metrics.push({ epoch, loss: avgLoss, accuracy, top3Accuracy: accuracy });
+    let top3Correct = 0;
+    for (const ex of examples) {
+      const vector = buildFeatureVector(ex.context);
+      const scores = computeScoresDeep(vector, W1, W2);
+      const sorted = scores.sort((a, b) => b.score - a.score);
+      const inTop3 = sorted.slice(0, 3).some((s) => s.kind === ex.expected);
+      if (inTop3) top3Correct++;
+    }
+    const top3AccuracyVal = examples.length > 0 ? (top3Correct / examples.length) * 100 : 0;
+    metrics.push({ epoch, loss: avgLoss, accuracy, top3Accuracy: top3AccuracyVal });
 
     if (valExamples && valExamples.length > 0 && patience) {
       const valLoss = computeValLossTwo(valExamples, W1, W2, margin);

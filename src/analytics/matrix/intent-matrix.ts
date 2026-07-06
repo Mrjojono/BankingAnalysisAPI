@@ -153,10 +153,11 @@ export function buildWeightMatrix(): WeightMatrix {
   W[row('cat_SALAIRE')][col('INCOME_DROP')] = 1.5;
   W[row('change')][col('INCOME_DROP')] = -1.0;
 
-  // ─── 17. GOOD_HABIT (expenseRatio < 50% et cat=ALIMENTATION) ───
-  // Poids NÉGATIF sur expense_ratio : plus il est bas, plus le score monte
+  // ─── 17. GOOD_HABIT (change >= 0, expenseRatio < 65%, cat=ALIMENTATION) ───
+  // Poids NÉGATIF sur expense_ratio : plus il est bas, plus le score monte (seuil 65%)
   W[row('cat_ALIMENTATION')][col('GOOD_HABIT')] = 1.0;
-  W[row('expense_ratio')][col('GOOD_HABIT')] = -1.0;
+  W[row('change')][col('GOOD_HABIT')] = 1.0;
+  W[row('expense_ratio')][col('GOOD_HABIT')] = -0.8;
 
   return W;
 }
