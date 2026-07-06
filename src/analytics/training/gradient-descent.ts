@@ -326,3 +326,34 @@ export function trainTwoLayer(
   }
   return { W1, W2, metrics };
 }
+
+export function forwardTwoLayer(
+  vector: number[],
+  W1: number[][],
+  W2: number[][],
+): number[] {
+  const hiddenSize = W2.length;
+  const hidden: number[] = [];
+  for (let j = 0; j < hiddenSize; j++) {
+    let sum = 0;
+    for (let i = 0; i < vector.length; i++) {
+      sum += vector[i] * (W1[i]?.[j] ?? 0);
+    }
+    hidden.push(Math.max(0, sum)); // ReLU
+  }
+
+  const scores: number[] = [];
+  for (let j = 0; j < W2[0].length; j++) {
+    let sum = 0;
+    for (let i = 0; i < hidden.length; i++) {
+      sum += hidden[i] * (W2[i]?.[j] ?? 0);
+    }
+    scores.push(sum);
+  }
+
+  // Softmax
+  const max = Math.max(...scores);
+  const exps = scores.map(s => Math.exp(s - max));
+  const sumExp = exps.reduce((a, b) => a + b, 0);
+  return exps.map(s => (sumExp > 0 ? s / sumExp : 0));
+}
