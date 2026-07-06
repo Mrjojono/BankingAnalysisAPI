@@ -1,6 +1,6 @@
 import type { WeightMatrix, ScoredIntent } from '../matrix/types';
 import { buildFeatureVector } from '../matrix/context-vector.builder';
-import { computeScores, selectActiveIntents } from '../matrix/scoring-engine';
+import { computeScores, computeScoresDeep, selectActiveIntents } from '../matrix/scoring-engine';
 import type { TrainingExample } from './types';
 
 export type EvaluationReport = {
@@ -29,6 +29,51 @@ export function evaluate(
   for (const ex of examples) {
     const vector = buildFeatureVector(ex.context);
     const scores = computeScores(vector, W);
+    const sorted = selectActiveIntents(scores, -Infinity);
+    const predicted = sorted[0]?.kind ?? 'NONE';
+
+    if (!confusionMatrix[ex.expected]) confusionMatrix[ex.expected] = {};
+    confusionMatrix[ex.expected][predicted] =
+      (confusionMatrix[ex.expected][predicted] ?? 0) + 1;
+
+    if (predicted === ex.expected) correct++;
+
+    const inTop3 = sorted.slice(0, 3).some((s) => s.kind === ex.expected);
+    if (inTop3) top3++;
+
+    if (predicted !== ex.expected) {
+      errors.push({
+        id: ex.id,
+        category: ex.context.category,
+        expected: ex.expected,
+        predicted,
+        scores: sorted.slice(0, 5),
+      });
+    }
+  }
+
+  return {
+    total: examples.length,
+    accuracy: examples.length > 0 ? (correct / examples.length) * 100 : 0,
+    top3Accuracy: examples.length > 0 ? (top3 / examples.length) * 100 : 0,
+    confusionMatrix,
+    errors,
+  };
+}
+
+export function evaluateTwoLayer(
+  examples: TrainingExample[],
+  W1: WeightMatrix,
+  W2: WeightMatrix,
+): EvaluationReport {
+  const confusionMatrix: Record<string, Record<string, number>> = {};
+  const errors: EvaluationReport['errors'] = [];
+  let correct = 0;
+  let top3 = 0;
+
+  for (const ex of examples) {
+    const vector = buildFeatureVector(ex.context);
+    const scores = computeScoresDeep(vector, W1, W2);
     const sorted = selectActiveIntents(scores, -Infinity);
     const predicted = sorted[0]?.kind ?? 'NONE';
 

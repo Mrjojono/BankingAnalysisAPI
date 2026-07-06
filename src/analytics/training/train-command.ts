@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { loadAndSplit } from './data-loader';
 import { trainSingleLayer, trainTwoLayer } from './gradient-descent';
-import { evaluate, printReport } from './model-evaluator';
+import { evaluate, evaluateTwoLayer, printReport } from './model-evaluator';
 import {
   buildWeightMatrix,
   buildWeightMatricesDeep,
@@ -81,11 +81,11 @@ export class TrainCommand {
       );
 
       console.log('\n── Évaluation sur l\'ensemble de validation ──');
-      const valReport = evaluate(val, result.W2);
+      const valReport = evaluateTwoLayer(val, result.W1, result.W2);
       printReport(valReport);
 
       console.log('\n── Évaluation sur l\'ensemble de test (hold-out) ──');
-      const testReport = evaluate(test, result.W2);
+      const testReport = evaluateTwoLayer(test, result.W1, result.W2);
       printReport(testReport);
       finalAccuracy = testReport.accuracy;
       metrics = result.metrics;

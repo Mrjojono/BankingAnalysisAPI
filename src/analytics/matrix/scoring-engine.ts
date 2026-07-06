@@ -64,11 +64,27 @@ export function computeScores(
  * // (les scores < 0.8 sont ignorés)
  * ```
  */
+/**
+ * Softmax function : convertit des scores bruts en probabilités (somme = 1).
+ * Utilise la soustraction du max pour la stabilité numérique.
+ */
+export function softmax(scores: ScoredIntent[]): ScoredIntent[] {
+  if (scores.length === 0) return [];
+  const max = Math.max(...scores.map((s) => s.score));
+  const exps = scores.map((s) => Math.exp(s.score - max));
+  const sum = exps.reduce((a, b) => a + b, 0);
+  return scores.map((s, i) => ({
+    kind: s.kind,
+    score: sum > 0 ? exps[i] / sum : 0,
+  }));
+}
+
 export function selectActiveIntents(
   scores: ScoredIntent[],
   threshold: number = SCORE_THRESHOLD,
 ): ScoredIntent[] {
-  return scores
+  const softmaxScores = softmax(scores);
+  return softmaxScores
     .filter((s) => s.score >= threshold)
     .sort((a, b) => b.score - a.score);
 }
