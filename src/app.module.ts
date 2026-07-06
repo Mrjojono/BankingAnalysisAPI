@@ -15,6 +15,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { EducationModule } from './education/education.module';
 import { QuizModule } from './quiz/quiz.module';
 import { SavingsModule } from './savings/savings.module';
+import { EncryptionModule } from './encryption/encryption.module';
+import { MonitoringModule } from './monitoring/monitoring.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -49,6 +51,8 @@ import { AppController } from './app.controller';
     EducationModule,
     QuizModule,
     SavingsModule,
+    EncryptionModule,
+    MonitoringModule,
   ],
   controllers: [AppController],
   providers: [
