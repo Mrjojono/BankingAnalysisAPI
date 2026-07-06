@@ -53,6 +53,34 @@ export function updateTrainingExample(
   return existing[idx];
 }
 
+export function loadAndSplit(
+  dataFile?: string,
+  trainRatio: number = 0.7,
+  valRatio: number = 0.15,
+): { train: TrainingExample[]; val: TrainingExample[]; test: TrainingExample[] } {
+  const all = loadTrainingData(dataFile);
+
+  // Fisher-Yates shuffle
+  const shuffled = [...all];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  const trainEnd = Math.floor(shuffled.length * trainRatio);
+  const valEnd = trainEnd + Math.floor(shuffled.length * valRatio);
+
+  const train = shuffled.slice(0, trainEnd);
+  const val = shuffled.slice(trainEnd, valEnd);
+  const test = shuffled.slice(valEnd);
+
+  console.log(
+    `[DataLoader] Split : ${train.length} train / ${val.length} val / ${test.length} test`,
+  );
+
+  return { train, val, test };
+}
+
 export function deleteTrainingExample(
   id: string,
   filePath?: string,

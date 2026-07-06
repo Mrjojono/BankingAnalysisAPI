@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { loadTrainingData } from './data-loader';
+import { loadAndSplit } from './data-loader';
 import { trainSingleLayer, trainTwoLayer } from './gradient-descent';
 import { evaluate, printReport } from './model-evaluator';
 import {
@@ -26,8 +26,8 @@ export class TrainCommand {
     console.log(`  Données       : ${config.dataFile}`);
     console.log('───────────────────────────────────────\n');
 
-    const examples = loadTrainingData(config.dataFile);
-    if (examples.length === 0) {
+    const { train, val, test } = loadAndSplit(config.dataFile);
+    if (train.length === 0) {
       console.log(
         "Aucun exemple d'entraînement. Ajoute des données dans training-data.json",
       );
@@ -70,17 +70,24 @@ export class TrainCommand {
     if (config.layers === 2) {
       const { W1: initW1, W2: initW2 } = buildWeightMatricesDeep();
       const result = trainTwoLayer(
-        examples,
+        train,
         initW1,
         initW2,
         config.epochs,
         config.learningRate,
         config.margin,
+        val,
+        config.patience,
       );
 
-      const report = evaluate(examples, result.W2);
-      printReport(report);
-      finalAccuracy = report.accuracy;
+      console.log('\n── Évaluation sur l\'ensemble de validation ──');
+      const valReport = evaluate(val, result.W2);
+      printReport(valReport);
+
+      console.log('\n── Évaluation sur l\'ensemble de test (hold-out) ──');
+      const testReport = evaluate(test, result.W2);
+      printReport(testReport);
+      finalAccuracy = testReport.accuracy;
       metrics = result.metrics;
 
       this.saveMatricesDeep(result.W1, result.W2);
@@ -95,16 +102,23 @@ export class TrainCommand {
     } else {
       const initialMatrix = buildWeightMatrix();
       const result = trainSingleLayer(
-        examples,
+        train,
         initialMatrix,
         config.epochs,
         config.learningRate,
         config.margin,
+        val,
+        config.patience,
       );
 
-      const report = evaluate(examples, result.W);
-      printReport(report);
-      finalAccuracy = report.accuracy;
+      console.log('\n── Évaluation sur l\'ensemble de validation ──');
+      const valReport = evaluate(val, result.W);
+      printReport(valReport);
+
+      console.log('\n── Évaluation sur l\'ensemble de test (hold-out) ──');
+      const testReport = evaluate(test, result.W);
+      printReport(testReport);
+      finalAccuracy = testReport.accuracy;
       metrics = result.metrics;
 
       this.saveMatrix(result.W);
