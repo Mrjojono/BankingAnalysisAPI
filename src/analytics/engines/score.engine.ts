@@ -12,6 +12,7 @@ import {
   realizeScoreLabel,
   realizeScoreInterpretation,
 } from '../../messages/realizer';
+import { ANALYTICS_CONSTANTS } from '../config/constants';
 
 @Injectable()
 export class ScoreEngine {
@@ -60,9 +61,20 @@ export class ScoreEngine {
       .toDP(0)
       .toNumber();
 
+    let sigmoidScore = Math.round(
+      100 / (1 + Math.exp(-5 * (globalScore - 50) / 100)),
+    );
+
+    if (metrics.debtRatio > ANALYTICS_CONSTANTS.BCEAO_DEBT_RATIO_THRESHOLD) {
+      sigmoidScore = Math.min(sigmoidScore, 50);
+    }
+
+    const confidence = Math.min(1, metrics.monthsData / 6);
+    const finalScore = Math.round(sigmoidScore * confidence);
+
     return {
-      globalScore,
-      label: this.getScoreLabel(globalScore),
+      globalScore: finalScore,
+      label: this.getScoreLabel(finalScore),
       components: {
         C1_expenses: {
           score: c1Score,
@@ -86,7 +98,7 @@ export class ScoreEngine {
         },
       },
       methodology:
-        'CFPB + Financial Health Network + FICO + Garman & Forgue + BCEAO',
+        'CFPB + Financial Health Network + FICO + Garman & Forgue + BCEAO + Sigmoid',
       interpretations: this.interpretComponents({
         C1_expenses: c1Score,
         C2_debt: c2Score,

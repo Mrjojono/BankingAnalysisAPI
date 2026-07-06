@@ -1253,6 +1253,7 @@ export class OverviewService {
       overdraftDays: overdraftFrequency.overdraftDays,
       revenueVolatilityScore: revenueVariation.volatilityScore,
       balanceVolatilityScore: actualBalanceVolatility.score,
+      monthsData: ANALYTICS_CONSTANTS.DEFAULT_LOOKBACK_MONTHS,
     };
   }
 }

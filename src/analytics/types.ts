@@ -456,6 +456,8 @@ export type ScoreMetrics = {
   overdraftScore: number;
   revenueVolatilityScore: number;
   balanceVolatilityScore: number;
+  debtRatio: number;
+  monthsData: number;
 };
 
 export type RecommendationMetrics = {
