@@ -14,6 +14,7 @@ export type TrainingConfig = {
   margin: number;
   dataFile: string;
   layers: 1 | 2;
+  lambda: number;
   patience: number;
 };
 
@@ -23,6 +24,7 @@ export const DEFAULT_TRAINING_CONFIG: TrainingConfig = {
   margin: 0.5,
   dataFile: 'training-data.json',
   layers: 1,
+  lambda: 0.001,
   patience: 10,
 };
 

@@ -76,6 +76,7 @@ export class TrainCommand {
         config.epochs,
         config.learningRate,
         config.margin,
+        config.lambda,
         val,
         config.patience,
       );
@@ -107,6 +108,7 @@ export class TrainCommand {
         config.epochs,
         config.learningRate,
         config.margin,
+        config.lambda,
         val,
         config.patience,
       );

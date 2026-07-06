@@ -102,6 +102,7 @@ export function trainSingleLayer(
   epochs: number,
   learningRate: number,
   margin: number,
+  lambda: number,
   valExamples?: TrainingExample[],
   patience?: number,
 ): { W: WeightMatrix; metrics: TrainingMetrics[] } {
@@ -111,6 +112,8 @@ export function trainSingleLayer(
 
   let bestValLoss = Infinity;
   let patienceCounter = 0;
+  let lrPlateauCounter = 0;
+  let currentLR = learningRate;
 
   for (let epoch = 0; epoch < epochs; epoch++) {
     let totalLoss = 0;
@@ -132,14 +135,17 @@ export function trainSingleLayer(
       const correctScore = scores[correctIdx].score;
       const wrongScore = scores[wrongIdx].score;
       const loss = marginLoss(correctScore, wrongScore, margin);
-      totalLoss += loss;
+      const l2Term = (lambda / 2) * W.reduce((sum, row) => sum + row.reduce((s, w) => s + w * w, 0), 0);
+      totalLoss += loss + l2Term;
 
       if (correctScore > wrongScore) correct++;
 
       if (loss > 0) {
         for (let i = 0; i < vector.length; i++) {
-          W[i][correctIdx] = (W[i][correctIdx] ?? 0) + learningRate * vector[i];
-          W[i][wrongIdx] = (W[i][wrongIdx] ?? 0) - learningRate * vector[i];
+          const deltaCorrect = Math.max(-1.0, Math.min(1.0, currentLR * vector[i]));
+          const deltaWrong = Math.max(-1.0, Math.min(1.0, -currentLR * vector[i]));
+          W[i][correctIdx] = (W[i][correctIdx] ?? 0) + deltaCorrect - currentLR * lambda * (W[i][correctIdx] ?? 0);
+          W[i][wrongIdx] = (W[i][wrongIdx] ?? 0) + deltaWrong - currentLR * lambda * (W[i][wrongIdx] ?? 0);
         }
       }
     }
@@ -166,9 +172,15 @@ export function trainSingleLayer(
 
       if (valLoss < bestValLoss) {
         bestValLoss = valLoss;
+        lrPlateauCounter = 0;
         patienceCounter = 0;
         bestW = W.map((row) => [...row]);
       } else {
+        lrPlateauCounter++;
+        if (lrPlateauCounter >= 3 && lrPlateauCounter % 3 === 0) {
+          currentLR /= 2;
+          console.log(`          LR réduit à ${currentLR.toFixed(6)} (plateau de ${lrPlateauCounter} étapes)`);
+        }
         patienceCounter++;
         if (patienceCounter >= patience) {
           console.log(
@@ -193,6 +205,7 @@ export function trainTwoLayer(
   epochs: number,
   learningRate: number,
   margin: number,
+  lambda: number,
   valExamples?: TrainingExample[],
   patience?: number,
 ): { W1: WeightMatrix; W2: WeightMatrix; metrics: TrainingMetrics[] } {
@@ -205,6 +218,8 @@ export function trainTwoLayer(
 
   let bestValLoss = Infinity;
   let patienceCounter = 0;
+  let lrPlateauCounter = 0;
+  let currentLR = learningRate;
 
   for (let epoch = 0; epoch < epochs; epoch++) {
     let totalLoss = 0;
@@ -247,7 +262,11 @@ export function trainTwoLayer(
       if (wrongIdx === -1) continue;
 
       const loss = marginLoss(correctScore, wrongScore, margin);
-      totalLoss += loss;
+      const l2Term = (lambda / 2) * (
+        W1.reduce((sum, row) => sum + row.reduce((s, w) => s + w * w, 0), 0) +
+        W2.reduce((sum, row) => sum + row.reduce((s, w) => s + w * w, 0), 0)
+      );
+      totalLoss += loss + l2Term;
       if (correctScore > wrongScore) correct++;
 
       if (loss > 0) {
@@ -258,12 +277,10 @@ export function trainTwoLayer(
         dLdscores[wrongIdx] = +1;
 
         for (let i = 0; i < hiddenSize; i++) {
-          W2[i][correctIdx] =
-            (W2[i][correctIdx] ?? 0) -
-            learningRate * hidden[i] * dLdscores[correctIdx];
-          W2[i][wrongIdx] =
-            (W2[i][wrongIdx] ?? 0) -
-            learningRate * hidden[i] * dLdscores[wrongIdx];
+          const deltaCorrectW2 = Math.max(-1.0, Math.min(1.0, currentLR * hidden[i]));
+          const deltaWrongW2 = Math.max(-1.0, Math.min(1.0, -currentLR * hidden[i]));
+          W2[i][correctIdx] = (W2[i][correctIdx] ?? 0) + deltaCorrectW2 - currentLR * lambda * (W2[i][correctIdx] ?? 0);
+          W2[i][wrongIdx] = (W2[i][wrongIdx] ?? 0) + deltaWrongW2 - currentLR * lambda * (W2[i][wrongIdx] ?? 0);
         }
 
         // Gradient sur la couche cachée : dL/dhidden = dL/dscores × W2^T
@@ -278,7 +295,8 @@ export function trainTwoLayer(
         for (let i = 0; i < vector.length; i++) {
           for (let j = 0; j < hiddenSize; j++) {
             const grad = dLdhidden[j] * reluDeriv(hidden[j]) * vector[i];
-            W1[i][j] = (W1[i][j] ?? 0) - learningRate * grad;
+            const deltaW1 = Math.max(-1.0, Math.min(1.0, currentLR * grad));
+            W1[i][j] = (W1[i][j] ?? 0) - deltaW1 - currentLR * lambda * (W1[i][j] ?? 0);
           }
         }
       }
@@ -306,10 +324,16 @@ export function trainTwoLayer(
 
       if (valLoss < bestValLoss) {
         bestValLoss = valLoss;
+        lrPlateauCounter = 0;
         patienceCounter = 0;
         bestW1 = W1.map((r) => [...r]);
         bestW2 = W2.map((r) => [...r]);
       } else {
+        lrPlateauCounter++;
+        if (lrPlateauCounter >= 3 && lrPlateauCounter % 3 === 0) {
+          currentLR /= 2;
+          console.log(`          LR réduit à ${currentLR.toFixed(6)} (plateau de ${lrPlateauCounter} étapes)`);
+        }
         patienceCounter++;
         if (patienceCounter >= patience) {
           console.log(
