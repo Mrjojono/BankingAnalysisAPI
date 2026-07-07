@@ -8,8 +8,8 @@ import {
   RepaymentHistoryItem,
 } from '../types';
 import Decimal from 'decimal.js';
-import { Classifier } from '../shared/classifier';
 import { filterEntries } from '../helper';
+import { DebtDetector } from '../detectors/debt-detector';
 import { Injectable } from '@nestjs/common';
 
 import { ANALYTICS_CONSTANTS } from '../config/constants';
@@ -19,7 +19,7 @@ import { ANALYTICS_CONSTANTS } from '../config/constants';
  */
 @Injectable()
 export class DebtEngine {
-  constructor(private classifier: Classifier) {}
+  constructor(private debtDetector: DebtDetector) {}
 
   /**
    * Détection des dettes
@@ -65,7 +65,16 @@ export class DebtEngine {
     for (const [desc, group] of groupedByDescription.entries()) {
       if (group.length < MIN_OCCURRENCES) continue;
 
-      if (!(await this.classifier.isDebt(desc, customerId))) continue;
+      const groupAvg = group.reduce(
+        (sum, e) => sum + Number(e.amount),
+        0,
+      ) / group.length;
+      const assessment = await this.debtDetector.assessDebtPayment(
+        desc,
+        groupAvg,
+        customerId,
+      );
+      if (!assessment.isDebt) continue;
 
       group.sort(
         (a, b) =>
@@ -277,12 +286,12 @@ export class DebtEngine {
 
     const creditEntries: Entry[] = [];
     for (const entry of debits) {
-      if (
-        await this.classifier.isDebt(
-          entry.transaction.description ?? '',
-          customerId,
-        )
-      ) {
+      const assessment = await this.debtDetector.assessDebtPayment(
+        entry.transaction.description ?? '',
+        Number(entry.amount),
+        customerId,
+      );
+      if (assessment.isDebt) {
         creditEntries.push(entry);
       }
     }

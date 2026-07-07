@@ -8,6 +8,7 @@ import { ExpenseEngine } from './engines/expense.engine';
 import { RevenueEngine } from './engines/revenue.engine';
 import { BalanceEngine } from './engines/balance.engine';
 import { DebtEngine } from './engines/debt.engine';
+import { DebtDetector } from './detectors/debt-detector';
 import { SavingsEngine } from './engines/savings.engine';
 import { ScoreEngine } from './engines/score.engine';
 import { RecommendationEngine } from './engines/recommendation.engine';
@@ -36,6 +37,7 @@ import { AuthModule } from '../auth/auth.module';
     ExpenseEngine,
     RevenueEngine,
     BalanceEngine,
+    DebtDetector,
     DebtEngine,
     SavingsEngine,
     ScoreEngine,

@@ -1198,9 +1198,13 @@ export class OverviewService {
       revenues.currentMonth.total,
       debtAnalytics.totalMonthlyDebt,
     );
+    const nonDebtExpenses = Math.max(
+      0,
+      expenses.totalExpenses - debtAnalytics.totalMonthlyDebt,
+    );
     const actualSavingsRate = await this.savingsEngine.calculateSavingsRate(
       revenues.currentMonth.total,
-      expenses.totalExpenses,
+      nonDebtExpenses,
       debtAnalytics.totalMonthlyDebt,
     );
 
