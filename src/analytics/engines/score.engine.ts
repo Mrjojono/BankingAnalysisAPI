@@ -62,7 +62,7 @@ export class ScoreEngine {
       .toNumber();
 
     let sigmoidScore = Math.round(
-      100 / (1 + Math.exp(-5 * (globalScore - 50) / 100)),
+      100 / (1 + Math.exp((-5 * (globalScore - 50)) / 100)),
     );
 
     if (metrics.debtRatio > ANALYTICS_CONSTANTS.BCEAO_DEBT_RATIO_THRESHOLD) {

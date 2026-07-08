@@ -314,6 +314,8 @@ model BankCustomer {
   accounts      BankAccount[]
   beneficiaries Beneficiary[]
 
+  smsTransactions      SmsTransaction[]
+
   sentTransactions     Transaction[] @relation("SenderCustomer")
   receivedTransactions Transaction[] @relation("ReceiverCustomer")
 
@@ -721,8 +723,8 @@ model Rule {
 }
 
 model SmsTransaction {
-  id         Int      @id @default(autoincrement())
-  customerId String
+  id         Int          @id @default(autoincrement())
+  customerId String       @db.Uuid
   smsId      Int
   address    String
   body       String
@@ -731,9 +733,12 @@ model SmsTransaction {
   operator   String?
   sender     String?
   dateSent   DateTime
-  createdAt  DateTime @default(now())
+  createdAt  DateTime     @default(now())
+
+  customer BankCustomer @relation(fields: [customerId], references: [id])
 
   @@unique([customerId, smsId])
+  @@index([customerId])
   @@map("sms_transactions")
 }
 

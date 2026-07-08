@@ -53,56 +53,82 @@ export function filterTransactions(
   });
 }
 
+export type PartitionCriteria = {
+  direction?: 'DEBIT' | 'CREDIT';
+  accountType?:
+    | 'CHECKING'
+    | 'SAVINGS'
+    | 'LOAN'
+    | 'CORPORATE'
+    | 'MOBILE_MONEY';
+  includeMobileMoney?: boolean;
+  year?: number;
+  month?: number;
+  from?: Date;
+  to?: Date;
+};
+
+function entryMatches(entry: Entry, options: PartitionCriteria): boolean {
+  const { direction, accountType, includeMobileMoney, year, month, from, to } =
+    options;
+
+  if (direction && entry.direction !== direction) return false;
+
+  if (
+    accountType &&
+    entry.account.bankAccount?.accountType !== accountType &&
+    !(
+      includeMobileMoney &&
+      accountType === 'CHECKING' &&
+      entry.account.bankAccount?.accountType === 'MOBILE_MONEY'
+    )
+  )
+    return false;
+
+  const txDate = new Date(entry.transaction.transactionDate);
+
+  if (from && txDate < from) return false;
+  if (to && txDate > to) return false;
+
+  if (!from && !to) {
+    if (year && txDate.getUTCFullYear() !== year) return false;
+    if (month && txDate.getUTCMonth() + 1 !== month) return false;
+  }
+
+  return true;
+}
+
 /**
  * Filtre les écritures comptables (Entries) selon plusieurs critères.
  */
 export function filterEntries(
   entries: Entry[],
-  options: {
-    direction?: 'DEBIT' | 'CREDIT';
-    accountType?:
-      | 'CHECKING'
-      | 'SAVINGS'
-      | 'LOAN'
-      | 'CORPORATE'
-      | 'MOBILE_MONEY';
-    includeMobileMoney?: boolean;
-    year?: number;
-    month?: number;
-    from?: Date;
-    to?: Date;
-  },
+  options: PartitionCriteria,
 ): Entry[] {
-  const { direction, accountType, includeMobileMoney, year, month, from, to } =
-    options;
+  return entries.filter((entry) => entryMatches(entry, options));
+}
 
-  return entries.filter((entry) => {
-    // 1. Filtrage par direction
-    if (direction && entry.direction !== direction) return false;
+/**
+ * Partitionne les écritures en un seul passage selon plusieurs critères.
+ * Chaque entry peut atterrir dans plusieurs buckets si elle correspond à plusieurs critères.
+ */
+export function partitionEntries(
+  entries: Entry[],
+  partitions: Record<string, PartitionCriteria>,
+): Record<string, Entry[]> {
+  const result: Record<string, Entry[]> = {};
+  const keys = Object.keys(partitions);
+  for (const key of keys) {
+    result[key] = [];
+  }
 
-    // 2. Filtrage par type de compte
-    if (
-      accountType &&
-      entry.account.bankAccount?.accountType !== accountType &&
-      !(
-        includeMobileMoney &&
-        accountType === 'CHECKING' &&
-        entry.account.bankAccount?.accountType === 'MOBILE_MONEY'
-      )
-    )
-      return false;
-
-    // 3. Filtrage par période
-    const txDate = new Date(entry.transaction.transactionDate);
-
-    if (from && txDate < from) return false;
-    if (to && txDate > to) return false;
-
-    if (!from && !to) {
-      if (year && txDate.getUTCFullYear() !== year) return false;
-      if (month && txDate.getUTCMonth() + 1 !== month) return false;
+  for (const entry of entries) {
+    for (const key of keys) {
+      if (entryMatches(entry, partitions[key])) {
+        result[key].push(entry);
+      }
     }
+  }
 
-    return true;
-  });
+  return result;
 }

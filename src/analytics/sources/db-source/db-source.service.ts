@@ -167,6 +167,11 @@ export class DbSource implements TransactionSourceProvider {
     from?: Date,
     to?: Date,
   ): Promise<Entry[]> {
+    if (!from) {
+      from = new Date();
+      from.setUTCFullYear(from.getUTCFullYear() - 1);
+    }
+
     const entries = await this.prisma.entry.findMany({
       where: {
         account: {
@@ -195,6 +200,7 @@ export class DbSource implements TransactionSourceProvider {
           transactionDate: 'desc',
         },
       },
+      take: 10000,
     });
 
     return entries as unknown as Entry[];

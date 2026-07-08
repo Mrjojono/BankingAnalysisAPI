@@ -7,6 +7,7 @@
 
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EncryptionService } from '../encryption/encryption.service';
 import { parseSms } from '../analytics/sources/sms/sms-parser';
 import { Classifier } from '../analytics/shared/classifier';
 import { ExpenseCategory } from '../analytics/config/expense-keywords';
@@ -31,6 +32,7 @@ export class SmsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly classifier: Classifier,
+    private readonly encryption: EncryptionService,
   ) {}
 
   /**
@@ -125,7 +127,7 @@ export class SmsService {
         customerId,
         smsId: msg.id,
         address: msg.address,
-        body: msg.body.slice(0, 500),
+        body: this.encryption.encrypt(msg.body.slice(0, 500)),
         amount: parsed.amount,
         direction: parsed.direction,
         operator: parsed.operator,

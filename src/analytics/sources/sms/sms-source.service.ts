@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { TransactionSourceProvider } from '../interfaces/transaction-source-provider.interface';
 import { Entry } from '../../types';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { EncryptionService } from '../../../encryption/encryption.service';
 
 /**
  * Source SMS (Mobile Money).
@@ -23,7 +24,10 @@ export class SmsSource implements TransactionSourceProvider {
   readonly name = 'sms';
   private readonly logger = new Logger(SmsSource.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly encryption: EncryptionService,
+  ) {}
 
   /**
    * Toujours disponible si la base est accessible.
@@ -74,10 +78,19 @@ export class SmsSource implements TransactionSourceProvider {
     const isDebit = sms.direction === 'DEBIT';
     const direction = sms.direction ?? 'CREDIT';
     const amount = sms.amount ?? 0;
+    let decryptedBody = '(chiffré)';
+    try {
+      decryptedBody = this.encryption.decrypt(sms.body);
+    } catch {
+      this.logger.warn(
+        `Impossible de déchiffrer le body du SMS ${sms.id}`,
+      );
+    }
+
     const description = [
       sms.operator,
       sms.sender ? `(${sms.sender})` : null,
-      sms.body.slice(0, 500),
+      decryptedBody.slice(0, 500),
     ]
       .filter(Boolean)
       .join(' ');

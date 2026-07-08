@@ -15,10 +15,13 @@ import { Entry } from '../types';
 import { ANALYTICS_CONSTANTS } from '../config/constants';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
+import { RedisService } from '../../redis/redis.service';
 
 @Injectable()
 export class OverviewService {
   private readonly logger = new Logger(OverviewService.name);
+  private readonly metricsCache = new Map<string, { data: any; ts: number }>();
+  private readonly METRICS_CACHE_TTL = 5000;
 
   constructor(
     private sourceRegistry: TransactionSourceRegistry,
@@ -35,6 +38,7 @@ export class OverviewService {
     private classifier: Classifier,
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private redisService: RedisService,
   ) {}
 
   /**
@@ -1133,6 +1137,25 @@ export class OverviewService {
     year?: number,
     month?: number,
   ): Promise<any> {
+    const cacheKey = `${customerId}:${year ?? ''}:${month ?? ''}`;
+
+    const cached = this.metricsCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < this.METRICS_CACHE_TTL) {
+      return cached.data;
+    }
+
+    const redisKey = `analytics:metrics:${cacheKey}`;
+    try {
+      const cachedRaw = await this.redisService.get(redisKey);
+      if (cachedRaw) {
+        const parsed = JSON.parse(cachedRaw);
+        this.metricsCache.set(cacheKey, { data: parsed, ts: Date.now() });
+        return parsed;
+      }
+    } catch {
+      // Redis indisponible, fallback sur le calcul direct
+    }
+
     const { refYear, refMonth, analysisDate } = await this.resolveReferenceDate(
       customerId,
       year,
@@ -1229,7 +1252,7 @@ export class OverviewService {
     const emergencyFundScore =
       monthsCovered >= 3 ? 100 : monthsCovered >= 1 ? 50 : 20;
 
-    return {
+    const metrics = {
       monthlyIncome: revenues.currentMonth.total,
       monthlyExpenses: expenses.totalExpenses,
       expenseRatioScore: actualExpenseRatio.score,
@@ -1259,5 +1282,13 @@ export class OverviewService {
       balanceVolatilityScore: actualBalanceVolatility.score,
       monthsData: ANALYTICS_CONSTANTS.DEFAULT_LOOKBACK_MONTHS,
     };
+
+    this.metricsCache.set(cacheKey, { data: metrics, ts: Date.now() });
+    try {
+      await this.redisService.set(redisKey, JSON.stringify(metrics), 300);
+    } catch {
+      // Redis indisponible, le cache mémoire suffit
+    }
+    return metrics;
   }
 }

@@ -98,6 +98,9 @@
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1"
     },
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(afinn-165|uuid)/)"
+    ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],

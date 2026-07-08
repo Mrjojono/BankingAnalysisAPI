@@ -85,12 +85,19 @@ export class NotificationsService {
     userIds: string[],
     input: NotificationInput,
   ) {
-    const results: any[] = [];
-    for (const userId of userIds) {
-      const n = await this.create(userId, input);
-      results.push(n);
-    }
-    return results;
+    const batchData = userIds.map((userId) => ({
+      userId,
+      type: input.type,
+      channel: input.channel ?? 'IN_APP',
+      title: input.title,
+      body: input.body,
+      data: (input.data ?? undefined) as any,
+      severity: input.severity ?? 'INFO',
+      link: input.link ?? undefined,
+    }));
+
+    await this.prisma.notification.createMany({ data: batchData });
+    return { count: userIds.length };
   }
 
   async getHistory(

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionSourceRegistry } from '../sources/registry/transaction-source-registry';
 import { Classifier } from '../shared/classifier';
-import { filterEntries } from '../helper';
+import { partitionEntries } from '../helper';
 import { InterpreterEngine, type RuleContext } from './interpreter.engine';
 import {
   realizeIntent,
@@ -47,34 +47,40 @@ export class AdviceEngine {
     const allEntries = await this.sourceRegistry.aggregateEntries(customerId);
     if (allEntries.length === 0) return allAdvice;
 
-    // recuperation des transactions actuelles et precedentes en les filtrant pour chaque categories
-    const currentDebits = filterEntries(allEntries, {
-      direction: 'DEBIT',
-      accountType: 'CHECKING',
-      includeMobileMoney: true,
-      from: currentStart,
-      to: currentEnd,
-    });
-    const prevDebits = filterEntries(allEntries, {
-      direction: 'DEBIT',
-      accountType: 'CHECKING',
-      includeMobileMoney: true,
-      from: prevStart,
-      to: prevEnd,
-    });
-    const currentCredits = filterEntries(allEntries, {
-      direction: 'CREDIT',
-      accountType: 'CHECKING',
-      includeMobileMoney: true,
-      from: currentStart,
-      to: currentEnd,
-    });
-    const prevCredits = filterEntries(allEntries, {
-      direction: 'CREDIT',
-      accountType: 'CHECKING',
-      includeMobileMoney: true,
-      from: prevStart,
-      to: prevEnd,
+    const {
+      currentDebits,
+      prevDebits,
+      currentCredits,
+      prevCredits,
+    } = partitionEntries(allEntries, {
+      currentDebits: {
+        direction: 'DEBIT',
+        accountType: 'CHECKING',
+        includeMobileMoney: true,
+        from: currentStart,
+        to: currentEnd,
+      },
+      prevDebits: {
+        direction: 'DEBIT',
+        accountType: 'CHECKING',
+        includeMobileMoney: true,
+        from: prevStart,
+        to: prevEnd,
+      },
+      currentCredits: {
+        direction: 'CREDIT',
+        accountType: 'CHECKING',
+        includeMobileMoney: true,
+        from: currentStart,
+        to: currentEnd,
+      },
+      prevCredits: {
+        direction: 'CREDIT',
+        accountType: 'CHECKING',
+        includeMobileMoney: true,
+        from: prevStart,
+        to: prevEnd,
+      },
     });
 
     const [currentCats, prevCats] = await Promise.all([
