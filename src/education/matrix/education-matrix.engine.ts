@@ -2,10 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OverviewService } from '../../analytics/overview/overview.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildEducationVector } from './education-context.builder';
-import {
-  buildEducationWeightMatrix,
-  SCORE_THRESHOLD,
-} from './education-intent-matrix';
+import { buildEducationWeightMatrix } from './education-intent-matrix';
 import {
   computeScores,
   selectActiveAdviceTypes,
@@ -27,7 +24,7 @@ export class EducationMatrixEngine {
       const vector = buildEducationVector(metrics);
       const matrix = buildEducationWeightMatrix();
       const scores = computeScores(vector, matrix);
-      const active = selectActiveAdviceTypes(scores, SCORE_THRESHOLD);
+      const active = selectActiveAdviceTypes(scores);
       return active.map((s) => s.kind);
     } catch (error) {
       this.logger.warn(`Erreur matrice éducative: ${(error as Error).message}`);
@@ -48,14 +45,18 @@ export class EducationMatrixEngine {
 
     const completed = progress.filter((p) => p.completed).length;
 
-    const quizAttempts = await this.prisma.quizAttempt.findMany({
-      where: {
-        userId: progress[0]?.userId ?? '',
-        completedAt: { not: null },
-      },
-      orderBy: { completedAt: 'desc' },
-      take: 10,
-    });
+    const firstUserId = progress[0]?.userId;
+    const quizAttempts =
+      firstUserId
+        ? await this.prisma.quizAttempt.findMany({
+            where: {
+              userId: firstUserId,
+              completedAt: { not: null },
+            },
+            orderBy: { completedAt: 'desc' },
+            take: 10,
+          })
+        : [];
 
     let quizCompletionRate = 0;
     if (quizAttempts.length > 0) {

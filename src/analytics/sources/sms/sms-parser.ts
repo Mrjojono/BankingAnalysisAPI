@@ -11,6 +11,16 @@
  * - Autres → UNKNOWN
  */
 
+export function getPatternStats() {
+  const operators = [...new Set(PATTERNS.map((p) => p.operator))];
+  return {
+    total: PATTERNS.length,
+    operators,
+    creditCount: PATTERNS.filter((p) => p.direction === 'CREDIT').length,
+    debitCount: PATTERNS.filter((p) => p.direction === 'DEBIT').length,
+  };
+}
+
 export type ParsedSms = {
   operator: string;
   direction: 'DEBIT' | 'CREDIT' | null;

@@ -25,27 +25,10 @@ export class PushService {
   constructor(private prisma: PrismaService) {}
 
   async registerToken(userId: string, token: string, platform?: string) {
-    const existing = await this.prisma.pushToken.findUnique({
+    return this.prisma.pushToken.upsert({
       where: { token },
-    });
-
-    if (existing) {
-      if (existing.userId !== userId) {
-        await this.prisma.pushToken.update({
-          where: { id: existing.id },
-          data: { userId, platform },
-        });
-      } else if (platform) {
-        await this.prisma.pushToken.update({
-          where: { id: existing.id },
-          data: { platform },
-        });
-      }
-      return existing;
-    }
-
-    return this.prisma.pushToken.create({
-      data: { userId, token, platform },
+      create: { userId, token, platform },
+      update: { userId, platform },
     });
   }
 

@@ -1,6 +1,14 @@
 import type { FeatureVector, WeightMatrix, ScoredAdviceType } from './types';
-import { EDUCATION_ADVICE_TYPES, SCORE_THRESHOLD } from './education-intent-matrix';
-import { relu } from './activation';
+import { EDUCATION_ADVICE_TYPES } from './education-intent-matrix';
+import { relu, softmax } from './activation';
+
+/**
+ * Seuil adaptatif : 2× la probabilité moyenne (1/N).
+ * Avec 16 intents → 2/16 = 0.125, bien plus atteignable que 0.8.
+ */
+export function adaptiveThreshold(numIntents: number): number {
+  return numIntents > 0 ? (2 / numIntents) : 0.8;
+}
 
 export function computeScores(
   featureVector: FeatureVector,
@@ -25,10 +33,14 @@ export function computeScores(
 
 export function selectActiveAdviceTypes(
   scores: ScoredAdviceType[],
-  threshold: number = SCORE_THRESHOLD,
+  threshold?: number,
 ): ScoredAdviceType[] {
+  const rawScores = scores.map((s) => s.score);
+  const softmaxScores = softmax(rawScores);
+  const t = threshold ?? adaptiveThreshold(scores.length);
   return scores
-    .filter((s) => s.score >= threshold)
+    .map((s, i) => ({ kind: s.kind, score: softmaxScores[i] }))
+    .filter((s) => s.score >= t)
     .sort((a, b) => b.score - a.score);
 }
 

@@ -17,6 +17,7 @@ import { QuizModule } from './quiz/quiz.module';
 import { SavingsModule } from './savings/savings.module';
 import { EncryptionModule } from './encryption/encryption.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
+import { UserModule } from './user/user.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -53,6 +54,7 @@ import { AppController } from './app.controller';
     SavingsModule,
     EncryptionModule,
     MonitoringModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [

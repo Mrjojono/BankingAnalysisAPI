@@ -15,6 +15,13 @@ enum Role {
   SUPER_ADMIN
 }
 
+enum UserAccountStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  BANNED
+}
+
 enum KycStatus {
   PENDING
   UNDER_REVIEW
@@ -136,7 +143,12 @@ model User {
   email    String  @unique
   password String?
 
-  role Role @default(CLIENT)
+  role   Role               @default(CLIENT)
+  status UserAccountStatus  @default(ACTIVE)
+
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  loginCount      Int       @default(0)
 
   mfaEnabled  Boolean @default(false)
   mfaSecret   String?
@@ -264,7 +276,7 @@ model PushToken {
 }
 
 model Notification {
-  id        String              @id @default(cuid())
+  id        String              @id @default(uuid()) @db.Uuid
   userId    String              @db.Uuid
   type      NotificationType
   channel   NotificationChannel @default(IN_APP)
@@ -285,7 +297,7 @@ model Notification {
 }
 
 model NotificationPreference {
-  id     String  @id @default(cuid())
+  id     String  @id @default(uuid()) @db.Uuid
   userId String  @unique @db.Uuid
   push   Boolean @default(true)
   email  Boolean @default(false)
@@ -294,6 +306,28 @@ model NotificationPreference {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notification_prefs")
+}
+
+model ScheduledNotification {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  body        String
+  type        String   @default("ADMIN_BROADCAST")
+  severity    String   @default("INFO")
+
+  scheduledAt DateTime
+  recurrence  String?  // DAILY | WEEKLY | MONTHLY | null = one-shot
+  lastSentAt  DateTime?
+  active      Boolean  @default(true)
+
+  targetType  String   @default("all")   // all | user_ids | customer_targets
+  targetIds   Json?                       // array of userIds or customer emails/IDs
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, scheduledAt])
+  @@map("scheduled_notifications")
 }
 
 model BankCustomer {
@@ -780,7 +814,8 @@ model Lesson {
   id               String           @id @default(uuid()) @db.Uuid
   learningPathId   String           @db.Uuid
   title            String
-  content          String // Markdown
+  content          String // Markdown (fallback)
+  contentBlocks    Json?
   summary          String?
   imageUrl         String?
   videoUrl         String?

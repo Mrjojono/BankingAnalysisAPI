@@ -1,6 +1,91 @@
 -- CreateEnum
+CREATE TYPE "LessonDifficulty" AS ENUM ('BEGINNER', 'INTERMEDIATE', 'ADVANCED');
+CREATE TYPE "LessonStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'ARCHIVED');
+
+-- CreateEnum
 CREATE TYPE "QuizQuestionType" AS ENUM ('MCQ', 'TRUE_FALSE');
 CREATE TYPE "QuizStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'ARCHIVED');
+
+-- CreateTable: learning_paths
+CREATE TABLE "learning_paths" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "icon" TEXT,
+    "difficulty" "LessonDifficulty" NOT NULL,
+    "order" INTEGER NOT NULL DEFAULT 0,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "learning_paths_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable: lessons
+CREATE TABLE "lessons" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "learningPathId" UUID NOT NULL,
+    "title" TEXT NOT NULL,
+    "content" TEXT NOT NULL DEFAULT '',
+    "contentBlocks" JSONB,
+    "summary" TEXT,
+    "imageUrl" TEXT,
+    "videoUrl" TEXT,
+    "difficulty" "LessonDifficulty" NOT NULL,
+    "order" INTEGER NOT NULL DEFAULT 0,
+    "estimatedMinutes" INTEGER,
+    "status" "LessonStatus" NOT NULL DEFAULT 'DRAFT',
+    "minScore" INTEGER,
+    "maxScore" INTEGER,
+    "relatedProductId" UUID,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "lessons_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX "lessons_learningPathId_idx" ON "lessons"("learningPathId");
+CREATE INDEX "lessons_minScore_maxScore_idx" ON "lessons"("minScore", "maxScore");
+ALTER TABLE "lessons" ADD CONSTRAINT "lessons_learningPathId_fkey" FOREIGN KEY ("learningPathId") REFERENCES "learning_paths"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- CreateTable: lesson_advice_links
+CREATE TABLE "lesson_advice_links" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "lessonId" UUID NOT NULL,
+    "adviceType" TEXT NOT NULL,
+    "priority" INTEGER NOT NULL DEFAULT 0,
+    CONSTRAINT "lesson_advice_links_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "lesson_advice_links_lessonId_adviceType_key" ON "lesson_advice_links"("lessonId", "adviceType");
+CREATE INDEX "lesson_advice_links_adviceType_idx" ON "lesson_advice_links"("adviceType");
+ALTER TABLE "lesson_advice_links" ADD CONSTRAINT "lesson_advice_links_lessonId_fkey" FOREIGN KEY ("lessonId") REFERENCES "lessons"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- CreateTable: user_path_progress
+CREATE TABLE "user_path_progress" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "userId" UUID NOT NULL,
+    "pathId" UUID NOT NULL,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "user_path_progress_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "user_path_progress_userId_pathId_key" ON "user_path_progress"("userId", "pathId");
+ALTER TABLE "user_path_progress" ADD CONSTRAINT "user_path_progress_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "user_path_progress" ADD CONSTRAINT "user_path_progress_pathId_fkey" FOREIGN KEY ("pathId") REFERENCES "learning_paths"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- CreateTable: user_lesson_progress
+CREATE TABLE "user_lesson_progress" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "userId" UUID NOT NULL,
+    "lessonId" UUID NOT NULL,
+    "completed" BOOLEAN NOT NULL DEFAULT false,
+    "completedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "user_lesson_progress_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "user_lesson_progress_userId_lessonId_key" ON "user_lesson_progress"("userId", "lessonId");
+ALTER TABLE "user_lesson_progress" ADD CONSTRAINT "user_lesson_progress_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "user_lesson_progress" ADD CONSTRAINT "user_lesson_progress_lessonId_fkey" FOREIGN KEY ("lessonId") REFERENCES "lessons"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- CreateTable: quizzes
 CREATE TABLE "quizzes" (

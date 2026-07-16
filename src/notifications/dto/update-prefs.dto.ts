@@ -1,23 +1,17 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsArray, IsString } from 'class-validator';
+import { IsBoolean, IsOptional, IsObject } from 'class-validator';
 
 export class UpdatePrefsDto {
   @ApiPropertyOptional({ description: 'Activer les notifications push' })
   @IsBoolean()
   @IsOptional()
-  push?: boolean;
-
-  @ApiPropertyOptional({ description: 'Activer les notifications email' })
-  @IsBoolean()
-  @IsOptional()
-  email?: boolean;
+  pushEnabled?: boolean;
 
   @ApiPropertyOptional({
-    description: 'Types autorisés (null = tous)',
-    example: ['ADVICE', 'SCORE_CHANGE'],
+    description: 'Types de notification (map clé -> booléen)',
+    example: { SCORE_CHANGE: true, ADVICE: false },
   })
-  @IsArray()
-  @IsString({ each: true })
+  @IsObject()
   @IsOptional()
-  types?: string[];
+  types?: Record<string, boolean>;
 }

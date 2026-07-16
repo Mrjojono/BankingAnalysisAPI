@@ -1,16 +1,10 @@
-/**
- * sms.service.ts — Service de synchronisation des SMS Mobile Money.
- *
- * Reçoit les SMS bruts depuis l'application mobile,
- * les parse, déduplique et insère dans sms_transactions.
- */
-
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../encryption/encryption.service';
 import { parseSms } from '../analytics/sources/sms/sms-parser';
 import { Classifier } from '../analytics/shared/classifier';
 import { ExpenseCategory } from '../analytics/config/expense-keywords';
+import { CamenBertService } from './camenbert/camenbert.service';
 
 interface RawSms {
   id: number;
@@ -33,12 +27,9 @@ export class SmsService {
     private readonly prisma: PrismaService,
     private readonly classifier: Classifier,
     private readonly encryption: EncryptionService,
+    private readonly camenBert: CamenBertService,
   ) {}
 
-  /**
-   * Synchronise les SMS bruts d'un client identifié par son userId (JWT).
-   * Résout le customerId via la table user_bank_connections.
-   */
   async syncSmsFromUser(
     userId: string,
     messages: RawSms[],
@@ -59,10 +50,6 @@ export class SmsService {
     return this.syncSms(customerId, messages);
   }
 
-  /**
-   * Synchronise les SMS bruts d'un client (interne, utiliser syncSmsFromUser).
-   * Filtre les SMS non-financiers via parseSms + Classifier.
-   */
   async syncSms(customerId: string, messages: RawSms[]): Promise<SyncResult> {
     if (!messages || !Array.isArray(messages)) {
       return { synced: 0, duplicates: 0, skipped: 0 };
@@ -111,15 +98,30 @@ export class SmsService {
       }
 
       if (parsed.amount === null || parsed.direction === null) {
-        try {
-          const result = await this.classifier.categorizeWithCache(msg.body);
-          if (result === ExpenseCategory.DIVERS) {
-            skipReasons.classifierDivers++;
+        let filled = false;
+
+        if (this.camenBert.isReady() && parsed.direction === null) {
+          const cbResult = await this.camenBert.classify(msg.body);
+          if (cbResult && cbResult.confidence >= 0.75 && cbResult.direction) {
+            parsed.direction = cbResult.direction;
+            filled = true;
+            this.logger.debug(
+              `CamenBert a rempli la direction: ${cbResult.direction} (${(cbResult.confidence * 100).toFixed(0)}%)`,
+            );
+          }
+        }
+
+        if (!filled) {
+          try {
+            const result = await this.classifier.categorizeWithCache(msg.body);
+            if (result === ExpenseCategory.DIVERS) {
+              skipReasons.classifierDivers++;
+              continue;
+            }
+          } catch {
+            skipReasons.classifierError++;
             continue;
           }
-        } catch {
-          skipReasons.classifierError++;
-          continue;
         }
       }
 
@@ -174,6 +176,15 @@ export class SmsService {
       classifierError = e.message;
     }
 
+    let camenBertResult: any = null;
+    try {
+      if (this.camenBert.isReady()) {
+        camenBertResult = await this.camenBert.classify(body);
+      }
+    } catch {
+      camenBertResult = { error: 'Erreur inference' };
+    }
+
     const steps: Record<string, any> = {
       parseSms: {
         operator: parseSmsResult.operator,
@@ -185,6 +196,7 @@ export class SmsService {
         raw: rawDate ?? null,
         valid: dateValid,
       },
+      camenBert: camenBertResult ?? { error: 'Modèle non chargé' },
       classifier: classifierResult ?? { error: classifierError },
     };
 
@@ -201,17 +213,51 @@ export class SmsService {
       verdict = 'SKIP';
       reason = 'Aucune donnée financière détectée';
     } else {
-      const cat =
-        classifierResult?.winner ?? classifierResult?.category ?? 'DIVERS';
-      if (cat === ExpenseCategory.DIVERS) {
-        verdict = 'SKIP';
-        reason = 'Classifié DIVERS (pas une transaction financière)';
-      } else {
+      if (camenBertResult?.direction && camenBertResult.confidence >= 0.75) {
         verdict = 'INSERT';
-        reason = `Classifié comme ${cat}`;
+        reason = `CamenBert a complété la direction: ${camenBertResult.direction} (${(camenBertResult.confidence * 100).toFixed(0)}%)`;
+      } else {
+        const cat =
+          classifierResult?.winner ?? classifierResult?.category ?? 'DIVERS';
+        if (cat === ExpenseCategory.DIVERS) {
+          verdict = 'SKIP';
+          reason = 'Classifié DIVERS (pas une transaction financière)';
+        } else {
+          verdict = 'INSERT';
+          reason = `Classifié comme ${cat}`;
+        }
       }
     }
 
     return { steps, verdict, reason };
+  }
+
+  async debugCamenBert(body: string) {
+    if (!this.camenBert.isReady()) {
+      const loaded = await this.camenBert.ensureLoaded();
+      if (!loaded) {
+        return { ready: false, message: 'Modèle CamenBert non chargé' };
+      }
+    }
+    const result = await this.camenBert.classify(body);
+    const threshold = 0.75;
+    return {
+      ready: true,
+      result,
+      threshold,
+      wouldInsert: result !== null && result.confidence >= threshold,
+    };
+  }
+
+  getCamenBertStatus() {
+    return {
+      ready: this.camenBert.isReady(),
+      modelName: 'camenbert-int8',
+      threshold: this.camenBert.getThreshold(),
+      lazy: this.camenBert.isLazy(),
+      labels: this.camenBert.getLabels(),
+      loadError: this.camenBert.getLoadError(),
+      metrics: this.camenBert.getMetrics(),
+    };
   }
 }

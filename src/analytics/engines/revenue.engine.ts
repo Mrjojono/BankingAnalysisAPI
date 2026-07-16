@@ -192,6 +192,7 @@ export class RevenueEngine {
     customerId: string,
     year?: number,
     month?: number,
+    months: number = 6,
   ): Promise<IncomeFrequency> {
     const now = new Date();
     const refYear = year ?? now.getUTCFullYear();
@@ -199,7 +200,7 @@ export class RevenueEngine {
     const analysisDate = new Date(
       Date.UTC(refYear, refMonth, 0, 23, 59, 59, 999),
     );
-    const cutoff = new Date(Date.UTC(refYear, refMonth - 1, 1));
+    const cutoff = new Date(Date.UTC(refYear, refMonth - months, 1));
 
     const credits = filterEntries(entries, {
       direction: 'CREDIT',

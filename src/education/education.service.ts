@@ -89,7 +89,7 @@ export class EducationService {
       },
     });
 
-    if (!path) throw new NotFoundException('Parcours introuvable');
+    if (!path || !path.isActive) throw new NotFoundException('Parcours introuvable');
 
     return {
       id: path.id,
@@ -115,7 +115,7 @@ export class EducationService {
               completedAt: lesson.progress[0].completedAt,
               viewedAt: lesson.progress[0].viewedAt,
             }
-          : { completed: false, viewedAt: new Date() },
+          : { completed: false, viewedAt: null },
       })),
     };
   }
@@ -123,9 +123,10 @@ export class EducationService {
   async getLessonDetail(lessonId: string, userId: string) {
     const lesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
+      include: { learningPath: { select: { isActive: true } } },
     });
 
-    if (!lesson || lesson.status !== 'PUBLISHED') {
+    if (!lesson || lesson.status !== 'PUBLISHED' || !lesson.learningPath.isActive) {
       throw new NotFoundException('Leçon introuvable');
     }
 
@@ -144,6 +145,7 @@ export class EducationService {
       learningPathId: lesson.learningPathId,
       title: lesson.title,
       content: lesson.content,
+      contentBlocks: lesson.contentBlocks ?? null,
       summary: lesson.summary,
       imageUrl: lesson.imageUrl,
       videoUrl: lesson.videoUrl,
@@ -153,7 +155,7 @@ export class EducationService {
       progress: {
         completed: progress?.completed ?? false,
         completedAt: progress?.completedAt,
-        viewedAt: progress?.viewedAt ?? new Date(),
+        viewedAt: progress?.viewedAt ?? null,
       },
     };
   }
@@ -168,7 +170,7 @@ export class EducationService {
       },
     });
 
-    if (!lesson) throw new NotFoundException('Leçon introuvable');
+    if (!lesson || lesson.status !== 'PUBLISHED') throw new NotFoundException('Leçon introuvable');
 
     await this.prisma.userLessonProgress.upsert({
       where: { userId_lessonId: { userId, lessonId } },
@@ -237,6 +239,7 @@ export class EducationService {
         where: {
           adviceLinks: { some: { adviceType: { in: adviceTypes } } },
           status: 'PUBLISHED',
+          learningPath: { isActive: true },
         },
         include: {
           learningPath: { select: { title: true } },
@@ -247,6 +250,7 @@ export class EducationService {
       this.prisma.lesson.findMany({
         where: {
           status: 'PUBLISHED',
+          learningPath: { isActive: true },
           OR: [
             { minScore: null, maxScore: null },
             { minScore: { lte: globalScore }, maxScore: { gte: globalScore } },
@@ -275,9 +279,9 @@ export class EducationService {
       seen.add(lesson.id);
       if (lesson.progress[0]?.completed) continue;
 
-      const isFromMatrix = adviceTypes.includes(
-        lesson.adviceLinks?.[0]?.adviceType ?? '',
-      );
+      const isFromMatrix = lesson.adviceLinks?.some(
+        (link) => adviceTypes.includes(link.adviceType),
+      ) ?? false;
       const matchScore = isFromMatrix ? 2 : 1;
       const reason = isFromMatrix
         ? 'Basé sur votre profil financier'
@@ -293,6 +297,15 @@ export class EducationService {
     }
 
     return recommendations.sort((a, b) => b.score - a.score).slice(0, 5);
+  }
+
+  async getRecommendationsForUser(userId: string) {
+    const connection = await this.prisma.userBankConnection.findFirst({
+      where: { userId },
+    });
+    const customerId = connection?.bankCustomerId;
+    if (!customerId) return [];
+    return this.getRecommendations(userId, customerId);
   }
 
   // ========== Admin: Paths ==========
@@ -355,12 +368,12 @@ export class EducationService {
 
   async createLesson(dto: CreateLessonDto) {
     await this.ensurePathExists(dto.learningPathId);
-    return this.prisma.lesson.create({ data: dto });
+    return this.prisma.lesson.create({ data: dto as any });
   }
 
   async updateLesson(lessonId: string, dto: UpdateLessonDto) {
     await this.ensureLessonExists(lessonId);
-    return this.prisma.lesson.update({ where: { id: lessonId }, data: dto });
+    return this.prisma.lesson.update({ where: { id: lessonId }, data: dto as any });
   }
 
   async deleteLesson(lessonId: string) {

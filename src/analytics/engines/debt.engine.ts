@@ -8,7 +8,7 @@ import {
   RepaymentHistoryItem,
 } from '../types';
 import Decimal from 'decimal.js';
-import { filterEntries } from '../helper';
+import { filterEntries, normalizeDescription } from '../helper';
 import { DebtDetector } from '../detectors/debt-detector';
 import { Injectable } from '@nestjs/common';
 
@@ -53,7 +53,7 @@ export class DebtEngine {
     for (const entry of debits) {
       const desc = entry.transaction.description;
       if (desc) {
-        const normalizedDesc = desc.toLowerCase().trim();
+        const normalizedDesc = normalizeDescription(desc);
         const group = groupedByDescription.get(normalizedDesc) || [];
         group.push(entry);
         groupedByDescription.set(normalizedDesc, group);
@@ -297,9 +297,10 @@ export class DebtEngine {
     }
 
     const history: RepaymentHistoryItem[] = [];
-    let paymentsOnTime = 0;
     const now = new Date();
 
+    // Collecter les jours de paiement réels pour chaque mois
+    const monthEntries: { month: string; entry?: Entry }[] = [];
     for (let i = 0; i < months; i++) {
       const targetDate = new Date(
         Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1),
@@ -312,18 +313,33 @@ export class DebtEngine {
             .toISOString()
             .slice(0, 7) === monthStr,
       );
+      monthEntries.push({ month: monthStr, entry: monthEntry });
+    }
 
+    // Calculer le jour médian comme échéance attendue (≥ 3 paiements nécessaires)
+    const paymentDays = monthEntries
+      .filter((m): m is { month: string; entry: Entry } => !!m.entry)
+      .map((m) => new Date(m.entry.transaction.transactionDate).getUTCDate())
+      .sort((a, b) => a - b);
+
+    const expectedDay =
+      paymentDays.length >= 3
+        ? paymentDays[Math.floor(paymentDays.length / 2)]
+        : 5; // fallback par défaut si pas assez de données
+
+    let paymentsOnTime = 0;
+    for (const { month: monthStr, entry: monthEntry } of monthEntries) {
       if (monthEntry) {
         const txDate = new Date(monthEntry.transaction.transactionDate);
         const day = txDate.getUTCDate();
-        const diff = Math.abs(day - 5);
+        const diff = Math.abs(day - expectedDay);
         const onTime = diff <= 5;
         if (onTime) paymentsOnTime++;
 
         history.push({
           month: monthStr,
           paid: true,
-          daysFromExpected: day - 5,
+          daysFromExpected: day - expectedDay,
         });
       } else {
         history.push({
@@ -343,5 +359,17 @@ export class DebtEngine {
       score: regularityRate,
       history: history.reverse(),
     };
+  }
+
+  /**
+   * Calcule le score d'utilisation du crédit (creditUtilizationScore)
+   * à partir du debt ratio. Fonction partagée pour éviter la duplication.
+   */
+  computeCreditUtilizationScore(debtRatio: number): number {
+    if (debtRatio === 0) return 100;
+    if (debtRatio <= 15) return 80;
+    if (debtRatio <= ANALYTICS_CONSTANTS.BCEAO_DEBT_RATIO_THRESHOLD) return 60;
+    if (debtRatio <= 45) return 30;
+    return 10;
   }
 }

@@ -9,7 +9,7 @@ import {
 } from '../types';
 import Decimal from 'decimal.js';
 import { Classifier } from '../shared/classifier';
-import { filterEntries } from '../helper';
+import { filterEntries, normalizeDescription } from '../helper';
 
 import { ANALYTICS_CONSTANTS } from '../config/constants';
 
@@ -150,17 +150,6 @@ export class ExpenseEngine {
   }
 
   /**
-   * Normalise la description.
-   */
-  private normalizeDescription(desc: string): string {
-    return desc
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s]/gu, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  /**
    * Depenses recurrentes.
    */
   async detectRecurringExpenses(
@@ -202,7 +191,7 @@ export class ExpenseEngine {
     const groupedByDescription = new Map<string, Entry[]>();
     for (const entry of debits) {
       if (entry.transaction.description) {
-        const normalizedDesc = this.normalizeDescription(
+        const normalizedDesc = normalizeDescription(
           entry.transaction.description,
         );
         const group = groupedByDescription.get(normalizedDesc) || [];

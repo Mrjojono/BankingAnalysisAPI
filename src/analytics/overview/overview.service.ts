@@ -664,9 +664,13 @@ export class OverviewService {
       refMonth,
     );
 
+    const nonDebtExpenses = Math.max(
+      0,
+      expenses.totalExpenses - debts.totalMonthlyDebt,
+    );
     return await this.savingsEngine.calculateSavingsRate(
       revenues.currentMonth.total,
-      expenses.totalExpenses,
+      nonDebtExpenses,
       debts.totalMonthlyDebt,
     );
   }
@@ -1242,15 +1246,17 @@ export class OverviewService {
         avgBalanceRes.averageBalance,
       );
 
-    // Emergency Fund Score
+    // Emergency Fund Score (lissage continu, asymptotique vers 100)
     const monthsCovered =
       expenses.totalExpenses > 0
         ? avgBalanceRes.averageBalance / expenses.totalExpenses
         : avgBalanceRes.averageBalance > 0
           ? 6
           : 0;
-    const emergencyFundScore =
-      monthsCovered >= 3 ? 100 : monthsCovered >= 1 ? 50 : 20;
+    const cappedMonths = Math.min(monthsCovered, 6);
+    const emergencyFundScore = Math.round(
+      (1 - Math.exp(-cappedMonths / 1.5)) * 100,
+    );
 
     const metrics = {
       monthlyIncome: revenues.currentMonth.total,
@@ -1262,16 +1268,9 @@ export class OverviewService {
       debtRatio: actualDebtRatio.debtRatio,
       repaymentRegularityScore: repaymentHistory.score,
       creditUtilizationScore:
-        actualDebtRatio.debtRatio === 0
-          ? 100
-          : actualDebtRatio.debtRatio <= 15
-            ? 80
-            : actualDebtRatio.debtRatio <=
-                ANALYTICS_CONSTANTS.BCEAO_DEBT_RATIO_THRESHOLD
-              ? 60
-              : actualDebtRatio.debtRatio <= 45
-                ? 30
-                : 10,
+        this.debtEngine.computeCreditUtilizationScore(
+          actualDebtRatio.debtRatio,
+        ),
       savingsRateScore: actualSavingsRate.score,
       savingsRate: actualSavingsRate.savingsRate,
       emergencyFundScore,

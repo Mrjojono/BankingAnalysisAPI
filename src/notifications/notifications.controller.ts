@@ -3,11 +3,11 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
   UseGuards,
-  ParseUUIDPipe,
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -16,7 +16,7 @@ import { PushService } from './push.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UserId } from '../auth/user-id.decorator';
 import { UpdatePrefsDto } from './dto/update-prefs.dto';
-import { RegisterPushTokenDto } from './dto/register-push-token.dto';
+import { RegisterPushTokenDto, UnregisterPushTokenDto } from './dto/register-push-token.dto';
 
 @ApiTags('Notifications')
 @ApiBearerAuth()
@@ -52,7 +52,7 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Marquer comme lue' })
   async markAsRead(
     @UserId() userId: string,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
   ) {
     await this.notificationsService.markAsRead(userId, id);
     return { success: true };
@@ -63,6 +63,21 @@ export class NotificationsController {
   async markAllAsRead(@UserId() userId: string) {
     await this.notificationsService.markAllAsRead(userId);
     return { success: true };
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Supprimer une notification' })
+  async remove(
+    @UserId() userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.notificationsService.delete(userId, id);
+  }
+
+  @Delete()
+  @ApiOperation({ summary: 'Vider toutes les notifications' })
+  async removeAll(@UserId() userId: string) {
+    return this.notificationsService.deleteAll(userId);
   }
 
   @Get('preferences')
@@ -86,14 +101,14 @@ export class NotificationsController {
     @UserId() userId: string,
     @Body() dto: RegisterPushTokenDto,
   ) {
-    return this.pushService.registerToken(userId, dto.token);
+    return this.pushService.registerToken(userId, dto.token, dto.platform);
   }
 
   @Post('push/unregister')
   @ApiOperation({ summary: "Désenregistrer un token push" })
   async unregisterPushToken(
     @UserId() userId: string,
-    @Body() dto: RegisterPushTokenDto,
+    @Body() dto: UnregisterPushTokenDto,
   ) {
     await this.pushService.unregisterToken(userId, dto.token);
     return { success: true };

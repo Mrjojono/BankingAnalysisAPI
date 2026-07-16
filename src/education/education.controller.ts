@@ -3,17 +3,14 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UserId } from '../auth/user-id.decorator';
 import { EducationService } from './education.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { UpdateProgressDto } from './dto/update-progress.dto';
 
 @ApiTags('Education')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('education')
 export class EducationController {
-  constructor(
-    private readonly educationService: EducationService,
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly educationService: EducationService) {}
 
   @Get('paths')
   @ApiOperation({ summary: 'Lister les parcours avec progression' })
@@ -40,22 +37,17 @@ export class EducationController {
   }
 
   @Patch('progress')
-  @ApiOperation({ summary: 'Mettre à jour la progression (mobile)' })
-  async updateProgress(
+  @ApiOperation({ summary: 'Marquer une leçon terminée (mobile)' })
+  updateProgress(
     @UserId() userId: string,
-    @Body() body: { pathId: string; lessonId: string; status: string },
+    @Body() dto: UpdateProgressDto,
   ) {
-    return this.educationService.completeLesson(body.lessonId, userId);
+    return this.educationService.completeLesson(dto.lessonId, userId);
   }
 
   @Get('recommendations')
   @ApiOperation({ summary: 'Leçons recommandées (matrice + score)' })
-  async getRecommendations(@UserId() userId: string) {
-    const connection = await this.prisma.userBankConnection.findFirst({
-      where: { userId },
-    });
-    const customerId = connection?.bankCustomerId;
-    if (!customerId) return [];
-    return this.educationService.getRecommendations(userId, customerId);
+  getRecommendations(@UserId() userId: string) {
+    return this.educationService.getRecommendationsForUser(userId);
   }
 }

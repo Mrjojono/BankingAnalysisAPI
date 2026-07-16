@@ -13,7 +13,7 @@
     questions?: any[];
     onadd: (q: any) => void;
     onupdate: (q: any) => Promise<void>;
-    ondelete: (id: string) => Promise<void>;
+    ondelete: (id: string) => void;
     saving?: boolean;
   } = $props();
 

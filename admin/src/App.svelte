@@ -8,12 +8,13 @@
   import Glossary from './pages/Glossary.svelte';
   import Docs from './pages/Docs.svelte';
   import Login from './pages/Login.svelte';
-  import Classifier from './pages/Classifier.svelte';
-  import Embedding from './pages/Embedding.svelte';
-  import Training from './pages/Training.svelte';
+  import CentreIA from './pages/CentreIA.svelte';
   import Graph from './pages/Graph.svelte';
   import Notifications from './pages/Notifications.svelte';
   import Education from './pages/Education.svelte';
+  import Users from './pages/Users.svelte';
+  import Logs from './pages/Logs.svelte';
+  import DashboardAnalytics from './pages/DashboardAnalytics.svelte';
   import { getAuth, checkAuth } from './lib/stores/auth.svelte';
 
   const auth = getAuth();
@@ -57,12 +58,8 @@
       <Rules onNavigate={handleNavigate} />
     {:else if page === 'catalog'}
       <Catalog />
-    {:else if page === 'classifier'}
-      <Classifier />
-    {:else if page === 'embedding'}
-      <Embedding />
-    {:else if page === 'training'}
-      <Training />
+    {:else if page === 'centreIA'}
+      <CentreIA />
     {:else if page === 'graph'}
       <Graph productId={graphProductId} ruleId={graphRuleId} onNavigate={handleNavigate} />
     {:else if page === 'glossary'}
@@ -73,6 +70,12 @@
       <Notifications />
     {:else if page === 'education'}
       <Education />
+    {:else if page === 'users'}
+      <Users />
+    {:else if page === 'logs'}
+      <Logs />
+    {:else if page === 'dashboard'}
+      <DashboardAnalytics />
     {/if}
   </AppLayout>
 {/if}

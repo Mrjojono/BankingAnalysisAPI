@@ -10,6 +10,7 @@ import type * as jwt from 'jsonwebtoken';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/auth-response.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import {
   generateOtp,
   comparePassword,
@@ -28,6 +29,9 @@ import {
   forgotPasswordOtpKey,
   logAuth,
   forgotPasswordKey,
+  signSetPasswordToken,
+  validateSetPasswordToken,
+  setPasswordKey,
 } from './auth.utils';
 import { RedisService } from '../redis/redis.service';
 import { MailService } from '../mail/mail.service';
@@ -139,7 +143,7 @@ export class AuthService {
     await this.redis.delete(registerOtpKey(accountNumber));
   }
 
-  private async createUser(state: RegisterState, password: string) {
+  private async createUser(state: RegisterState, password?: string) {
     const existingUser = await this.prisma.user.findUnique({
       where: { email: state.contact },
     });
@@ -162,9 +166,10 @@ export class AuthService {
     const user = await this.prisma.user.create({
       data: {
         email: state.contact,
-        password: await hashPassword(password),
+        password: password ? await hashPassword(password) : null,
         role: 'CLIENT',
         mfaEnabled: false,
+        emailVerifiedAt: new Date(),
       },
     });
 
@@ -186,12 +191,12 @@ export class AuthService {
   async register(
     dto: RegisterDto,
     req?: any,
-  ): Promise<{ step: string; message: string; token?: string }> {
+  ): Promise<{ step: string; message: string; token?: string; refreshToken?: string }> {
     const { ipAddress, userAgent } = req
       ? this.extractRequestInfo(req)
       : { ipAddress: null, userAgent: null };
 
-    if (!dto.contact && !dto.otp && !dto.password) {
+    if (!dto.contact && !dto.otp) {
       const bankCustomer = await this.findBankCustomer(dto.accountNumber);
 
       if (bankCustomer.userConnection) {
@@ -235,7 +240,7 @@ export class AuthService {
       };
     }
 
-    if (dto.contact && dto.contactType && !dto.otp && !dto.password) {
+    if (dto.contact && dto.contactType && !dto.otp) {
       const state = await this.getRegisterState(dto.accountNumber);
       const bankCustomer = await this.findBankCustomer(dto.accountNumber);
 
@@ -268,7 +273,7 @@ export class AuthService {
       return { step: 'verify_otp', message: 'Code OTP envoyé.' };
     }
 
-    if (dto.otp && !dto.password) {
+    if (dto.otp) {
       const state = await this.getRegisterState(dto.accountNumber);
 
       try {
@@ -297,59 +302,41 @@ export class AuthService {
         throw error;
       }
 
-      await this.redis.set(
-        registerKey(dto.accountNumber),
-        JSON.stringify({
-          ...state,
-          step: 'set_password',
-        }),
-        600,
+      const user = await this.createUser(state);
+      await this.redis.delete(registerKey(dto.accountNumber));
+
+      const setPasswordJwt = signSetPasswordToken({
+        sub: user.id,
+        type: 'set_password',
+        accountNumber: dto.accountNumber,
+      });
+
+      const magicLink = `https://app.orabank.ci/auth/set-password?token=${setPasswordJwt}&acc=${dto.accountNumber}`;
+
+      await this.mailService.sendMail({
+        to: state.contact,
+        subject: 'Créez votre mot de passe Orabank',
+        template: 'set-password',
+        context: { magicLink, accountNumber: dto.accountNumber },
+      });
+
+      logAuth(
+        this.prisma,
+        'registration_link_sent',
+        true,
+        user.email,
+        user.id,
+        ipAddress,
+        userAgent,
+        { accountNumber: dto.accountNumber },
       );
 
+      this.logger.log(`Lien envoyé pour : ${dto.accountNumber}`);
+
       return {
-        step: 'set_password',
-        message: 'OTP validé. Créez votre mot de passe.',
+        step: 'link_sent',
+        message: 'Lien de création de mot de passe envoyé par email.',
       };
-    }
-
-    if (dto.password) {
-      const state = await this.getRegisterState(dto.accountNumber);
-
-      try {
-        const user = await this.createUser(state, dto.password);
-        await this.redis.delete(registerKey(dto.accountNumber));
-
-        logAuth(
-          this.prisma,
-          'account_created',
-          true,
-          user.email,
-          user.id,
-          ipAddress,
-          userAgent,
-          { accountNumber: dto.accountNumber },
-        );
-
-        this.logger.log(`Compte activé : ${dto.accountNumber}`);
-
-        return {
-          step: 'complete',
-          message: 'Compte activé avec succès.',
-          token: signToken({ id: user.id, email: user.email, role: user.role }),
-        };
-      } catch (error) {
-        logAuth(
-          this.prisma,
-          'account_creation_failed',
-          false,
-          state.contact,
-          null,
-          ipAddress,
-          userAgent,
-          { reason: error.message },
-        );
-        throw error;
-      }
     }
 
     throw new UnauthorizedException('Requête invalide');
@@ -534,6 +521,11 @@ export class AuthService {
       data: { token: refreshToken },
     });
 
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date(), loginCount: { increment: 1 } },
+    });
+
     const username = user.bankConnections[0]?.bankCustomer
       ? `${user.bankConnections[0].bankCustomer.firstName} ${user.bankConnections[0].bankCustomer.lastName ?? ''}`.trim()
       : undefined;
@@ -623,6 +615,11 @@ export class AuthService {
       data: { token: refreshToken },
     });
 
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date(), loginCount: { increment: 1 } },
+    });
+
     const username = user.bankConnections[0]?.bankCustomer
       ? `${user.bankConnections[0].bankCustomer.firstName} ${user.bankConnections[0].bankCustomer.lastName ?? ''}`.trim()
       : undefined;
@@ -636,7 +633,7 @@ export class AuthService {
 
   async me(
     userId: string,
-  ): Promise<{ id: string; email: string; role: string; username?: string }> {
+  ): Promise<{ id: string; email: string; role: string; username?: string; bankCustomerId?: string }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { bankConnections: { include: { bankCustomer: true } } },
@@ -644,10 +641,12 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
-    const username = user.bankConnections[0]?.bankCustomer
-      ? `${user.bankConnections[0].bankCustomer.firstName} ${user.bankConnections[0].bankCustomer.lastName ?? ''}`.trim()
+    const bankConnection = user.bankConnections[0];
+    const username = bankConnection?.bankCustomer
+      ? `${bankConnection.bankCustomer.firstName} ${bankConnection.bankCustomer.lastName ?? ''}`.trim()
       : undefined;
-    return { id: user.id, email: user.email, role: user.role, username };
+    const bankCustomerId = bankConnection?.bankCustomerId ?? undefined;
+    return { id: user.id, email: user.email, role: user.role, username, bankCustomerId };
   }
 
   async refreshToken(
@@ -690,7 +689,7 @@ export class AuthService {
     const newSession = await this.prisma.session.create({
       data: {
         userId: session.userId,
-        token: 'pending',
+        token: crypto.randomUUID(),
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         userAgent: userAgent ?? session.userAgent ?? undefined,
         ipAddress: ipAddress ?? session.ipAddress ?? undefined,
@@ -877,6 +876,113 @@ export class AuthService {
     throw new UnauthorizedException('Requête invalide');
   }
 
+  async verifySetPasswordToken(token: string) {
+    const payload = validateSetPasswordToken(token);
+
+    if (payload.type !== 'set_password' || !payload.sub) {
+      throw new UnauthorizedException('Token invalide');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub as string },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Utilisateur introuvable');
+    }
+
+    if (user.password) {
+      throw new BadRequestException('Mot de passe déjà défini. Connectez-vous.');
+    }
+
+    return { valid: true, accountNumber: payload.accountNumber as string };
+  }
+
+  async setPassword(
+    token: string,
+    password: string,
+    req?: any,
+  ): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    user: { id: string; email: string; role: string; username?: string };
+  }> {
+    const { ipAddress, userAgent } = req
+      ? this.extractRequestInfo(req)
+      : { ipAddress: null, userAgent: null };
+
+    const payload = validateSetPasswordToken(token);
+
+    if (payload.type !== 'set_password' || !payload.sub) {
+      throw new UnauthorizedException('Token invalide');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub as string },
+      include: { bankConnections: { include: { bankCustomer: true } } },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Utilisateur introuvable');
+    }
+
+    if (user.password) {
+      throw new BadRequestException('Mot de passe déjà défini. Connectez-vous.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { password: await hashPassword(password) },
+    });
+
+    const session = await this.prisma.session.create({
+      data: {
+        userId: user.id,
+        token: signRefreshToken({ sessionId: 'tmp' }),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        userAgent: userAgent ?? undefined,
+        ipAddress: ipAddress ?? undefined,
+      },
+    });
+
+    const refreshToken = signRefreshToken({ sessionId: session.id });
+    await this.prisma.session.update({
+      where: { id: session.id },
+      data: { token: refreshToken },
+    });
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date(), loginCount: { increment: 1 } },
+    });
+
+    const username = user.bankConnections[0]?.bankCustomer
+      ? `${user.bankConnections[0].bankCustomer.firstName} ${user.bankConnections[0].bankCustomer.lastName ?? ''}`.trim()
+      : undefined;
+
+    logAuth(
+      this.prisma,
+      'password_set',
+      true,
+      user.email,
+      user.id,
+      ipAddress,
+      userAgent,
+    );
+
+    this.logger.log(`Mot de passe défini pour : ${user.email}`);
+
+    return {
+      accessToken: signAccessToken({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      }),
+      refreshToken,
+      user: { id: user.id, email: user.email, role: user.role, username },
+    };
+  }
+
   async enableMfa(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -953,6 +1059,23 @@ export class AuthService {
 
     this.logger.log(`MFA désactivé pour l'utilisateur : ${userId}`);
     return { message: 'MFA désactivé avec succès' };
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Utilisateur non trouvé');
+    if (!user.password) throw new BadRequestException('Mot de passe non défini');
+
+    const isValid = await comparePassword(dto.currentPassword, user.password);
+    if (!isValid) throw new BadRequestException('Mot de passe actuel incorrect');
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: await hashPassword(dto.newPassword) },
+    });
+
+    this.logger.log(`Mot de passe changé pour l'utilisateur : ${userId}`);
+    return { message: 'Mot de passe modifié avec succès' };
   }
 
   async mfaStatus(userId: string) {

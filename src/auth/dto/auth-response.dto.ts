@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsString, IsNotEmpty } from 'class-validator';
 
 export class AuthResponseDto {
   @ApiProperty({ description: 'Étape actuelle du flux', example: 'verify_otp' })
@@ -47,6 +48,8 @@ export class RefreshTokenDto {
     description: 'Token de rafraîchissement',
     example: 'eyJhbGciOiJIUzI1NiIs...',
   })
+  @IsString()
+  @IsNotEmpty()
   refreshToken: string;
 }
 
@@ -76,6 +79,12 @@ export class MeResponseDto {
     example: 'Joan Doe',
   })
   username?: string;
+
+  @ApiPropertyOptional({
+    description: "Identifiant du client bancaire lié",
+    example: 'clx...',
+  })
+  bankCustomerId?: string;
 }
 
 export class MessageResponseDto {

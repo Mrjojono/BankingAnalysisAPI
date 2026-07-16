@@ -21,6 +21,10 @@ export class EmbeddingLoader implements OnApplicationBootstrap {
   private loaded = false;
 
   async onApplicationBootstrap(): Promise<void> {
+    if (process.env.EMBEDDING_ENABLED === 'false') {
+      console.log('[EmbeddingLoader] Désactivé via EMBEDDING_ENABLED=false');
+      return;
+    }
     await this.load();
   }
 

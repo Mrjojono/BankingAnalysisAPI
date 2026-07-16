@@ -101,6 +101,17 @@ function entryMatches(entry: Entry, options: PartitionCriteria): boolean {
 /**
  * Filtre les écritures comptables (Entries) selon plusieurs critères.
  */
+/**
+ * Normalise une description de transaction : lower case, supprime ponctuation, collapse espaces.
+ */
+export function normalizeDescription(desc: string): string {
+  return desc
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function filterEntries(
   entries: Entry[],
   options: PartitionCriteria,

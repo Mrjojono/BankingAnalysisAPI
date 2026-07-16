@@ -1,5 +1,7 @@
-import { IsString, IsOptional, IsEnum, IsInt, Min, Max, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsInt, Min, Max, IsUUID, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ContentBlock } from './content-block.dto';
 
 export class CreateLessonDto {
   @ApiProperty()
@@ -68,4 +70,9 @@ export class CreateLessonDto {
   @IsOptional()
   @IsEnum(['DRAFT', 'PUBLISHED', 'ARCHIVED'] as const)
   status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+
+  @ApiPropertyOptional({ type: [ContentBlock], description: 'Blocs de contenu structuré (remplace le Markdown si présent)' })
+  @IsOptional()
+  @IsArray()
+  contentBlocks?: ContentBlock[];
 }

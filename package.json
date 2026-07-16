@@ -21,6 +21,8 @@
     "test:mail": "MAIL_E2E_TEST=true jest --config ./test/jest-e2e.json --testPathPatterns mail --setupFiles dotenv/config",
     "seed:analytics": "npx tsx prisma/seed-analytics.ts",
     "seed:admin": "npx tsx prisma/seed-admin.ts",
+    "seed:education": "npx tsx prisma/seed-education.ts",
+    "seed:demo": "npx tsx prisma/seed-demo.ts",
     "train": "npx ts-node src/scripts/train.ts"
   },
   "dependencies": {
@@ -44,6 +46,7 @@
     "ioredis": "^5.11.0",
     "jsonwebtoken": "^9.0.3",
     "natural": "^8.1.1",
+    "onnxruntime-node": "^1.27.0",
     "otp-generator": "^4.0.1",
     "otplib": "^13.4.1",
     "pg": "^8.21.0",

@@ -2,7 +2,7 @@ import { Controller, Get, Post } from '@nestjs/common';
 import { PredictionLogger } from './prediction-logger.service';
 import { DriftDetector } from './drift-detector.service';
 
-@Controller('admin/monitoring')
+@Controller('api/admin/monitoring')
 export class MonitoringController {
   constructor(
     private readonly predictionLogger: PredictionLogger,

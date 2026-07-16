@@ -55,7 +55,7 @@ export class NotificationsService {
         title: input.title,
         body: input.body,
         data: { type: input.type, notificationId: notification.id, ...(input.data ?? {}) },
-      });
+      }).catch((err) => this.logger.error(`Push sendToUser failed: ${err.message}`));
     }
 
     if (prefs?.email === true && isTypeAllowed) {
@@ -74,7 +74,7 @@ export class NotificationsService {
             type: input.type,
             severity: input.severity ?? 'INFO',
           },
-        });
+        }).catch((err) => this.logger.error(`Mail send failed: ${err.message}`));
       }
     }
 
@@ -183,23 +183,49 @@ export class NotificationsService {
     return { message: 'Notification supprimée' };
   }
 
+  async deleteAll(userId: string) {
+    await this.prisma.notification.deleteMany({
+      where: { userId },
+    });
+    return { message: 'Toutes les notifications ont été supprimées' };
+  }
+
+  private readonly ALL_TYPES = [
+    'ADVICE',
+    'SCORE_CHANGE',
+    'ELIGIBILITY',
+    'EDUCATIONAL',
+    'WEEKLY_DIGEST',
+    'SYSTEM',
+    'ADMIN_BROADCAST',
+  ];
+
   async getPreferences(userId: string) {
     const prefs = await this.prisma.notificationPreference.findUnique({
       where: { userId },
     });
 
+    const storedTypes = (prefs?.types as Record<string, boolean>) ?? {};
+    const types = Object.fromEntries(
+      this.ALL_TYPES.map((t) => [t, storedTypes[t] ?? true]),
+    );
+
     return {
-      push: prefs?.push ?? true,
-      email: prefs?.email ?? false,
-      types: prefs?.types ?? null,
+      pushEnabled: prefs?.push ?? true,
+      types,
     };
   }
 
   async updatePreferences(userId: string, dto: UpdatePrefsDto) {
     const data: any = {};
-    if (dto.push !== undefined) data.push = dto.push;
-    if (dto.email !== undefined) data.email = dto.email;
-    if (dto.types !== undefined) data.types = dto.types;
+    if (dto.pushEnabled !== undefined) data.push = dto.pushEnabled;
+    if (dto.types !== undefined) {
+      const existing = await this.prisma.notificationPreference.findUnique({
+        where: { userId },
+      });
+      const current = (existing?.types as Record<string, boolean>) ?? {};
+      data.types = { ...current, ...dto.types };
+    }
 
     await this.prisma.notificationPreference.upsert({
       where: { userId },

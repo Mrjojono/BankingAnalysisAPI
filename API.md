@@ -4,6 +4,7 @@
 
 ---
 
+
 ## Sommaire
 
 - [Auth](#auth)
@@ -12,6 +13,9 @@
 - [Éligibilité](#eligibility)
 - [SMS](#sms)
 - [Mail](#mail)
+- [Notifications](#notifications)
+- [MFA (Multi-Factor Authentication)](#mfa-multi-factor-authentication)
+- [Logs (admin)](#logs-admin)
 - [WebSocket](#websocket)
 - [Enums & Constantes partagées](#enums--constantes-partages)
 
@@ -1000,3 +1004,234 @@ export type AdviceInsightType =
 | `409` | Conflit (email déjà utilisé, etc.) |
 | `429` | Trop de requêtes |
 | `500` | Erreur serveur |
+
+---
+
+## Notifications
+
+### Endpoints admin (prefixe: `/api/admin`)
+
+```typescript
+// GET /api/admin/notifications/stats
+export interface NotificationStats {
+  totalNotifications: number;
+  totalPushTokens: number;
+  unreadCount: number;
+  totalScheduled: number;
+}
+
+// POST /api/admin/notifications/broadcast
+export interface BroadcastDto {
+  title: string;
+  body: string;
+  type?: 'ADMIN_BROADCAST' | 'ADVICE' | 'EDUCATIONAL' | 'SYSTEM';  // defaut ADMIN_BROADCAST
+  severity?: 'INFO' | 'WARNING' | 'CRITICAL';                       // defaut INFO
+  target?: 'all' | string[];                                        // defaut 'all'
+  customerTargets?: string[];                                        // IDs ou emails BankCustomer
+}
+
+// DELETE /api/admin/notifications (purge)
+export interface PurgeNotificationsDto {
+  type?: string;    // ne supprimer que ce type
+  before?: string;  // ne supprimer que les notifications avant cette date (ISO)
+}
+
+// GET /api/admin/notifications/scheduled
+export type ScheduledNotification = {
+  id: string;
+  title: string;
+  body: string;
+  type: string;
+  severity: string;
+  scheduledAt: string;      // ISO date
+  recurrence: string | null; // null | 'DAILY' | 'WEEKLY' | 'MONTHLY'
+  lastSentAt: string | null;
+  active: boolean;
+  targetType: 'all' | 'user_ids' | 'customer_targets';
+  targetIds: string[] | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// POST /api/admin/notifications/scheduled
+export interface CreateScheduledNotificationDto {
+  title: string;
+  body: string;
+  type?: string;             // defaut ADMIN_BROADCAST
+  severity?: string;         // defaut INFO
+  scheduledAt: string;       // ISO date (future = programme)
+  recurrence?: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  targetType?: 'all' | 'user_ids' | 'customer_targets'; // defaut 'all'
+  targetIds?: string[];
+}
+
+// PATCH /api/admin/notifications/scheduled/:id
+export type UpdateScheduledNotificationDto = Partial<CreateScheduledNotificationDto> & {
+  active?: boolean;
+};
+
+// DELETE /api/admin/notifications/scheduled/:id
+```
+
+### Endpoints utilisateur (prefixe: `/notifications`)
+
+```typescript
+// GET /notifications?page=1&limit=20&unreadOnly=false
+export interface NotificationHistory {
+  items: NotificationItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface NotificationItem {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  channel: 'PUSH' | 'IN_APP' | 'EMAIL';
+  title: string;
+  body: string;
+  data: any;
+  severity: string | null;
+  link: string | null;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
+// GET /notifications/unread
+// PATCH /notifications/:id/read
+// POST /notifications/read-all
+// GET /notifications/preferences
+// PATCH /notifications/preferences
+export interface NotificationPreferences {
+  push: boolean;
+  email: boolean;
+  types: string[] | null;
+}
+
+export interface UpdatePrefsDto {
+  push?: boolean;
+  email?: boolean;
+  types?: string[];
+}
+
+// POST /notifications/push/register
+export interface RegisterPushTokenDto {
+  token: string;         // Expo push token
+  platform?: 'ios' | 'android' | 'web';
+}
+
+// POST /notifications/push/unregister
+export interface UnregisterPushTokenDto {
+  token: string;
+}
+```
+
+---
+
+## MFA (Multi-Factor Authentication)
+
+```typescript
+// POST /auth/mfa/enable
+export interface EnableMfaResponseDto {
+  secret: string;   // secret TOTP (a sauvegarder)
+  uri: string;      // otpauth:// URI pour QR code
+}
+
+// POST /auth/mfa/verify
+export interface VerifyMfaDto {
+  code: string;     // 6 chiffres TOTP
+}
+
+// POST /auth/mfa/disable
+export interface DisableMfaDto {
+  password: string; // confirmation mot de passe
+}
+
+// GET /auth/mfa/status
+export type MfaStatusResponseDto = {
+  enabled: boolean;
+  method: 'TOTP' | null;
+};
+
+// POST /auth/login/mfa (deuxieme etape login)
+export interface MfaLoginDto {
+  mfaToken: string;  // token temporaire recu au login
+  code: string;      // 6 chiffres TOTP
+}
+```
+
+---
+
+## Logs (admin)
+
+### Authentification logs (prefixe: `/api/admin`)
+
+```typescript
+// GET /api/admin/auth-logs?userId=&action=&success=&from=&to=&page=&limit=
+export interface AuthLogList {
+  data: AuthLogItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface AuthLogItem {
+  id: string;
+  userId: string | null;
+  email: string | null;
+  action: string;
+  success: boolean;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+}
+
+// GET /api/admin/auth-logs/:id
+// DELETE /api/admin/auth-logs (purge, avec filtres)
+export interface PurgeLogsDto {
+  before?: string;  // ISO date, supprime les logs avant cette date
+}
+```
+
+### Audit logs (prefixe: `/api/admin`)
+
+```typescript
+// GET /api/admin/audit-logs?entityType=&entityId=&action=&actorId=&from=&to=&page=&limit=
+export interface AuditLogList {
+  data: AuditLogItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface AuditLogItem {
+  id: string;
+  entityType: string;
+  entityId: string;
+  action: string;
+  actorId: string | null;
+  actorRole: string | null;
+  before: any;
+  after: any;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
+// DELETE /api/admin/audit-logs (purge, avec filtres)
+```
+
+---
+
+## WebSocket
+
+```typescript
+// Gateway: /notifications (avec JWT en handshake)
+// Rooms: user:{userId}
+
+// Gateway: /admin (dashboard temps reel)
+// Evenements:
+// - heartbeat: { timestamp: string, users: number, ... }
+```

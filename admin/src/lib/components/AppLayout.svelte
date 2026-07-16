@@ -27,12 +27,13 @@
     products: 'Produits',
     rules: 'Règles',
     catalog: 'Messages',
-    classifier: 'Classifieur',
-    embedding: 'Embeddings',
-    training: 'Entraînement',
+    centreIA: 'Centre IA',
     glossary: 'Lexique',
     docs: 'Documentation',
     notifications: 'Notifications',
+    users: 'Utilisateurs',
+    logs: 'Logs',
+    dashboard: 'Dashboard',
   };
 
   async function handleLogout() {

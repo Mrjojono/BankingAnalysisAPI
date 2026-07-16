@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Landmark, FileCheck, MessageSquare, BookOpen, FileText, LogOut, FlaskConical, Layers, Brain, GitGraph, Bell, GraduationCap } from '@lucide/svelte';
+  import { Landmark, FileCheck, MessageSquare, BookOpen, FileText, LogOut, GitGraph, Bell, GraduationCap, Users, ScrollText, BarChart3, Cpu } from '@lucide/svelte';
   import { getAuth } from '../stores/auth.svelte';
 
   let {
@@ -20,11 +20,12 @@
       { id: 'rules', icon: FileCheck, label: 'Règles' },
       { id: 'graph', icon: GitGraph, label: 'Graphique' },
       { id: 'catalog', icon: MessageSquare, label: 'Messages' },
+      { id: 'users', icon: Users, label: 'Utilisateurs' },
+      { id: 'logs', icon: ScrollText, label: 'Logs' },
+      { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
     ]},
     { section: 'Analytics', items: [
-      { id: 'classifier', icon: FlaskConical, label: 'Classifieur' },
-      { id: 'embedding', icon: Layers, label: 'Embeddings' },
-      { id: 'training', icon: Brain, label: 'Entraînement' },
+      { id: 'centreIA', icon: Cpu, label: 'Centre IA' },
     ]},
     { section: 'Communication', items: [
       { id: 'notifications', icon: Bell, label: 'Notifications' },

@@ -14,26 +14,20 @@ async function request<T>(url: string, opts?: RequestInit): Promise<T> {
     headers['Authorization'] = `Bearer ${auth.accessToken}`;
   }
 
-  const method = opts?.method ?? 'GET';
-  console.log(`[API] ${method} ${fullUrl}`);
-
   const res = await fetch(fullUrl, { ...opts, headers });
 
   if (res.status === 401 && auth.refreshToken) {
-    console.log(`[API] 401 ${fullUrl} → tentative refresh`);
     const refreshOk = await tryRefresh();
     if (refreshOk) {
-      console.log(`[API] refresh OK, retry ${fullUrl}`);
       headers['Authorization'] = `Bearer ${auth.accessToken}`;
       const retry = await fetch(fullUrl, { ...opts, headers });
       if (!retry.ok) {
         const text = await retry.text();
-        console.error(`[API] retry échoué ${retry.status} ${fullUrl}:`, text);
         throw new Error(text);
       }
-      return retry.json();
+      const body = await resOrEmpty(retry);
+      return body as T;
     }
-    console.error(`[API] refresh échoué, session expirée`);
     auth.accessToken = null;
     auth.refreshToken = null;
     auth.user = null;
@@ -45,35 +39,42 @@ async function request<T>(url: string, opts?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const text = await res.text();
-    console.error(`[API] ${res.status} ${fullUrl}:`, text);
     throw new Error(text);
   }
-  return res.json();
+  return resOrEmpty(res) as Promise<T>;
+}
+
+/*
+ * Some backend DELETE/PATCH endpoints return 200 with an empty body.
+ * res.json() on an empty body throws 'Unexpected end of JSON input'.
+ * This helper parses only non-empty responses.
+ */
+async function resOrEmpty(res: Response) {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    throw new Error('Invalid JSON response from server');
+  }
 }
 
 async function tryRefresh(): Promise<boolean> {
   const auth = getAuth();
   try {
-    console.log(`[API] refresh token: /auth/refresh`);
     const res = await fetch('/auth/refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: auth.refreshToken }),
     });
-    if (!res.ok) {
-      const text = await res.text();
-      console.error(`[API] refresh échoué ${res.status}:`, text);
-      return false;
-    }
+    if (!res.ok) return false;
     const data = await res.json();
     auth.accessToken = data.accessToken;
     auth.refreshToken = data.refreshToken;
     localStorage.setItem('accessToken', data.accessToken);
     localStorage.setItem('refreshToken', data.refreshToken);
-    console.log(`[API] refresh réussi`);
     return true;
-  } catch (err) {
-    console.error(`[API] refresh erreur:`, err);
+  } catch {
     return false;
   }
 }
@@ -203,6 +204,27 @@ export const api = {
       body: JSON.stringify(params),
     }),
 
+  testCamenBert: (body: string) =>
+    request<any>('/camenbert/test', {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }),
+  camenBertStatus: () => request<any>('/camenbert/status'),
+  loadCamenBert: () => request<any>('/camenbert/load', { method: 'POST' }),
+
+  modelList: () => request<any>('/models'),
+  runModelTraining: (params: { epochs?: number; batchSize?: number; lr?: number }) =>
+    request<any>('/models/train', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+  datasetInfo: () => request<any>('/models/dataset'),
+  trainingStatus: () => request<any>('/models/training/status'),
+  cancelTraining: () => request<any>('/models/training/cancel', { method: 'POST' }),
+  deployModel: () => request<any>('/models/training/deploy', { method: 'POST' }),
+  trainingLogs: (offset = 0) => request<any>('/models/training/logs?offset=' + offset),
+  regexStats: () => request<any>('/models/regex-stats'),
+
   notificationStats: () => request<any>('/notifications/stats'),
   listCustomers: (q?: string, page?: number, limit?: number) => {
     const params = new URLSearchParams();
@@ -223,4 +245,92 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  purgeNotifications: (data?: { type?: string; before?: string }) =>
+    request<any>('/notifications', {
+      method: 'DELETE',
+      body: JSON.stringify(data ?? {}),
+    }),
+
+  listScheduled: () => request<any[]>('/notifications/scheduled'),
+
+  createScheduled: (data: {
+    title: string;
+    body: string;
+    type?: string;
+    severity?: string;
+    scheduledAt: string;
+    recurrence?: string;
+    targetType?: string;
+    targetIds?: string[];
+  }) =>
+    request<any>('/notifications/scheduled', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateScheduled: (id: string, data: any) =>
+    request<any>(`/notifications/scheduled/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  deleteScheduled: (id: string) =>
+    request<any>(`/notifications/scheduled/${id}`, { method: 'DELETE' }),
+
+  // ========== Users ==========
+  listUsers: (params: { q?: string; role?: string; status?: string; page?: number; limit?: number }) => {
+    const sp = new URLSearchParams();
+    if (params.q) sp.set('q', params.q);
+    if (params.role) sp.set('role', params.role);
+    if (params.status) sp.set('status', params.status);
+    if (params.page) sp.set('page', String(params.page));
+    if (params.limit) sp.set('limit', String(params.limit));
+    return request<any>(`/users?${sp.toString()}`);
+  },
+  getUser: (id: string) => request<any>(`/users/${id}`),
+  updateUser: (id: string, data: any) =>
+    request<any>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteUser: (id: string) =>
+    request<any>(`/users/${id}`, { method: 'DELETE' }),
+  getUserSessions: (id: string) => request<any[]>(`/users/${id}/sessions`),
+  revokeUserSessions: (id: string) =>
+    request<any>(`/users/${id}/sessions`, { method: 'DELETE' }),
+
+  dashboardAnalytics: () => request<any>('/analytics/dashboard'),
+
+  // ========== Logs ==========
+  listAuthLogs: (params: { userId?: string; action?: string; success?: string; from?: string; to?: string; page?: number; limit?: number }) => {
+    const sp = new URLSearchParams();
+    if (params.userId) sp.set('userId', params.userId);
+    if (params.action) sp.set('action', params.action);
+    if (params.success) sp.set('success', params.success);
+    if (params.from) sp.set('from', params.from);
+    if (params.to) sp.set('to', params.to);
+    if (params.page) sp.set('page', String(params.page));
+    if (params.limit) sp.set('limit', String(params.limit));
+    return request<any>(`/auth-logs?${sp.toString()}`);
+  },
+  getAuthLog: (id: string) => request<any>(`/auth-logs/${id}`),
+  listAuditLogs: (params: { entityType?: string; entityId?: string; action?: string; actorId?: string; from?: string; to?: string; page?: number; limit?: number }) => {
+    const sp = new URLSearchParams();
+    if (params.entityType) sp.set('entityType', params.entityType);
+    if (params.entityId) sp.set('entityId', params.entityId);
+    if (params.action) sp.set('action', params.action);
+    if (params.actorId) sp.set('actorId', params.actorId);
+    if (params.from) sp.set('from', params.from);
+    if (params.to) sp.set('to', params.to);
+    if (params.page) sp.set('page', String(params.page));
+    if (params.limit) sp.set('limit', String(params.limit));
+    return request<any>(`/audit-logs?${sp.toString()}`);
+  },
+  purgeAuthLogs: (data?: { before?: string }) =>
+    request<any>('/auth-logs', { method: 'DELETE', body: JSON.stringify(data ?? {}) }),
+  purgeAuditLogs: (data?: { before?: string }) =>
+    request<any>('/audit-logs', { method: 'DELETE', body: JSON.stringify(data ?? {}) }),
+
+  // ========== Monitoring ==========
+  monitoringStats: () => request<any>('/monitoring/stats'),
+  driftReport: () => request<any>('/monitoring/drift'),
+  saveBaseline: () => request<any>('/monitoring/baseline', { method: 'POST' }),
 };

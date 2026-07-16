@@ -1,11 +1,14 @@
 <script lang="ts">
-  import { Plus, Info, BookOpen, GraduationCap, Workflow, Search, Trash2, HelpCircle } from '@lucide/svelte';
+  import { Plus, Info, BookOpen, GraduationCap, Workflow, Search, HelpCircle } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import { toast } from '../lib/stores/toast.svelte';
   import Button from '../lib/components/Button.svelte';
   import Input from '../lib/components/Input.svelte';
   import Drawer from '../lib/components/Drawer.svelte';
+  import ConfirmDialog from '../lib/components/ConfirmDialog.svelte';
   import BlockEditor from '../lib/components/education/BlockEditor.svelte';
+  import ContentBlockEditor from '../lib/components/education/ContentBlockEditor.svelte';
   import CanvasView from '../lib/components/education/CanvasView.svelte';
   import StatsCards from '../lib/components/education/StatsCards.svelte';
   import PathsTable from '../lib/components/education/PathsTable.svelte';
@@ -99,8 +102,9 @@
       order: editingPath.order,
       isActive: editingPath.isActive,
     };
+    const wasUpdate = !!editingPath.id;
     try {
-      if (editingPath.id) {
+      if (wasUpdate) {
         const updated = await api.updateEducationPath(editingPath.id, clean);
         paths = paths.map(p => p.id === updated.id ? updated : p);
       } else {
@@ -109,14 +113,17 @@
       }
       drawerOpen = false;
       editingPath = null;
-    } catch (e: any) { error = e.message; }
+      toast.success(wasUpdate ? 'Parcours modifié' : 'Parcours créé');
+    } catch (e: any) { toast.error(e.message); }
     finally { saving = false; }
   }
 
-  async function removePath(id: string) {
-    if (!confirm('Supprimer ce parcours ?')) return;
-    await api.deleteEducationPath(id);
-    paths = paths.filter(p => p.id !== id);
+  function removePath(id: string) {
+    ask('Supprimer le parcours ?', 'Cette action est irréversible. Les leçons seront archivées.', async () => {
+      await api.deleteEducationPath(id);
+      paths = paths.filter(p => p.id !== id);
+      toast.success('Parcours supprimé');
+    });
   }
 
   // ===== Lesson CRUD =====
@@ -136,6 +143,7 @@
     return {
       learningPathId: '',
       title: '', summary: '', content: '',
+      contentBlocks: [],
       difficulty: 'BEGINNER', status: 'DRAFT',
       order: lessons.length + 1, estimatedMinutes: 10,
       imageUrl: '', videoUrl: '',
@@ -156,6 +164,7 @@
       title: editingLesson.title,
       summary: editingLesson.summary,
       content: editingLesson.content,
+      contentBlocks: editingLesson.contentBlocks?.length ? editingLesson.contentBlocks : undefined,
       difficulty: editingLesson.difficulty,
       order: editingLesson.order,
       estimatedMinutes: editingLesson.estimatedMinutes,
@@ -167,8 +176,9 @@
       relatedProductId: editingLesson.relatedProductId ?? undefined,
     };
     Object.keys(clean).forEach(k => clean[k] === undefined && delete clean[k]);
+    const wasUpdate = !!editingLesson.id;
     try {
-      if (editingLesson.id) {
+      if (wasUpdate) {
         const updated = await api.updateEducationLesson(editingLesson.id, clean);
         lessons = lessons.map(l => l.id === updated.id ? updated : l);
       } else {
@@ -177,14 +187,17 @@
       }
       lessonDrawerOpen = false;
       editingLesson = null;
-    } catch (e: any) { error = e.message; }
+      toast.success(wasUpdate ? 'Leçon modifiée' : 'Leçon créée');
+    } catch (e: any) { toast.error(e.message); }
     finally { saving = false; }
   }
 
-  async function removeLesson(id: string) {
-    if (!confirm('Archiver cette leçon ?')) return;
-    await api.deleteEducationLesson(id);
-    lessons = lessons.filter(l => l.id !== id);
+  function removeLesson(id: string) {
+    ask('Archiver la leçon ?', 'La leçon sera archivée et masquée des utilisateurs.', async () => {
+      await api.deleteEducationLesson(id);
+      lessons = lessons.filter(l => l.id !== id);
+      toast.success('Leçon archivée');
+    });
   }
 
   // ===== Advice Link CRUD =====
@@ -206,16 +219,19 @@
       };
       adviceDrawerOpen = false;
       editingAdvice = null;
-    } catch (e: any) { error = e.message; }
+      toast.success('Conseil lié à la leçon');
+    } catch (e: any) { toast.error(e.message); }
     finally { saving = false; }
   }
 
-  async function removeAdviceLink(id: string) {
-    if (!confirm('Supprimer ce lien ?')) return;
-    await api.deleteEducationAdviceLink(id);
-    if (editingLesson) {
-      editingLesson.adviceLinks = (editingLesson.adviceLinks ?? []).filter((a: any) => a.id !== id);
-    }
+  function removeAdviceLink(id: string) {
+    ask('Supprimer le lien ?', 'Le conseil ne sera plus associé à cette leçon.', async () => {
+      await api.deleteEducationAdviceLink(id);
+      if (editingLesson) {
+        editingLesson.adviceLinks = (editingLesson.adviceLinks ?? []).filter((a: any) => a.id !== id);
+      }
+      toast.success('Lien supprimé');
+    });
   }
 
   // ===== Quiz CRUD =====
@@ -226,6 +242,20 @@
   let quizLessonDrawerOpen = $state(false);
   let viewingQuiz = $state<any | null>(null);
   let savingQuiz = $state(false);
+  let confirm = $state<{ title: string; message: string; action: () => void } | null>(null);
+
+  function ask(title: string, message: string, action: () => void) {
+    confirm = { title, message, action };
+  }
+
+  function cancelConfirm() {
+    confirm = null;
+  }
+
+  function execConfirm() {
+    confirm?.action();
+    confirm = null;
+  }
 
   async function loadQuizzes() {
     try {
@@ -252,8 +282,9 @@
       status: editingQuiz.status,
       passingScore: editingQuiz.passingScore,
     };
+    const wasUpdate = !!editingQuiz.id;
     try {
-      if (editingQuiz.id) {
+      if (wasUpdate) {
         const updated = await api.updateQuiz(editingQuiz.id, clean);
         quizzes = quizzes.map(q => q.id === updated.id ? updated : q);
         if (viewingQuiz?.id === updated.id) {
@@ -266,33 +297,44 @@
       }
       quizDrawerOpen = false;
       editingQuiz = null;
-    } catch (e: any) { error = e.message; }
+      toast.success(wasUpdate ? 'Quiz modifié' : 'Quiz créé');
+    } catch (e: any) { toast.error(e.message); }
     finally { savingQuiz = false; }
   }
 
-  async function removeQuiz(id: string) {
-    if (!confirm('Supprimer ce quiz ? Toutes les questions seront supprimées.')) return;
-    try {
-      await api.deleteQuiz(id);
-      quizzes = quizzes.filter(q => q.id !== id);
-      if (viewingQuiz?.id === id) viewingQuiz = null;
-    } catch (e: any) { error = e.message; }
+  function removeQuiz(id: string) {
+    ask('Supprimer le quiz ?', 'Toutes les questions et réponses seront supprimées.', async () => {
+      try {
+        await api.deleteQuiz(id);
+        quizzes = quizzes.filter(q => q.id !== id);
+        if (viewingQuiz?.id === id) viewingQuiz = null;
+        toast.success('Quiz supprimé');
+      } catch (e: any) { toast.error(e.message); }
+    });
   }
 
   async function openQuizView(q: any) {
     try {
       viewingQuiz = await api.getQuiz(q.id);
       quizQuestionDrawerOpen = true;
-    } catch (e: any) { error = e.message; }
+    } catch (e: any) { toast.error(e.message); }
   }
 
   async function addQuizQuestion(data: any) {
     if (!viewingQuiz) return;
     try {
       const q = await api.addQuestion(viewingQuiz.id, data);
-      viewingQuiz = await api.getQuiz(viewingQuiz.id);
-      quizzes = await api.listQuizzes();
-    } catch (e: any) { error = e.message; }
+      viewingQuiz = {
+        ...viewingQuiz,
+        questions: [...(viewingQuiz.questions ?? []), q],
+        _count: { ...viewingQuiz._count, questions: (viewingQuiz._count?.questions ?? 0) + 1 },
+      };
+      quizzes = quizzes.map(qz => qz.id === viewingQuiz!.id
+        ? { ...qz, _count: { ...qz._count, questions: (qz._count?.questions ?? 0) + 1 } }
+        : qz
+      );
+      toast.success('Question ajoutée');
+    } catch (e: any) { toast.error(e.message); }
   }
 
   async function updateQuizQuestion(data: any) {
@@ -303,16 +345,27 @@
       } else {
         await api.updateQuestion(data.id, { question: data.question, type: data.type, explanation: data.explanation });
       }
-    } catch (e: any) { error = e.message; }
+      toast.success('Question mise à jour');
+    } catch (e: any) { toast.error(e.message); }
   }
 
-  async function deleteQuizQuestion(qid: string) {
-    if (!confirm('Supprimer cette question ?')) return;
-    try {
-      await api.deleteQuestion(qid);
-      viewingQuiz = await api.getQuiz(viewingQuiz!.id);
-      quizzes = await api.listQuizzes();
-    } catch (e: any) { error = e.message; }
+  function deleteQuizQuestion(qid: string) {
+    ask('Supprimer la question ?', 'Cette action est irréversible.', async () => {
+      try {
+        await api.deleteQuestion(qid);
+        if (viewingQuiz) {
+          viewingQuiz = {
+            ...viewingQuiz,
+            questions: viewingQuiz.questions.filter((q: any) => q.id !== qid),
+            _count: { ...viewingQuiz._count, questions: (viewingQuiz._count?.questions ?? 1) - 1 },
+          };
+        }
+        quizzes = quizzes.map(q => q.id === viewingQuiz?.id ? {
+          ...q, _count: { ...q._count, questions: (q._count?.questions ?? 1) - 1 },
+        } : q);
+        toast.success('Question supprimée');
+      } catch (e: any) { toast.error(e.message); }
+    });
   }
 
   async function linkQuizLesson(lessonId: string) {
@@ -320,7 +373,7 @@
     try {
       await api.linkQuizToLesson(viewingQuiz.id, lessonId);
       viewingQuiz = await api.getQuiz(viewingQuiz.id);
-    } catch (e: any) { error = e.message; }
+    } catch (e: any) { toast.error(e.message); }
   }
 
   async function unlinkQuizLesson(lessonId: string) {
@@ -328,7 +381,7 @@
     try {
       await api.unlinkQuizFromLesson(viewingQuiz.id, lessonId);
       viewingQuiz = await api.getQuiz(viewingQuiz.id);
-    } catch (e: any) { error = e.message; }
+    } catch (e: any) { toast.error(e.message); }
   }
 </script>
 
@@ -364,6 +417,16 @@
 
   {#if error}
     <div class="bg-red-50 text-error px-4 py-3 rounded-xl text-sm font-medium mb-4 shrink-0">{error}</div>
+  {/if}
+
+  {#if confirm}
+    <ConfirmDialog
+      open={true}
+      title={confirm.title}
+      message={confirm.message}
+      onconfirm={execConfirm}
+      oncancel={cancelConfirm}
+    />
   {/if}
 
   <!-- Tabs -->
@@ -491,12 +554,27 @@
       </label>
     </div>
     <Input label="Résumé" bind:value={editingLesson!.summary} />
+    <!-- Content Tabs -->
     <div>
-      <span class="text-sm font-semibold text-on-surface-variant block mb-2">Contenu</span>
-      <BlockEditor
-        content={editingLesson!.content ?? ''}
-        onchange={(c) => { editingLesson!.content = c; }}
-      />
+      <div class="flex gap-1 mb-3 bg-surface-container rounded-lg p-0.5 w-fit">
+        <button onclick={() => lessonPreview = false}
+          class="px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer border-none {!lessonPreview ? 'bg-white text-on-surface shadow-sm' : 'text-outline hover:text-on-surface'}">
+          Blocs structurés
+        </button>
+        <button onclick={() => lessonPreview = true}
+          class="px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer border-none {lessonPreview ? 'bg-white text-on-surface shadow-sm' : 'text-outline hover:text-on-surface'}">
+          Markdown
+        </button>
+      </div>
+
+      {#if lessonPreview}
+        <BlockEditor
+          content={editingLesson!.content ?? ''}
+          onchange={(c) => { editingLesson!.content = c; }}
+        />
+      {:else}
+        <ContentBlockEditor bind:blocks={editingLesson!.contentBlocks} />
+      {/if}
     </div>
     <div class="grid grid-cols-2 gap-4">
       <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">

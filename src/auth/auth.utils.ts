@@ -144,6 +144,20 @@ export const validateRefreshToken = (token: string): jwt.JwtPayload => {
   }
 };
 
+export const signSetPasswordToken = (payload: object): string => {
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '24h' });
+};
+
+export const validateSetPasswordToken = (token: string): jwt.JwtPayload => {
+  try {
+    return jwt.verify(token, getJwtSecret()) as jwt.JwtPayload;
+  } catch {
+    throw new UnauthorizedException('Lien invalide ou expiré.');
+  }
+};
+
+export const setPasswordKey = (userId: string) => `set-password:${userId}`;
+
 /**
  * @param prisma - Service Prisma
  * @param action - Type d'action (login_attempt, otp_sent, account_created, etc)

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Req, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, Req, UseGuards, Query } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -9,6 +9,8 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { SetPasswordDto } from './dto/set-password.dto';
 import {
   AuthResponseDto,
   LoginResponseDto,
@@ -36,19 +38,14 @@ export class AuthController {
 
   @Post('register')
   @ApiOperation({
-    summary: "Inscription d'un nouvel utilisateur (flux en 4 étapes)",
+    summary: "Inscription d'un nouvel utilisateur (flux en 3 étapes + lien magique)",
     description:
-      'Flux multi-étapes : 1. Vérification du compte bancaire → 2. Envoi OTP → 3. Validation OTP → 4. Création du mot de passe. ' +
-      "Chaque appel avance d'une étape en fonction des champs fournis.",
+      'Flux multi-étapes : 1. Vérification du compte bancaire → 2. Envoi OTP → 3. Validation OTP + envoi lien magique. ' +
+      "Le mot de passe est défini ultérieurement via le lien reçu par email (POST /auth/set-password).",
   })
   @ApiResponse({
     status: 200,
-    description: 'Étape intermédiaire réussie (retourne step et message)',
-    type: AuthResponseDto,
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Inscription terminée, retourne un token JWT',
+    description: 'Étape réussie (retourne step et message) — étapes: verify_contact, verify_otp, link_sent',
     type: AuthResponseDto,
   })
   @ApiResponse({
@@ -138,6 +135,23 @@ export class AuthController {
     return this.authService.resendOtp(registerDto.accountNumber);
   }
 
+  @Get('verify-set-password-token')
+  @ApiOperation({ summary: 'Vérifier la validité du token de création de mot de passe (magic link)' })
+  @ApiResponse({ status: 200, description: 'Token valide' })
+  @ApiResponse({ status: 401, description: 'Token invalide ou expiré' })
+  async verifySetPasswordToken(@Query('token') token: string) {
+    return this.authService.verifySetPasswordToken(token);
+  }
+
+  @Post('set-password')
+  @ApiOperation({ summary: 'Définir le mot de passe via le lien magique reçu par email' })
+  @ApiResponse({ status: 200, description: 'Mot de passe créé, retourne les tokens', type: LoginResponseDto })
+  @ApiResponse({ status: 400, description: 'Mot de passe déjà défini ou trop court' })
+  @ApiResponse({ status: 401, description: 'Token invalide ou expiré' })
+  async setPassword(@Body() dto: SetPasswordDto, @Req() req: Request) {
+    return this.authService.setPassword(dto.token, dto.password, req);
+  }
+
   @Post('forgot-password')
   @ApiOperation({
     summary: 'Réinitialisation de mot de passe (flux en 3 étapes)',
@@ -209,5 +223,15 @@ export class AuthController {
   })
   async mfaStatus(@User() user: any) {
     return this.authService.mfaStatus(user.id);
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Changer le mot de passe' })
+  @ApiResponse({ status: 200, description: 'Mot de passe modifié avec succès' })
+  @ApiResponse({ status: 400, description: 'Mot de passe actuel incorrect ou nouveau trop court' })
+  async changePassword(@User() user: any, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(user.id, dto);
   }
 }

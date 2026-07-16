@@ -3,14 +3,12 @@ import { INTENTS } from './intent-matrix';
 import { relu } from './activation';
 
 /**
- * Seuil minimum pour qu'une intention soit considérée comme "active".
- * En dessous de ce score, l'intention est ignorée.
- *
- * @description
- * Ce seuil évite les faux positifs. Si aucune feature pertinente n'est activée,
- * le score reste proche de 0 et l'intention ne se déclenche pas.
+ * Seuil adaptatif : 2× la probabilité moyenne (1/N).
+ * Avec 17 intents → 2/17 ≈ 0.118, bien plus atteignable que 0.8.
  */
-export const SCORE_THRESHOLD = 0.8;
+export function adaptiveThreshold(numIntents: number): number {
+  return numIntents > 0 ? (2 / numIntents) : 0.8;
+}
 
 /**
  * Multiplie le vecteur de features par la matrice des poids.
@@ -81,11 +79,12 @@ export function softmax(scores: ScoredIntent[]): ScoredIntent[] {
 
 export function selectActiveIntents(
   scores: ScoredIntent[],
-  threshold: number = SCORE_THRESHOLD,
+  threshold?: number,
 ): ScoredIntent[] {
   const softmaxScores = softmax(scores);
+  const t = threshold ?? adaptiveThreshold(scores.length);
   return softmaxScores
-    .filter((s) => s.score >= threshold)
+    .filter((s) => s.score >= t)
     .sort((a, b) => b.score - a.score);
 }
 
