@@ -55,6 +55,8 @@ import { UpdateRuleDto } from './dto/update-rule.dto';
 import * as bcrypt from 'bcryptjs';
 import { CamenBertTestDto } from './dto/camenbert-test.dto';
 import { SmsDebugDto } from './dto/sms-debug.dto';
+import { UpdateSmsPipelineDto } from './dto/sms-pipeline.dto';
+import { SmsPipelineConfig } from '../sms/pipeline/config';
 import { Response } from 'express';
 import { map } from 'rxjs/operators';
 
@@ -416,7 +418,7 @@ export class AdminController {
     const dateFloor = { gte: new Date(since.getFullYear(), since.getMonth(), since.getDate()) };
     const whereRange = { ...where, dateSent: dateFloor };
 
-    const [perStatus, perOperator, perDirection, perCategory, total, rulesCount] =
+    const [perStatus, perOperator, perDirection, perCategory, total, rulesCount, byArbitration, byCbCategory, disagreedCount] =
       await Promise.all([
         this.prisma.smsTransaction.groupBy({ by: ['status'], where: whereRange, _count: true }),
         this.prisma.smsTransaction.groupBy({ by: ['operator'], where: whereRange, _count: true }),
@@ -428,6 +430,17 @@ export class AdminController {
         }),
         this.prisma.smsTransaction.count({ where: whereRange }),
         this.prisma.smsFilterRule.count({ where: { isActive: true } }),
+        this.prisma.smsTransaction.groupBy({
+          by: ['arbitration'],
+          where: { ...whereRange, arbitration: { not: null } },
+          _count: true,
+        }),
+        this.prisma.smsTransaction.groupBy({
+          by: ['cbCategory'],
+          where: { ...whereRange, cbCategory: { not: null } },
+          _count: true,
+        }),
+        this.prisma.smsTransaction.count({ where: { ...whereRange, disagreed: true } }),
       ]);
 
     const perDay: { date: string; count: number }[] = [];
@@ -448,11 +461,35 @@ export class AdminController {
         byOperator: perOperator,
         byDirection: perDirection,
         byCategory: perCategory,
+        byArbitration,
+        byCbCategory,
+        disagreedCount,
         perDay,
       },
       rulesCount,
       filters: { operator, status, direction, customerId, days: daysCount },
     };
+  }
+
+  @Get('sms/pipeline')
+  @ApiOperation({ summary: 'Config du pipeline SMS v2 + statut CamenBert' })
+  async getSmsPipeline() {
+    const [config, camenBertStatus] = await Promise.all([
+      this.smsService.getPipelineConfig(),
+      this.smsService.getCamenBertStatus(),
+    ]);
+    return { config, camenBertStatus };
+  }
+
+  @Patch('sms/pipeline')
+  @ApiOperation({ summary: 'Mise à jour partielle de la config du pipeline SMS' })
+  async updateSmsPipeline(@Body() dto: UpdateSmsPipelineDto) {
+    const partial: Partial<SmsPipelineConfig> = {};
+    if (dto.regexEnabled !== undefined) partial.regexEnabled = dto.regexEnabled;
+    if (dto.camenbertEnabled !== undefined) partial.camenbertEnabled = dto.camenbertEnabled;
+    if (dto.camenbertThreshold !== undefined) partial.camenbertThreshold = dto.camenbertThreshold;
+    const config = await this.smsService.updatePipelineConfig(partial);
+    return { config };
   }
 
   // ──────────── Contrôle SMS : règles d'ignorance ────────────
