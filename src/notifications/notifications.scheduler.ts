@@ -84,10 +84,10 @@ export class NotificationsScheduler {
         _count: true,
       });
 
-      const countMap = new Map(unreadCounts.map((uc) => [uc.userId, uc._count]));
+      const countMap = new Map(unreadCounts.map((uc) => [uc.userId, uc._count as number]));
 
       for (const user of users) {
-        const unread = countMap.get(user.id) ?? 0;
+        const unread = Number(countMap.get(user.id) ?? 0);
         await this.notificationsService.create(user.id, {
           type: 'WEEKLY_DIGEST',
           title: 'Votre resume hebdomadaire',
@@ -125,17 +125,19 @@ export class NotificationsScheduler {
 
     this.logger.log(`Livraison de ${due.length} notification(s) programmée(s)`);
 
+    const users = await this.prisma.user.findMany({
+      where: { deletedAt: null },
+      select: { id: true },
+    });
+    const allUserIds = users.map((u) => u.id);
+
     for (const notif of due) {
       try {
         const type = notif.type as any;
 
         if (notif.targetType === 'all') {
-          const users = await this.prisma.user.findMany({
-            where: { deletedAt: null },
-            select: { id: true },
-          });
           await this.notificationsService.createMany(
-            users.map((u) => u.id),
+            allUserIds,
             { title: notif.title, body: notif.body, type, severity: notif.severity, link: '/' },
           );
           await this.pushService.sendToAll({

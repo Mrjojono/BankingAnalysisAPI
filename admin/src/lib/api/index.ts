@@ -145,6 +145,11 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ ruleIds }),
     }),
+  toggleProductStatus: (id: string, isActive: boolean) =>
+    request<any>('/products/' + id + '/status', {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
   deleteProduct: (id: string) =>
     request<any>('/products/' + id, { method: 'DELETE' }),
 
@@ -154,12 +159,24 @@ export const api = {
     request<any>('/rules', { method: 'POST', body: JSON.stringify(data) }),
   updateRule: (id: string, d: any) =>
     request<any>('/rules/' + id, { method: 'PUT', body: JSON.stringify(d) }),
+  toggleRuleStatus: (id: string, isActive: boolean) =>
+    request<any>('/rules/' + id + '/status', {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
   deleteRule: (id: string) =>
     request<any>('/rules/' + id, { method: 'DELETE' }),
 
   getCatalog: () => request<any>('/catalog'),
   updateCatalog: (data: any) =>
     request<any>('/catalog', { method: 'PUT', body: JSON.stringify(data) }),
+
+  getCatalogFragments: () => request<any>('/catalog-fragments'),
+  updateCatalogFragments: (data: any) =>
+    request<any>('/catalog-fragments', { method: 'PUT', body: JSON.stringify(data) }),
+  previewNlg: (data: { kind: string; severity: string; vars?: Record<string, any> }) =>
+    request<any>('/nlg/preview', { method: 'POST', body: JSON.stringify(data) }),
+  listNlgIntents: () => request<string[]>('/nlg/intents'),
 
   testClassifier: (desc: string) =>
     request<any>('/classifier/test?desc=' + encodeURIComponent(desc)),
@@ -289,6 +306,8 @@ export const api = {
     return request<any>(`/users?${sp.toString()}`);
   },
   getUser: (id: string) => request<any>(`/users/${id}`),
+  createUser: (data: { email: string; password: string; role: string }) =>
+    request<any>('/users', { method: 'POST', body: JSON.stringify(data) }),
   updateUser: (id: string, data: any) =>
     request<any>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteUser: (id: string) =>
@@ -329,8 +348,49 @@ export const api = {
   purgeAuditLogs: (data?: { before?: string }) =>
     request<any>('/audit-logs', { method: 'DELETE', body: JSON.stringify(data ?? {}) }),
 
+  // ========== Eligibility ==========
+  eligibilityDashboard: (customerId: string) =>
+    request<any>(`/eligibility/dashboard/${customerId}`),
+  eligibilityEvaluate: (data: { customerId: string; productCode: string; inputs?: Record<string, any>; mode?: string }) =>
+    request<any>('/eligibility/evaluate', { method: 'POST', body: JSON.stringify(data) }),
+  eligibilitySimulate: (data: { customerId: string; productCode: string; adjustments: Record<string, number>; mode?: string }) =>
+    request<any>('/eligibility/simulate', { method: 'POST', body: JSON.stringify(data) }),
+  eligibilityImprovementPlan: (customerId: string) =>
+    request<any>(`/eligibility/improvement-plan/${customerId}`),
+  eligibilityProducts: () => request<any[]>('/eligibility/products'),
+  eligibilityProductRules: (code: string) => request<any>(`/eligibility/products/${code}/rules`),
+
   // ========== Monitoring ==========
   monitoringStats: () => request<any>('/monitoring/stats'),
   driftReport: () => request<any>('/monitoring/drift'),
   saveBaseline: () => request<any>('/monitoring/baseline', { method: 'POST' }),
+
+  // ========== SMS (contrôle admin) ==========
+  smsStats: (params: {
+    operator?: string;
+    status?: string;
+    direction?: string;
+    customerId?: string;
+    days?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params.operator) sp.set('operator', params.operator);
+    if (params.status) sp.set('status', params.status);
+    if (params.direction) sp.set('direction', params.direction);
+    if (params.customerId) sp.set('customerId', params.customerId);
+    if (params.days) sp.set('days', String(params.days));
+    return request<any>(`/sms/stats?${sp.toString()}`);
+  },
+  listSmsRules: (customerId?: string) =>
+    request<any[]>(`/sms/rules${customerId ? `?customerId=${customerId}` : ''}`),
+  createSmsRule: (data: any) =>
+    request<any>('/sms/rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateSmsRule: (id: string, data: any) =>
+    request<any>(`/sms/rules/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  toggleSmsRuleStatus: (id: string, isActive: boolean) =>
+    request<any>(`/sms/rules/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
+  deleteSmsRule: (id: string) => request<any>(`/sms/rules/${id}`, { method: 'DELETE' }),
 };

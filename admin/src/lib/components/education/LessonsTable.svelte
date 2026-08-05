@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Pencil, Trash2 } from '@lucide/svelte';
+  import { Pencil } from '@lucide/svelte';
+  import ToggleSwitch from '../ToggleSwitch.svelte';
 
   const DIFFICULTIES = [
     { value: 'BEGINNER', label: 'Débutant', class: 'bg-green-50 text-green-700 ring-green-200' },
@@ -8,23 +9,16 @@
   ];
   const DIFFICULTY_MAP = Object.fromEntries(DIFFICULTIES.map(d => [d.value, d]));
 
-  const STATUSES = [
-    { value: 'DRAFT', label: 'Brouillon', class: 'bg-gray-50 text-gray-700 ring-gray-200' },
-    { value: 'PUBLISHED', label: 'Publié', class: 'bg-green-50 text-green-700 ring-green-200' },
-    { value: 'ARCHIVED', label: 'Archivé', class: 'bg-red-50 text-red-700 ring-red-200' },
-  ];
-  const STATUS_MAP = Object.fromEntries(STATUSES.map(s => [s.value, s]));
-
   let {
     lessons = [] as any[],
     paths = [] as any[],
     onEdit,
-    onDelete,
+    onToggle,
   }: {
     lessons?: any[];
     paths?: any[];
     onEdit?: (l: any) => void;
-    onDelete?: (id: string) => void;
+    onToggle?: (l: any, next: boolean) => void;
   } = $props();
 
   let page = $state(1);
@@ -75,9 +69,13 @@
             </span>
           </td>
           <td class="px-4 py-3">
-            <span class="inline-block px-2 py-1 rounded-md text-xs font-semibold {STATUS_MAP[l.status]?.class ?? 'bg-surface-container text-on-surface-variant'}">
-              {STATUS_MAP[l.status]?.label ?? l.status}
-            </span>
+            <ToggleSwitch
+              checked={l.status === 'PUBLISHED'}
+              onchange={(next) => onToggle?.(l, next)}
+              activeLabel="Publié"
+              inactiveLabel={l.status === 'DRAFT' ? 'Brouillon' : 'Archivé'}
+              title={l.status === 'PUBLISHED' ? 'Cliquer pour archiver' : 'Cliquer pour publier'}
+            />
           </td>
           <td class="px-4 py-3 text-sm text-on-surface-variant">{l.estimatedMinutes ?? '—'} min</td>
           <td class="px-4 py-3 text-sm text-on-surface-variant">
@@ -89,9 +87,6 @@
             <div class="flex gap-1">
               <button onclick={() => onEdit?.(l)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container transition-all cursor-pointer border-none text-on-surface-variant" title="Modifier">
                 <Pencil size={18} />
-              </button>
-              <button onclick={() => onDelete?.(l.id)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 hover:text-error transition-all cursor-pointer border-none text-on-surface-variant" title="Archiver">
-                <Trash2 size={18} />
               </button>
             </div>
           </td>

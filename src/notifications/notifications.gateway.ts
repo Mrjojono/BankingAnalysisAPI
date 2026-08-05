@@ -11,7 +11,9 @@ import { validateToken } from '../auth/auth.utils';
 
 @Injectable()
 @WebSocketGateway({
-  cors: { origin: '*' },
+  cors: {
+    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173', 'http://localhost:3000'],
+  },
   namespace: '/notifications',
 })
 export class NotificationsGateway

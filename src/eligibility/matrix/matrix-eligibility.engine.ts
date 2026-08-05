@@ -7,7 +7,8 @@ import {
   normalizedScoreToStatus,
 } from './eligibility-scoring.engine';
 import type { EligibilityMetrics } from './types';
-import type { EligibilityResult, RuleResult } from '../types';
+import type { EligibilityResult } from '../types';
+import { buildInfoRules } from '../types';
 
 @Injectable()
 export class MatrixEligibilityEngine {
@@ -39,6 +40,25 @@ export class MatrixEligibilityEngine {
 
     if (!product) {
       throw new Error(`Produit "${productCode}" introuvable`);
+    }
+
+    if (!product.isActive) {
+      return {
+        productCode: product.code,
+        productName: product.name,
+        productDescription: product.description ?? '',
+        hasEligibilityRules: false,
+        globalScore: 0,
+        maxScore: 0,
+        scorePercent: 0,
+        status: 'NOT_ELIGIBLE',
+        reason: 'Produit désactivé',
+        ruleResults: [],
+        infoRules: [],
+        passedRules: [],
+        failedRules: [],
+        partialRules: [],
+      };
     }
 
     const metrics: EligibilityMetrics = {
@@ -127,39 +147,4 @@ function computeGlobalScore(metrics: Record<string, number>): number {
     (metrics.balanceVolatilityScore ?? 50) * 0.25;
 
   return Math.round(c1 * 0.25 + c2 * 0.25 + c3 * 0.25 + c4 * 0.25);
-}
-
-function buildInfoRules(rules: any[]): RuleResult[] {
-  return rules.map((rule) => {
-    const seuil = rule.value?.toLocaleString('fr-FR') ?? '';
-    const pct = rule.percentage != null ? `${rule.percentage}%` : '';
-    const montant = rule.flatAmount?.toLocaleString('fr-FR') ?? '';
-    const periode = rule.period ?? '';
-
-    let detail = '';
-    if (rule.flatAmount != null) {
-      detail = `${montant} FCFA${periode ? `/${periode}` : ''}`;
-    } else if (rule.percentage != null) {
-      detail = `${pct}${rule.minAmount ? ` (min ${rule.minAmount.toLocaleString('fr-FR')} FCFA)` : ''}`;
-    } else if (rule.value != null) {
-      const op = rule.operator === 'GREATER_OR_EQUAL' ? 'max' : 'min';
-      detail = `${op === 'max' ? '\u2264' : '\u2265'} ${seuil} FCFA`;
-    }
-
-    return {
-      ruleId: rule.id,
-      ruleCode: rule.code,
-      label: rule.label,
-      status: 'PASS' as const,
-      valueSource: 'input' as const,
-      clientValue: null,
-      threshold: rule.value ?? rule.percentage ?? null,
-      thresholdMin: null,
-      thresholdMax: null,
-      scoreEarned: 0,
-      scoreMax: 0,
-      message: `${rule.label} : ${detail}`.replace(/ : $/, ''),
-      advice: null,
-    };
-  });
 }

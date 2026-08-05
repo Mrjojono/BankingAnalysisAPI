@@ -1,4 +1,4 @@
-import { Controller, Get, Res } from '@nestjs/common';
+import { Controller, Get, Res, NotFoundException } from '@nestjs/common';
 import type { Response } from 'express';
 import { join } from 'path';
 import { existsSync } from 'fs';
@@ -11,7 +11,7 @@ export class AppController {
   }
 
   @Get('dashboard')
-  getDashboard(@Res() res: Response) {
+  getDashboard(@Res({ passthrough: true }) res: Response) {
     const paths = [
       join(__dirname, '..', 'public', 'dashboard.html'),
       join(__dirname, '..', 'src', 'public', 'dashboard.html'),
@@ -24,15 +24,13 @@ export class AppController {
       }
     }
 
-    return res
-      .status(404)
-      .send(
-        'Dashboard file not found. Please run "npm run build" to ensure assets are copied.',
-      );
+    throw new NotFoundException(
+      'Dashboard file not found. Please run "npm run build" to ensure assets are copied.',
+    );
   }
 
   @Get('admin/*path')
-  getAdmin(@Res() res: Response) {
+  getAdmin(@Res({ passthrough: true }) res: Response) {
     const paths = [
       join(__dirname, '..', 'public', 'admin', 'index.html'),
       join(__dirname, '..', 'src', 'public', 'admin', 'index.html'),
@@ -45,8 +43,8 @@ export class AppController {
       }
     }
 
-    return res
-      .status(404)
-      .send('Admin build not found. Run "cd admin && npm run build".');
+    throw new NotFoundException(
+      'Admin build not found. Run "cd admin && npm run build".',
+    );
   }
 }

@@ -41,6 +41,13 @@ export class MfaStatusResponseDto {
   @ApiProperty({ description: 'MFA activé ou non' })
   enabled: boolean;
 
-  @ApiPropertyOptional({ description: 'Type de MFA' })
+  @ApiPropertyOptional({ description: 'Type de MFA (TOTP ou EMAIL)' })
   method?: string;
+}
+
+export class VerifyEmailMfaDto {
+  @ApiProperty({ description: 'Code OTP reçu par email', example: '123456' })
+  @IsString()
+  @IsNotEmpty()
+  code: string;
 }

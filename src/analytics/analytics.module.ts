@@ -19,6 +19,7 @@ import { MatrixInterpreterEngine } from './matrix/matrix-interpreter.engine';
 import { EmbeddingsModule } from './embeddings/embeddings.module';
 import { RedisModule } from '../redis/redis.module';
 import { AuthModule } from '../auth/auth.module';
+import { MessagesModule } from '../messages/messages.module';
 
 //pour revenir a l'ancien interpreter  supprimer MatrixInterpreterEngine et remmetre InterpreterEngine
 @Module({
@@ -28,6 +29,7 @@ import { AuthModule } from '../auth/auth.module';
     EmbeddingsModule,
     RedisModule,
     AuthModule,
+    MessagesModule,
   ],
   controllers: [AnalyticsController],
   providers: [

@@ -4,10 +4,11 @@ import { Classifier } from '../shared/classifier';
 import { partitionEntries } from '../helper';
 import { InterpreterEngine, type RuleContext } from './interpreter.engine';
 import {
-  realizeIntent,
+  realizeIntent as realizeIntentFallback,
   renderAdviceTemplate,
   getCategoryLabel,
 } from '../../messages/realizer';
+import { NLGEngineService } from '../../messages/nlg-engine.service';
 import type { PersonalAdvice } from '../../messages/intents';
 import type { Entry } from '../types';
 
@@ -25,6 +26,7 @@ export class AdviceEngine {
     private sourceRegistry: TransactionSourceRegistry,
     private classifier: Classifier,
     private interpreter: InterpreterEngine,
+    private nlgEngine: NLGEngineService,
   ) {}
 
   async generate(customerId: string): Promise<PersonalAdvice[]> {
@@ -121,7 +123,7 @@ export class AdviceEngine {
 
       const intents = this.interpreter.interpret(ctx);
       for (const intent of intents) {
-        allAdvice.push(realizeIntent(intent));
+        allAdvice.push(this.nlgEngine.generateFromIntent(intent, realizeIntentFallback));
       }
     }
 

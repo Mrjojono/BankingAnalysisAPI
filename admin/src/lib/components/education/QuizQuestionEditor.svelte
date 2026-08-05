@@ -113,8 +113,8 @@
       {#if editingQuestion === q.id}
         <div class="flex flex-col gap-2">
           <Input label="Question" bind:value={q.question} />
-          <label class="text-xs text-on-surface-variant">Explication (optionnelle)</label>
-          <input bind:value={q.explanation} placeholder="Explication après réponse..."
+          <label class="text-xs text-on-surface-variant" for="quiz-explanation-{i}">Explication (optionnelle)</label>
+          <input id="quiz-explanation-{i}" bind:value={q.explanation} placeholder="Explication après réponse..."
             class="w-full px-3 py-2 border border-mint-subtle rounded-lg text-sm bg-[#fafcfa] focus:border-primary focus:outline-none" />
           <div class="flex flex-col gap-1.5 mt-2">
             <span class="text-[11px] font-semibold text-on-surface-variant uppercase">Choix</span>

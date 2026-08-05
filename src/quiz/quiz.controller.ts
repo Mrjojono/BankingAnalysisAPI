@@ -3,7 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UserId } from '../auth/user-id.decorator';
 import { QuizService } from './quiz.service';
-import { SubmitQuizDto } from './dto/submit-answer.dto';
+import { QuizSubmitDto } from './dto/submit-answer.dto';
 
 @ApiTags('Quiz')
 @ApiBearerAuth()
@@ -31,7 +31,7 @@ export class QuizController {
   submit(
     @Param('id') id: string,
     @UserId() userId: string,
-    @Body() dto: SubmitQuizDto,
+    @Body() dto: QuizSubmitDto,
   ) {
     return this.quizService.submitAttempt(id, userId, dto.answers);
   }

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, MinLength } from 'class-validator';
+import { IsString, IsNotEmpty, MinLength, Matches } from 'class-validator';
 
 export class ChangePasswordDto {
   @ApiProperty({ example: 'monAncienMot2Passe', description: 'Mot de passe actuel' })
@@ -11,5 +11,6 @@ export class ChangePasswordDto {
   @IsString()
   @IsNotEmpty()
   @MinLength(8)
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{8,}$/, { message: 'Le mot de passe doit contenir au moins 8 caractères, une majuscule, une minuscule, un chiffre et un caractère spécial' })
   newPassword: string;
 }

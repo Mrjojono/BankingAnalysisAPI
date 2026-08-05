@@ -7,11 +7,14 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { OverviewService } from '../analytics/overview/overview.service';
 import { EligibilityEngine } from './engines/eligibility.engine';
 import { MatrixEligibilityEngine } from './matrix/matrix-eligibility.engine';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EducationService } from '../education/education.service';
-import type { EligibilityResult } from './types';
+import { ANALYTICS_FIELD_MAP } from './types';
+import type { EligibilityResult, ImprovementPlan, ImprovementPlanItem, SimulationResult, SimulationAdjustment, EligibilityDashboard, ProductScoreSummary, RuleResult } from './types';
+import type { SimulateEligibilityDto } from './dto/eligibility.dto';
 
 @Injectable()
 export class EligibilityService {
@@ -21,6 +24,7 @@ export class EligibilityService {
     private readonly ruleEngine: EligibilityEngine,
     private readonly matrixEngine: MatrixEligibilityEngine,
     private readonly prisma: PrismaService,
+    private readonly overviewService: OverviewService,
     private readonly notificationsService: NotificationsService,
     private readonly educationService: EducationService,
   ) {}
@@ -137,5 +141,131 @@ export class EligibilityService {
     if (!product) throw new Error(`Produit "${productCode}" introuvable`);
 
     return product;
+  }
+
+  async simulate(dto: SimulateEligibilityDto): Promise<SimulationResult> {
+    const mode = dto.mode ?? 'matrix';
+    const evaluation = (inputs: Record<string, number | boolean | string>) =>
+      mode === 'rules'
+        ? this.ruleEngine.evaluate(dto.customerId, dto.productCode, inputs)
+        : this.matrixEngine.evaluate(dto.customerId, dto.productCode, inputs);
+
+    const currentMetrics = await this.overviewService.gatherMetrics(dto.customerId);
+    const current = await evaluation({});
+
+    const adjustments: SimulationAdjustment[] = [];
+    const simulatedInputs: Record<string, number | boolean | string> = {};
+
+    for (const [field, value] of Object.entries(dto.adjustments)) {
+      const metricKey = ANALYTICS_FIELD_MAP[field] ?? field;
+      const from = (currentMetrics as any)[metricKey] ?? 0;
+      simulatedInputs[field] = value;
+      adjustments.push({ field, from: Number(from), to: value, delta: value - Number(from) });
+    }
+
+    const simulated = await evaluation(simulatedInputs);
+
+    return { current, simulated, adjustments };
+  }
+
+  async improvementPlan(customerId: string): Promise<ImprovementPlan> {
+    const products = await this.prisma.bankProduct.findMany({
+      where: { isActive: true },
+    });
+
+    let bestResult: EligibilityResult | null = null;
+    const items: ImprovementPlanItem[] = [];
+
+    for (const product of products) {
+      const result = await this.matrixEngine.evaluate(customerId, product.code, {});
+      if (!bestResult || result.scorePercent > bestResult.scorePercent) {
+        bestResult = result;
+      }
+
+      for (const rule of result.ruleResults) {
+        const maxRuleScore = result.maxScore > 0 ? rule.scoreMax : 0;
+        const potentialIfPassed = maxRuleScore;
+        const improvementGap = rule.status === 'FAIL' ? potentialIfPassed - rule.scoreEarned : 0;
+
+        if (rule.status !== 'PASS') {
+          items.push({
+            ruleId: rule.ruleId,
+            ruleCode: rule.ruleCode,
+            label: rule.label,
+            field: rule.field,
+            status: rule.status,
+            clientValue: rule.clientValue,
+            threshold: rule.threshold,
+            advice: rule.advice,
+            potentialScore: potentialIfPassed,
+            improvementGap,
+          });
+        }
+      }
+    }
+
+    const currentGlobalScore = bestResult?.globalScore ?? 0;
+    const maxScore = bestResult?.maxScore ?? 0;
+    const potentialScore = Math.min(currentGlobalScore + items.reduce((s, i) => s + i.improvementGap, 0), maxScore);
+    const improvementRate = maxScore > 0 ? potentialScore / maxScore : 0;
+
+    return {
+      customerId,
+      currentGlobalScore,
+      maxScore,
+      potentialScore,
+      improvementRate: Math.round(improvementRate * 10000) / 100,
+      items,
+    };
+  }
+
+  async dashboard(customerId: string): Promise<EligibilityDashboard> {
+    const products = await this.prisma.bankProduct.findMany({
+      where: { isActive: true },
+      select: { code: true, name: true },
+    });
+
+    const productScores: ProductScoreSummary[] = [];
+    let bestScore: ProductScoreSummary | null = null;
+    let worstScore: ProductScoreSummary | null = null;
+    let scoreSum = 0;
+
+    for (const product of products) {
+      try {
+        const result = await this.matrixEngine.evaluate(customerId, product.code, {});
+        const summary: ProductScoreSummary = {
+          productCode: product.code,
+          productName: product.name,
+          scorePercent: result.scorePercent,
+          status: result.status,
+        };
+        productScores.push(summary);
+        scoreSum += result.scorePercent;
+
+        if (!bestScore || result.scorePercent > bestScore.scorePercent) bestScore = summary;
+        if (!worstScore || result.scorePercent < worstScore.scorePercent) worstScore = summary;
+      } catch (e) {
+        this.logger.warn(`Dashboard: erreur produit ${product.code}: ${e}`);
+      }
+    }
+
+    const totalProducts = productScores.length;
+    const averageScore = totalProducts > 0 ? scoreSum / totalProducts : 0;
+
+    const allRuleResults = productScores.length > 0
+      ? (await this.matrixEngine.evaluate(customerId, products[0]?.code ?? '', {})).ruleResults
+      : [];
+
+    return {
+      customerId,
+      overview: {
+        bestScore,
+        worstScore,
+        averageScore: Math.round(averageScore * 100) / 100,
+        totalProducts,
+      },
+      productScores,
+      criticalRules: allRuleResults.filter((r) => r.status !== 'PASS').slice(0, 5),
+    };
   }
 }

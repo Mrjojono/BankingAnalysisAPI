@@ -37,6 +37,8 @@ export type Entry = {
   accountId: string;
   transaction: Transaction;
   account: Account & { bankAccount?: BankAccount };
+  /** Origine de l'écriture : 'bank' (comptes bancaires) ou 'sms' (Mobile Money) */
+  source?: string;
 };
 
 export type Transaction = {
@@ -456,6 +458,7 @@ export type ScoreMetrics = {
   overdraftScore: number;
   revenueVolatilityScore: number;
   balanceVolatilityScore: number;
+  negativeBalanceScore: number;
   debtRatio: number;
   monthsData: number;
 };

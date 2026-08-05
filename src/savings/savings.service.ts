@@ -27,7 +27,7 @@ export class SavingsService {
     const goal = await this.prisma.savingsGoal.create({
       data: {
         userId,
-        name: dto.name || dto.label || '',
+        name: dto.name || '',
         targetAmount: dto.targetAmount,
         targetDate: new Date(dto.targetDate),
         savedAmount: 0,
@@ -45,7 +45,6 @@ export class SavingsService {
 
     const data: any = {};
     if (dto.name !== undefined) data.name = dto.name;
-    else if (dto.label !== undefined) data.name = dto.label;
     if (dto.targetAmount !== undefined) data.targetAmount = dto.targetAmount;
     if (dto.savedAmount !== undefined) data.savedAmount = dto.savedAmount;
     if (dto.targetDate !== undefined) data.targetDate = new Date(dto.targetDate);

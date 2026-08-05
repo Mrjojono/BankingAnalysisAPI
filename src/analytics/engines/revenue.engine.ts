@@ -14,6 +14,7 @@ import {
 } from '../types';
 import { Classifier } from '../shared/classifier';
 import { Injectable } from '@nestjs/common';
+import { NON_EXPENSE_CATEGORIES } from '../config/expense-keywords';
 
 @Injectable()
 export class RevenueEngine {
@@ -28,6 +29,9 @@ export class RevenueEngine {
     period: Period,
   ): Promise<CashFlowAnalytics> {
     const periodEntries = filterEntries(entries, {
+      direction: 'CREDIT',
+      accountType: 'CHECKING',
+      excludeSelfTransfers: true,
       from: period.from,
       to: period.to,
     });
@@ -39,14 +43,29 @@ export class RevenueEngine {
 
     for (const entry of periodEntries) {
       const amount = new Decimal(entry.amount.toString());
+      creditCount++;
+      creditAmount = creditAmount.plus(amount);
+    }
 
-      if (entry.direction === 'CREDIT') {
-        creditCount++;
-        creditAmount = creditAmount.plus(amount);
-      } else {
-        debitCount++;
-        debitAmount = debitAmount.plus(amount);
-      }
+    const debitEntries = filterEntries(entries, {
+      direction: 'DEBIT',
+      accountType: 'CHECKING',
+      excludeSelfTransfers: true,
+      from: period.from,
+      to: period.to,
+    });
+
+    for (const entry of debitEntries) {
+      const category = await this.classifier.categorizeWithCache(
+        entry.transaction.description ?? '',
+        customerId,
+      );
+
+      if (NON_EXPENSE_CATEGORIES.has(category as any)) continue;
+
+      const amount = new Decimal(entry.amount.toString());
+      debitCount++;
+      debitAmount = debitAmount.plus(amount);
     }
 
     const netFlow = creditAmount.minus(debitAmount);
@@ -94,6 +113,7 @@ export class RevenueEngine {
     const targetMonthCredits = filterEntries(entries, {
       direction: 'CREDIT',
       accountType: 'CHECKING',
+      excludeSelfTransfers: true,
       year: refYear,
       month: refMonth,
     });
@@ -103,6 +123,7 @@ export class RevenueEngine {
     const previousMonthCredits = filterEntries(entries, {
       direction: 'CREDIT',
       accountType: 'CHECKING',
+      excludeSelfTransfers: true,
       year: prevDate.getUTCFullYear(),
       month: prevDate.getUTCMonth() + 1,
     });
@@ -118,6 +139,7 @@ export class RevenueEngine {
     const sixMonthsCredits = filterEntries(entries, {
       direction: 'CREDIT',
       accountType: 'CHECKING',
+      excludeSelfTransfers: true,
       from: sixMonthsStart,
       to: analysisDate,
     });
@@ -174,6 +196,7 @@ export class RevenueEngine {
         const rollingCredits = filterEntries(entries, {
           direction: 'CREDIT',
           accountType: 'CHECKING',
+          excludeSelfTransfers: true,
           from: rollingStart,
           to: analysisDate,
         });
@@ -205,6 +228,7 @@ export class RevenueEngine {
     const credits = filterEntries(entries, {
       direction: 'CREDIT',
       accountType: 'CHECKING',
+      excludeSelfTransfers: true,
       from: cutoff,
       to: analysisDate,
     }).sort(
@@ -214,7 +238,8 @@ export class RevenueEngine {
     );
 
     const entriesPerMonth = credits.length;
-    const entriesPerWeek = Math.round((credits.length / 4) * 100) / 100;
+    const weeks = months * 4.33;
+    const entriesPerWeek = Math.round((credits.length / weeks) * 100) / 100;
 
     if (credits.length < 2) {
       return {
@@ -273,6 +298,8 @@ export class RevenueEngine {
   ): Promise<RevenueSources> {
     const credits = filterEntries(entries, {
       direction: 'CREDIT',
+      accountType: 'CHECKING',
+      excludeSelfTransfers: true,
       from,
       to,
     });
@@ -352,6 +379,7 @@ export class RevenueEngine {
     const periodEntries = filterEntries(entries, {
       direction: 'CREDIT',
       accountType: 'CHECKING',
+      excludeSelfTransfers: true,
       from: periodStart,
       to: analysisDate,
     });

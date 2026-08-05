@@ -1,15 +1,16 @@
 <script lang="ts">
-  import { Pencil, Trash2, HelpCircle, BookOpen } from '@lucide/svelte';
+  import { Pencil, HelpCircle, BookOpen } from '@lucide/svelte';
+  import ToggleSwitch from '../ToggleSwitch.svelte';
 
   let {
     quizzes = [] as any[],
     onEdit,
-    onDelete,
+    onToggle,
     onView,
   }: {
     quizzes?: any[];
     onEdit?: (q: any) => void;
-    onDelete?: (id: string) => void;
+    onToggle?: (q: any, next: boolean) => void;
     onView?: (q: any) => void;
   } = $props();
 </script>
@@ -31,10 +32,13 @@
         <tr class="border-b border-mint-subtle hover:bg-[#f8faf6] transition-colors">
           <td class="px-4 py-3 font-medium text-on-surface">{q.title}</td>
           <td class="px-4 py-3">
-            <span class="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold
-              {q.status === 'PUBLISHED' ? 'bg-green-50 text-green-700' : q.status === 'ARCHIVED' ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-700'}">
-              {q.status === 'PUBLISHED' ? 'Publié' : q.status === 'ARCHIVED' ? 'Archivé' : 'Brouillon'}
-            </span>
+            <ToggleSwitch
+              checked={q.status === 'PUBLISHED'}
+              onchange={(next) => onToggle?.(q, next)}
+              activeLabel="Publié"
+              inactiveLabel={q.status === 'ARCHIVED' ? 'Archivé' : 'Brouillon'}
+              title={q.status === 'PUBLISHED' ? 'Cliquer pour passer en brouillon' : 'Cliquer pour publier'}
+            />
           </td>
           <td class="px-4 py-3 text-center text-on-surface-variant">{q._count?.questions ?? 0}</td>
           <td class="px-4 py-3 text-center font-medium">{q.passingScore}%</td>
@@ -53,10 +57,6 @@
               <button onclick={() => onEdit?.(q)}
                 class="p-1.5 rounded-md border border-transparent cursor-pointer text-outline hover:text-primary hover:border-primary transition-all">
                 <Pencil size={15} />
-              </button>
-              <button onclick={() => onDelete?.(q.id)}
-                class="p-1.5 rounded-md border border-transparent cursor-pointer text-outline hover:text-error hover:border-error transition-all">
-                <Trash2 size={15} />
               </button>
             </div>
           </td>

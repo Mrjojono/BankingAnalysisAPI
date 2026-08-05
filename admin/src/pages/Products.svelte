@@ -2,7 +2,10 @@
   import { Plus, Pencil, Trash2, Search, Info, GitGraph } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import { toast } from '../lib/stores/toast.svelte';
   import Drawer from '../lib/components/Drawer.svelte';
+  import ConfirmDialog from '../lib/components/ConfirmDialog.svelte';
+  import ToggleSwitch from '../lib/components/ToggleSwitch.svelte';
 
   let products = $state<any[]>([]);
   let editing = $state<any | null>(null);
@@ -11,6 +14,8 @@
   let drawerOpen = $state(false);
   let helpOpen = $state(false);
   let search = $state('');
+  let statusFilter = $state<'all' | 'active' | 'inactive'>('all');
+  let confirmDel = $state<any | null>(null);
   let { onNavigate }: { onNavigate?: (p: string, productId?: string | null) => void } = $props();
 
   const CATEGORIES: { value: string; label: string; desc: string; class: string }[] = [
@@ -74,13 +79,18 @@
   const PER_PAGE = 15;
 
   let filtered = $derived.by(() => {
-    if (!search) return products;
-    const q = search.toLowerCase();
-    return products.filter(p =>
-      p.code?.toLowerCase().includes(q) ||
-      p.name?.toLowerCase().includes(q) ||
-      p.category?.toLowerCase().includes(q)
-    );
+    let list = products;
+    if (statusFilter === 'active') list = list.filter(p => p.isActive);
+    else if (statusFilter === 'inactive') list = list.filter(p => !p.isActive);
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(p =>
+        p.code?.toLowerCase().includes(q) ||
+        p.name?.toLowerCase().includes(q) ||
+        p.category?.toLowerCase().includes(q)
+      );
+    }
+    return list;
   });
 
   let totalPages = $derived(Math.max(1, Math.ceil(filtered.length / PER_PAGE)));
@@ -107,13 +117,22 @@
   async function save() {
     if (!editing) return;
     saving = true; error = '';
+    const clean: Record<string, any> = {
+      code: editing.code,
+      name: editing.name,
+      description: editing.description ?? undefined,
+      reference: editing.reference ?? undefined,
+      category: editing.category ?? undefined,
+      isActive: editing.isActive,
+    };
+    Object.keys(clean).forEach(k => clean[k] === undefined && delete clean[k]);
     try {
       if (editing.id) {
-        const updated = await api.updateProduct(editing.id, editing);
-        products = products.map(p => p.id === updated.id ? updated : p);
+        const updated = await api.updateProduct(editing.id, clean);
+        products = products.map(p => p.id === updated.id ? { ...p, ...updated } : p);
       } else {
-        const created = await api.createProduct(editing);
-        products = [...products, created];
+        const created = await api.createProduct(clean);
+        products = [...products, { ...created, rules: [] }];
       }
       drawerOpen = false;
       editing = null;
@@ -121,10 +140,33 @@
     finally { saving = false; }
   }
 
-  async function remove(id: string) {
-    if (!confirm('Supprimer ce produit ?')) return;
-    await api.deleteProduct(id);
-    products = products.filter(p => p.id !== id);
+  async function toggleActive(p: any, next: boolean) {
+    try {
+      await api.toggleProductStatus(p.id, next);
+      p.isActive = next;
+      toast.success(next ? 'Produit activé' : 'Produit désactivé');
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  }
+
+  function askDelete(p: any) {
+    confirmDel = p;
+  }
+
+  async function execDelete() {
+    if (!confirmDel) return;
+    try {
+      await api.deleteProduct(confirmDel.id);
+      products = products.filter(p => p.id !== confirmDel.id);
+      toast.success('Produit supprimé définitivement');
+      drawerOpen = false;
+      editing = null;
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      confirmDel = null;
+    }
   }
 </script>
 
@@ -195,6 +237,17 @@
       <input type="checkbox" bind:checked={editing!.isActive} class="w-4 h-4 rounded border-mint-subtle text-primary focus:ring-primary" />
       Actif
     </label>
+    {#if editing!.id}
+      <div class="mt-4 pt-4 border-t border-red-200">
+        <h4 class="text-sm font-bold text-error mb-1">Zone dangereuse</h4>
+        <p class="text-xs text-on-surface-variant mb-3">La suppression est définitive : le produit et ses règles liées seront retirés de la base.</p>
+        <button onclick={() => askDelete(editing)}
+          class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-red-50 text-error border border-red-200 hover:bg-red-100 transition-all cursor-pointer">
+          <Trash2 size={16} />
+          Supprimer définitivement
+        </button>
+      </div>
+    {/if}
     <div class="flex gap-3 justify-end mt-4 pt-4 border-t border-mint-subtle">
       <button onclick={() => { drawerOpen = false; editing = null; }} class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white border border-mint-subtle hover:bg-surface-container transition-all cursor-pointer">
         Annuler
@@ -233,6 +286,21 @@
   <Search size={18} class="absolute left-3.5 top-1/2 -translate-y-1/2 text-outline" />
   <input bind:value={search} placeholder="Rechercher un produit (code, nom, catégorie)…"
     class="w-full pl-10 pr-4 py-2.5 border border-mint-subtle rounded-xl text-sm bg-white focus:border-primary focus:outline-none transition-all" />
+</div>
+
+<div class="flex gap-1 mb-4 w-fit">
+  <button onclick={() => statusFilter = 'all'}
+    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer border-none {statusFilter === 'all' ? 'bg-primary text-white' : 'bg-surface border border-mint-subtle text-on-surface-variant hover:bg-surface-container'}">
+    Tous ({products.length})
+  </button>
+  <button onclick={() => statusFilter = 'active'}
+    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer border-none {statusFilter === 'active' ? 'bg-primary text-white' : 'bg-surface border border-mint-subtle text-on-surface-variant hover:bg-surface-container'}">
+    Actifs ({products.filter(p => p.isActive).length})
+  </button>
+  <button onclick={() => statusFilter = 'inactive'}
+    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer border-none {statusFilter === 'inactive' ? 'bg-primary text-white' : 'bg-surface border border-mint-subtle text-on-surface-variant hover:bg-surface-container'}">
+    Inactifs ({products.filter(p => !p.isActive).length})
+  </button>
 </div>
 
 <div class="bg-surface rounded-2xl overflow-x-auto border border-mint-subtle">
@@ -283,15 +351,13 @@
           </td>
           <td class="px-4 py-3 text-sm text-on-surface-variant max-w-[200px] truncate" title={p.description ?? ''}>{p.description ?? '—'}</td>
           <td class="px-4 py-3">
-            {#if p.isActive}
-              <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
-                <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>Actif
-              </span>
-            {:else}
-              <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-outline">
-                <span class="w-1.5 h-1.5 rounded-full bg-outline"></span>Inactif
-              </span>
-            {/if}
+            <ToggleSwitch
+              checked={p.isActive}
+              onchange={(next) => toggleActive(p, next)}
+              activeLabel="Actif"
+              inactiveLabel="Inactif"
+              title={p.isActive ? 'Cliquer pour désactiver' : 'Cliquer pour activer'}
+            />
           </td>
           <td class="px-4 py-3">
             <div class="flex gap-1">
@@ -300,9 +366,6 @@
               </button>
               <button onclick={() => openForm(p)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container transition-all cursor-pointer border-none text-on-surface-variant" title="Modifier">
                 <Pencil size={18} />
-              </button>
-              <button onclick={() => remove(p.id)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 hover:text-error transition-all cursor-pointer border-none text-on-surface-variant" title="Supprimer">
-                <Trash2 size={18} />
               </button>
             </div>
           </td>
@@ -342,3 +405,14 @@
     </div>
   {/if}
 </div>
+
+{#if confirmDel}
+  <ConfirmDialog
+    open={true}
+    title="Supprimer ce produit ?"
+    message={`"${confirmDel.name}" sera supprimé définitivement de la base. Cette action est irréversible.`}
+    confirmText="Supprimer"
+    onconfirm={execDelete}
+    oncancel={() => confirmDel = null}
+  />
+{/if}

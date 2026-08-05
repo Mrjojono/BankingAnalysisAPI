@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import AppLayout from './lib/components/AppLayout.svelte';
   import Spinner from './lib/components/Spinner.svelte';
+  import Landing from './pages/Landing.svelte';
   import Products from './pages/Products.svelte';
   import Rules from './pages/Rules.svelte';
   import Catalog from './pages/Catalog.svelte';
@@ -15,10 +16,13 @@
   import Users from './pages/Users.svelte';
   import Logs from './pages/Logs.svelte';
   import DashboardAnalytics from './pages/DashboardAnalytics.svelte';
+  import Eligibility from './pages/Eligibility.svelte';
+  import Sms from './pages/Sms.svelte';
   import { getAuth, checkAuth } from './lib/stores/auth.svelte';
 
   const auth = getAuth();
   let page = $state('products');
+  let showLogin = $state(false);
   let graphProductId = $state<string | null>(null);
   let graphRuleId = $state<string | null>(null);
   let initializing = $state(true);
@@ -31,6 +35,7 @@
 
   function handleLogin() {
     if (!auth.user) {
+      showLogin = false;
       page = 'products';
     }
   }
@@ -48,7 +53,9 @@
   <div class="min-h-screen bg-background flex items-center justify-center">
     <Spinner text="Vérification de la session..." size="lg" />
   </div>
-{:else if !auth.user}
+{:else if !auth.user && !showLogin}
+  <Landing onlogin={() => showLogin = true} />
+{:else if !auth.user && showLogin}
   <Login onlogin={handleLogin} />
 {:else}
   <AppLayout {page} onNavigate={handleNavigate}>
@@ -76,6 +83,10 @@
       <Logs />
     {:else if page === 'dashboard'}
       <DashboardAnalytics />
+    {:else if page === 'eligibility'}
+      <Eligibility />
+    {:else if page === 'sms'}
+      <Sms />
     {/if}
   </AppLayout>
 {/if}

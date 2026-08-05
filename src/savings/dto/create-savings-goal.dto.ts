@@ -6,11 +6,6 @@ export class CreateSavingsGoalDto {
   @IsString()
   name: string;
 
-  @ApiPropertyOptional({ example: 'Voyage à Dakar' })
-  @IsOptional()
-  @IsString()
-  label?: string;
-
   @ApiProperty({ example: 500000 })
   @IsNumber()
   @Min(1)

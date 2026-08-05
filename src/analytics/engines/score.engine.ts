@@ -45,11 +45,12 @@ export class ScoreEngine {
       .toDP(0)
       .toNumber();
 
-    // C4 = (score découverts × 40%) + (score volatilité revenus × 35%) + (score volatilité solde × 25%)
+    // C4 = (score découverts × 25%) + (score volatilité revenus × 30%) + (score volatilité solde × 20%) + (score solde négatif × 25%)
     const c4Score = new Decimal(metrics.overdraftScore)
-      .mul(0.4)
-      .plus(new Decimal(metrics.revenueVolatilityScore).mul(0.35))
-      .plus(new Decimal(metrics.balanceVolatilityScore).mul(0.25))
+      .mul(0.25)
+      .plus(new Decimal(metrics.revenueVolatilityScore).mul(0.30))
+      .plus(new Decimal(metrics.balanceVolatilityScore).mul(0.20))
+      .plus(new Decimal(metrics.negativeBalanceScore).mul(0.25))
       .toDP(0)
       .toNumber();
 

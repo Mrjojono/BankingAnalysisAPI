@@ -7,11 +7,6 @@ export class UpdateSavingsGoalDto {
   @IsString()
   name?: string;
 
-  @ApiPropertyOptional({ example: 'Voyage à Dakar' })
-  @IsOptional()
-  @IsString()
-  label?: string;
-
   @ApiPropertyOptional({ example: 500000 })
   @IsOptional()
   @IsNumber()

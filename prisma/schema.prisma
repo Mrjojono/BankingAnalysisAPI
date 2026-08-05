@@ -361,6 +361,7 @@ model BankCustomer {
 
   @@index([accountNumber])
   @@index([email])
+  @@index([telephone])
   @@map("bank_customers")
 }
 
@@ -603,6 +604,8 @@ model Transaction {
   @@index([ledgerId])
   @@index([status])
   @@index([transactionDate])
+  @@index([senderCustomerId])
+  @@index([receiverCustomerId])
   @@map("transactions")
 }
 
@@ -756,6 +759,12 @@ model Rule {
   @@map("rules")
 }
 
+enum SmsTransactionStatus {
+  PENDING
+  APPROVED
+  IGNORED
+}
+
 model SmsTransaction {
   id         Int          @id @default(autoincrement())
   customerId String       @db.Uuid
@@ -769,11 +778,47 @@ model SmsTransaction {
   dateSent   DateTime
   createdAt  DateTime     @default(now())
 
+  status       SmsTransactionStatus @default(PENDING)
+  category     String?
+  counterparty String?
+  balanceAfter Float?
+  referenceNo  String?
+  confidence   Float?
+  fingerprint  String?              @unique
+  reviewedAt   DateTime?
+  reviewedBy   String?
+  matchRuleId  String?              @db.Uuid
+  matchRule    SmsFilterRule?       @relation(fields: [matchRuleId], references: [id])
+
   customer BankCustomer @relation(fields: [customerId], references: [id])
 
   @@unique([customerId, smsId])
   @@index([customerId])
+  @@index([status])
+  @@index([operator])
+  @@index([matchRuleId])
   @@map("sms_transactions")
+}
+
+model SmsFilterRule {
+  id          String   @id @default(uuid()) @db.Uuid
+  customerId  String?  @db.Uuid
+  operator    String?
+  address     String?
+  keyword     String?
+  direction   String?
+  action      String   @default("IGNORE")
+  description String?
+  isActive    Boolean  @default(true)
+
+  transactions SmsTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([isActive])
+  @@map("sms_filter_rules")
 }
 
 // ============================================================
@@ -838,6 +883,7 @@ model Lesson {
 
   @@index([learningPathId])
   @@index([minScore, maxScore])
+  @@index([status])
   @@map("lessons")
 }
 

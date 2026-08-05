@@ -4,6 +4,56 @@ import { computeRuleSatisfaction } from './eligibility-context.builder';
 import { ANALYTICS_FIELD_MAP, ELIGIBLE_THRESHOLD, PARTIAL_THRESHOLD } from '../types';
 import type { RuleResult } from '../types';
 
+const ADVICE_TEMPLATES: Record<string, { fail: string; partial: string }> = {
+  monthlyIncome: {
+    fail: 'Vos revenus sont insuffisants pour ce produit. Augmentez vos revenus ou consolidez vos sources de revenus.',
+    partial: 'Vos revenus sont proches du minimum requis. Continuez à les améliorer.',
+  },
+  debtRatio: {
+    fail: 'Votre taux d\'endettement est trop élevé. Remboursez vos dettes existantes avant de solliciter un nouveau crédit.',
+    partial: 'Votre taux d\'endettement est limite. Évitez de contracter de nouveaux crédits.',
+  },
+  expenseRatio: {
+    fail: 'Vos dépenses mensuelles sont trop élevées par rapport à vos revenus. Réduisez vos dépenses pour améliorer ce ratio.',
+    partial: 'Votre ratio dépenses/revenus est élevé. Essayez de réduire certaines dépenses non essentielles.',
+  },
+  repaymentRegularity: {
+    fail: 'Vous avez des retards de remboursement. Respectez vos échéances pour améliorer votre score.',
+    partial: 'Quelques retards de paiement détectés. Essayez de les éviter à l\'avenir.',
+  },
+  savingsRate: {
+    fail: 'Votre taux d\'épargne est insuffisant. Essayez d\'épargner au moins 10% de vos revenus chaque mois.',
+    partial: 'Continuez à améliorer votre taux d\'épargne pour atteindre l\'objectif recommandé.',
+  },
+  overdraftDays: {
+    fail: 'Vous passez trop de jours en découvert. Évitez les découverts bancaires et régularisez votre solde rapidement.',
+    partial: 'Réduisez le nombre de jours de découvert pour améliorer votre profil.',
+  },
+  savingsRegularity: {
+    fail: 'Votre épargne est irrégulière. Mettez en place un virement automatique mensuel.',
+    partial: 'Essayez d\'épargner de façon plus régulière chaque mois.',
+  },
+  emergencyFundScore: {
+    fail: 'Vous n\'avez pas de fonds d\'urgence suffisant. Constituez une épargne de précaution.',
+    partial: 'Continuez à alimenter votre fonds d\'urgence pour atteindre le niveau recommandé.',
+  },
+  balanceVolatility: {
+    fail: 'Votre solde est trop volatile. Stabilisez vos entrées et sorties d\'argent.',
+    partial: 'Votre solde est légèrement instable. Essayez de lisser vos dépenses.',
+  },
+  revenueVolatility: {
+    fail: 'Vos revenus sont trop irréguliers. Diversifiez vos sources de revenus.',
+    partial: 'Vos revenus sont modérément irréguliers. Un apport complémentaire pourrait aider.',
+  },
+};
+
+function generateAdvice(field: string, status: 'PASS' | 'FAIL' | 'PARTIAL'): string | null {
+  if (status === 'PASS') return null;
+  const templates = ADVICE_TEMPLATES[field];
+  if (!templates) return null;
+  return templates[status];
+}
+
 export type ProductScore = {
   productCode: string;
   rawScore: number;
@@ -42,10 +92,18 @@ export function scoreProduct(
     const status =
       satisfaction >= 1 ? 'PASS' : satisfaction <= 0 ? 'FAIL' : 'PARTIAL';
 
+    const advice = generateAdvice(rule.field, status);
+    const message = status === 'PASS'
+      ? `${rule.label} : respecté`
+      : status === 'PARTIAL'
+        ? `${rule.label} : partiellement respecté`
+        : `${rule.label} : non respecté`;
+
     ruleResults.push({
       ruleId: rule.id,
       ruleCode: rule.code,
       label: rule.label,
+      field: rule.field,
       status,
       valueSource: 'analytics',
       clientValue: metricValue,
@@ -54,8 +112,8 @@ export function scoreProduct(
       thresholdMax: rule.valueMax ?? null,
       scoreEarned: Math.round(earned),
       scoreMax: weight,
-      message: '',
-      advice: null,
+      message,
+      advice,
     });
   }
 

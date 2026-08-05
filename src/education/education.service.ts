@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OverviewService } from '../analytics/overview/overview.service';
 import { ScoreEngine } from '../analytics/engines/score.engine';
@@ -140,12 +140,16 @@ export class EducationService {
       where: { userId_lessonId: { userId, lessonId } },
     });
 
+    const resolvedBlocks = lesson.contentBlocks
+      ? await this.resolveVariables(lesson.contentBlocks as any[], userId)
+      : null;
+
     return {
       id: lesson.id,
       learningPathId: lesson.learningPathId,
       title: lesson.title,
       content: lesson.content,
-      contentBlocks: lesson.contentBlocks ?? null,
+      contentBlocks: resolvedBlocks,
       summary: lesson.summary,
       imageUrl: lesson.imageUrl,
       videoUrl: lesson.videoUrl,
@@ -306,6 +310,70 @@ export class EducationService {
     const customerId = connection?.bankCustomerId;
     if (!customerId) return [];
     return this.getRecommendations(userId, customerId);
+  }
+
+  async submitQuiz(quizId: string, userId: string, answers: { questionId: string; choiceId: string }[]) {
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { id: quizId },
+      include: {
+        questions: {
+          include: { choices: true },
+        },
+      },
+    });
+
+    if (!quiz || quiz.status !== 'PUBLISHED') {
+      throw new NotFoundException('Quiz introuvable');
+    }
+
+    const questionIds = new Set(quiz.questions.map((q) => q.id));
+    for (const a of answers) {
+      if (!questionIds.has(a.questionId)) {
+        throw new BadRequestException(`Question ${a.questionId} n'appartient pas à ce quiz`);
+      }
+    }
+
+    const choiceMap = new Map<string, boolean>();
+    for (const q of quiz.questions) {
+      for (const c of q.choices) {
+        choiceMap.set(c.id, c.isCorrect);
+      }
+    }
+
+    let correct = 0;
+    const answerRecords: { questionId: string; choiceId: string; isCorrect: boolean }[] = [];
+
+    for (const a of answers) {
+      const isCorrect = choiceMap.get(a.choiceId) ?? false;
+      if (isCorrect) correct++;
+      answerRecords.push({ questionId: a.questionId, choiceId: a.choiceId, isCorrect });
+    }
+
+    const total = quiz.questions.length;
+    const score = Math.round((correct / total) * 100);
+    const passed = score >= quiz.passingScore;
+
+    const attempt = await this.prisma.quizAttempt.create({
+      data: {
+        userId,
+        quizId,
+        score,
+        total,
+        passed,
+        completedAt: new Date(),
+        answers: {
+          create: answerRecords,
+        },
+      },
+    });
+
+    return {
+      attemptId: attempt.id,
+      score,
+      total,
+      correct,
+      passed,
+    };
   }
 
   // ========== Admin: Paths ==========
@@ -478,5 +546,47 @@ export class EducationService {
       where: { id: lessonId },
     });
     if (!lesson) throw new NotFoundException('Leçon introuvable');
+  }
+
+  private async resolveVariables(blocks: any[], userId: string): Promise<any[]> {
+    const connection = await this.prisma.userBankConnection.findFirst({
+      where: { userId },
+    });
+    if (!connection?.bankCustomerId) return blocks;
+
+    try {
+      const metrics = await this.overviewService.gatherMetrics(connection.bankCustomerId);
+      const scoreRes = await this.scoreEngine.calculateGlobalScore(metrics);
+      const vars: Record<string, string> = {
+        globalScore: String(scoreRes.globalScore ?? '—'),
+        monthlyIncome: String(metrics.monthlyIncome ?? '—'),
+        monthlyExpenses: String(metrics.monthlyExpenses ?? '—'),
+        savingsRate: metrics.savingsRate != null ? `${Math.round(metrics.savingsRate)}%` : '—',
+        expenseRatio: metrics.expenseRatio != null ? `${Math.round(metrics.expenseRatio)}%` : '—',
+        debtRatio: metrics.debtRatio != null ? `${Math.round(metrics.debtRatio)}%` : '—',
+        overdraftDays: String(metrics.overdraftDays ?? '—'),
+        savingsScore: String(metrics.savingsRateScore ?? '—'),
+        expenseScore: String(metrics.expenseRatioScore ?? '—'),
+        debtScore: String(metrics.debtRatioScore ?? '—'),
+        overdraftScore: String(metrics.overdraftScore ?? '—'),
+        stabilityScore: String(metrics.revenueVolatilityScore ?? '—'),
+        emergencyFundScore: String(metrics.emergencyFundScore ?? '—'),
+      };
+
+      const resolve = (val: string): string =>
+        val.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+
+      return blocks.map((block) => {
+        const b = { ...block };
+        if (b.text) b.text = resolve(b.text);
+        if (b.question) b.question = resolve(b.question);
+        if (b.explanation) b.explanation = resolve(b.explanation);
+        if (b.items) b.items = (b.items as string[]).map(resolve);
+        if (b.choices) b.choices = (b.choices as string[]).map(resolve);
+        return b;
+      });
+    } catch {
+      return blocks;
+    }
   }
 }

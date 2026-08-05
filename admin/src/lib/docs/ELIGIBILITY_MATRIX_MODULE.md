@@ -1,8 +1,10 @@
-# Module d'Éligibilité Matricielle
+# Module d'Éligibilité
 
 ## Vue d'ensemble
 
-Remplace l'évaluation par règles `if/else` par un **calcul matriciel vectorisé**. Chaque produit bancaire est représenté par une colonne de poids dans une matrice. Le client est représenté par un vecteur de métriques financières. Le score d'éligibilité = `vecteur × matrice`.
+Le module d'éligibilité évalue si un client est éligible à un produit bancaire. Deux moteurs sont disponibles :
+- **Matrix** (défaut) : scoring continu pondéré via `scoreProduct()` — satisfaction linéaire par règle
+- **Rules** (legacy) : scoring binaire pass/fail via `RuleEvaluator`
 
 ## Architecture
 
@@ -11,94 +13,149 @@ POST /eligibility/evaluate
   → EligibilityController
     → EligibilityService (mode='matrix' par défaut)
       → MatrixEligibilityEngine
-        ├── OverviewService.gatherMetrics()     ← calcule les métriques client
-        ├── EligibilityMatrixBuilder.loadProducts() ← charge matrice depuis DB (cache Redis)
-        ├── computeRuleSatisfaction()            ← compare métrique × seuil
+        ├── OverviewService.gatherMetrics()     ← métriques client
+        ├── EligibilityMatrixBuilder.loadProducts() ← produits + règles ELIGIBILITY (cache Redis)
+        ├── computeGlobalScore()                ← score global 4 composantes
         ├── scoreProduct()                       ← somme pondérée des satisfactions
-        └── normalizedScoreToStatus()            ← seuillage ELIGIBLE/PARTIAL/NOT_ELIGIBLE
+        ├── normalizedScoreToStatus()            ← seuillage ELIGIBLE/PARTIAL/NOT_ELIGIBLE
+        └── buildInfoRules()                     ← formatage règles non-ELIGIBILITY (frais, limites)
 ```
 
-## Flux détaillé
+## Endpoints
 
-### 1. Vecteur client (12 dimensions)
+| Méthode | Route | Description |
+|---------|-------|-------------|
+| `POST` | `/eligibility/evaluate` | Évaluer l'éligibilité pour un produit |
+| `POST` | `/eligibility/simulate` | Simulation "what if" avec ajustements |
+| `GET`  | `/eligibility/products` | Lister les produits actifs |
+| `GET`  | `/eligibility/products/:code/rules` | Règles d'un produit |
+| `GET`  | `/eligibility/improvement-plan/:customerId` | Plan d'amélioration |
+| `GET`  | `/eligibility/dashboard/:customerId` | Dashboard complet |
 
-Construit par `eligibility-context.builder.ts` à partir des métriques `gatherMetrics()` :
+## Types de réponse
 
-| Index | Feature | Source | Normalisation |
-|-------|---------|--------|---------------|
-| 0 | `debtRatio` | `analytics.debtRatio` | /100 |
-| 1 | `monthlyIncome` | `analytics.monthlyIncome` | /5_000_000 |
-| 2 | `overdraftDays` | `analytics.overdraftDays` | /31 |
-| 3 | `savingsRegularity` | `analytics.savingsRegularityScore` | /100 |
-| 4 | `expenseRatio` | `analytics.expenseRatio` | /100 |
-| 5 | `repaymentRegularity` | `analytics.repaymentRegularityScore` | /100 |
-| 6 | `revenueVolatility` | `analytics.revenueVolatilityScore` | 1 - (score/100) |
-| 7 | `emergencyFund` | `analytics.emergencyFundScore` | /100 |
-| 8 | `balanceVolatility` | `analytics.balanceVolatilityScore` | 1 - (score/100) |
-| 9 | `savingsRate` | `analytics.savingsRate` | /100 |
-| 10 | `globalScore` | calculé via `computeGlobalScore()` | /100 |
-| 11 | `depositAmount` | `clientInputs.depot/dat_montant/...` | /50_000_000 |
+### EligibilityResult
 
-Toutes les valeurs sont **clampées entre 0 et 1**.
-
-### 2. Matrice des poids
-
-Construite **dynamiquement** depuis les règles ELIGIBILITY en base de données par `eligibility-matrix.builder.ts` :
-
-```
-                    COMPTES_PART  VISA_LIBERTE  COMPTES_ENT
-debtRatio               -0.35         -0.35          0
-monthlyIncome            0.30          0.30          0
-overdraftDays           -0.20         -0.20          0
-savingsRegularity        0.15          0.15          0
-depositAmount              0             0          1.0
+```typescript
+{
+  productCode: string;
+  productName: string;
+  productDescription: string;
+  hasEligibilityRules: boolean;
+  globalScore: number;     // somme pondérée des satisfactions
+  maxScore: number;        // somme des poids max
+  scorePercent: number;    // 0-100
+  status: 'ELIGIBLE' | 'PARTIAL' | 'NOT_ELIGIBLE';
+  ruleResults: RuleResult[];
+  infoRules: RuleResult[];  // frais, limites, taux
+  passedRules: RuleResult[];
+  failedRules: RuleResult[];
+  partialRules: RuleResult[];
+}
 ```
 
-**Règle de conversion** règle DB → poids matriciel :
-- `operator = LESS_THAN / LESS_OR_EQUAL` → **poids négatif** (plus la valeur est élevée, plus le score baisse)
-- `operator = GREATER_THAN / GREATER_OR_EQUAL` → **poids positif** (plus la valeur est élevée, plus le score monte)
-- Magnitude du poids = `rule.weight / 100`
+### RuleResult
 
-### 3. Satisfaction de règle (0 à 1)
-
-`computeRuleSatisfaction()` transforme chaque règle avec son seuil en une fonction continue :
-
-```
-LESS_THAN (ex: debtRatio < 33) :
-  satisfaction = 0 si value >= threshold
-  satisfaction = 1 si value <= threshold - margin
-  linéaire entre (threshold - margin, threshold)
-
-GREATER_THAN (ex: monthlyIncome >= 200k) :
-  satisfaction = 0 si value <= threshold
-  satisfaction = 1 si value >= threshold + margin
-  linéaire entre (threshold, threshold + margin)
-
-BETWEEN :
-  satisfaction = 0 si value <= valueMin
-  satisfaction = 1 si value >= valueMax
-  linéaire entre (valueMin, valueMax)
-
-EQUALS / NOT_EQUALS :
-  satisfaction = 1 - |value - threshold| / tolerance
+```typescript
+{
+  ruleId: string;
+  ruleCode: string;
+  label: string;
+  field: string;             // champ métier (monthlyIncome, debtRatio, etc.)
+  status: 'PASS' | 'FAIL' | 'PARTIAL';
+  valueSource: 'analytics' | 'input' | 'not_found';
+  clientValue: number | boolean | string | null;
+  threshold: number | null;
+  scoreEarned: number;
+  scoreMax: number;          // poids de la règle
+  message: string;           // message formaté
+  advice: string | null;     // conseil personnalisé si FAIL/PARTIAL
+}
 ```
 
-La **marge** = `max(|threshold| × 0.5, 1)` pour éviter les transitions brutales.
+### SimulationResult
 
-### 4. Score produit
+```typescript
+{
+  current: EligibilityResult;
+  simulated: EligibilityResult;
+  adjustments: Array<{ field: string; from: number; to: number; delta: number }>;
+}
+```
+
+### ImprovementPlan
+
+```typescript
+{
+  customerId: string;
+  currentGlobalScore: number;
+  maxScore: number;
+  potentialScore: number;
+  improvementRate: number;   // pourcentage
+  items: ImprovementPlanItem[];
+}
+```
+
+## Scoring continu (matrix)
+
+### Satisfaction par règle (0 à 1)
+
+`computeRuleSatisfaction()` compare chaque métrique à son seuil :
+
+| Opérateur | Comportement |
+|-----------|-------------|
+| `LESS_THAN` | 1 si bien en dessous du seuil, 0 si au-dessus, linéaire dans la marge |
+| `GREATER_THAN` | 0 si en dessous du seuil, 1 si bien au-dessus, linéaire dans la marge |
+| `BETWEEN` | Interpolation linéaire entre valueMin et valueMax |
+| `EQUALS` | Basé sur la distance au seuil avec tolérance de 10% |
+
+La **marge** est spécifique par champ :
+- `monthlyIncome` : 200 000 FCFA
+- `debtRatio` : 5%
+- `overdraftDays` : 2 jours
+- `savingsRate` : 3%
+- `expenseRatio` : 5%
+- Autres : `max(|threshold| × 15%, 1)`
+
+### Score produit
 
 ```
 rawScore = Σ(satisfaction_i × weight_i) / Σ(weight_i)
 normalizedScore = clamp(rawScore, 0, 1)
 ```
 
-### 5. Seuils de décision
+### Seuils de décision
 
 | Score | Statut |
 |-------|--------|
 | ≥ 0.70 | **ELIGIBLE** |
 | ≥ 0.40 | **PARTIAL** |
 | < 0.40 | **NOT_ELIGIBLE** |
+
+## Score global 4 composantes
+
+Calculé par `computeGlobalScore()` pour chaque client :
+
+| Composante | Indicateurs | Pondération |
+|-----------|-------------|-------------|
+| **C1** Expenses | expenseRatioScore × 0.5 + paymentRegularityScore × 0.5 | 25% |
+| **C2** Debt | debtRatioScore × 0.4 + repaymentRegularityScore × 0.35 + creditUtilizationScore × 0.25 | 25% |
+| **C3** Savings | savingsRateScore × 0.5 + emergencyFundScore × 0.3 + savingsRegularityScore × 0.2 | 25% |
+| **C4** Stability | overdraftScore × 0.4 + revenueVolatilityScore × 0.35 + balanceVolatilityScore × 0.25 | 25% |
+
+Score final = `C1 × 0.25 + C2 × 0.25 + C3 × 0.25 + C4 × 0.25`, arrondi.
+
+## Conseils par règle
+
+Le moteur génère automatiquement des conseils personnalisés pour chaque règle FAIL/PARTIAL :
+
+| Champ | Conseil (FAIL) | Conseil (PARTIAL) |
+|-------|----------------|-------------------|
+| `monthlyIncome` | "Vos revenus sont insuffisants..." | "Vos revenus sont proches..." |
+| `debtRatio` | "Votre taux d'endettement est trop élevé..." | "Votre taux d'endettement est limite..." |
+| `expenseRatio` | "Vos dépenses sont trop élevées..." | "Votre ratio dépenses/revenus est élevé..." |
+| `savingsRate` | "Votre taux d'épargne est insuffisant..." | "Continuez à améliorer votre taux d'épargne..." |
+| `overdraftDays` | "Vous passez trop de jours en découvert..." | "Réduisez le nombre de jours de découvert..." |
 
 ## Cache
 
@@ -109,76 +166,38 @@ Pour invalider le cache manuellement :
 await matrixBuilder.invalidateCache();
 ```
 
-## API
-
-### POST /eligibility/evaluate
-
-**Corps de la requête :**
-```json
-{
-  "customerId": "3dc5213d-...",
-  "productCode": "COMPTES_PART",
-  "inputs": {
-    "dat_montant_min": 10000000
-  },
-  "mode": "matrix"
-}
-```
-
-**Paramètres :**
-- `mode` : `"matrix"` (défaut) ou `"rules"` (ancien moteur)
-
 ## Fichiers du module
 
 ```
-src/eligibility/matrix/
-├── types.ts                           # Types EligibilityMetrics, MatrixProduct, MatrixRule
-├── eligibility-context.builder.ts     # buildEligibilityVector(), computeRuleSatisfaction()
-├── eligibility-matrix.builder.ts      # Charge produits + règles depuis DB, cache Redis
-├── eligibility-scoring.engine.ts      # scoreProduct(), normalizedScoreToStatus()
-├── matrix-eligibility.engine.ts       # Moteur principal (orchestre le calcul)
-├── eligibility-matrix.module.ts       # Module NestJS
-└── index.ts                           # Barrel exports
-```
-
-Fichiers modifiés :
-```
-src/eligibility/eligibility.module.ts   → importe EligibilityMatrixModule
-src/eligibility/eligibility.service.ts  → utilise MatrixEligibilityEngine par défaut
-src/eligibility/eligibility.controller.ts → transmet le paramètre mode
-src/eligibility/dto/eligibility.dto.ts  → ajoute le champ mode optionnel
+src/eligibility/
+├── types.ts                           # Types EligibilityResult, RuleResult, ANALYTICS_FIELD_MAP
+├── eligibility.controller.ts          # Endpoints REST (evaluate, simulate, dashboard, etc.)
+├── eligibility.service.ts             # Orchestrateur (évaluation, simulation, plan d'amélioration)
+├── eligibility.module.ts              # Module NestJS
+├── dto/eligibility.dto.ts             # DTOs (EvaluateEligibilityDto, SimulateEligibilityDto)
+├── calibration.service.ts             # Calibration des seuils (Redis)
+├── engines/
+│   ├── eligibility.engine.ts          # Moteur rules (legacy)
+│   └── rule-evaluator.ts              # Évaluation par règle
+└── matrix/
+    ├── types.ts                       # EligibilityMetrics, MatrixProduct, MatrixRule
+    ├── eligibility-context.builder.ts # computeRuleSatisfaction(), FIELD_MARGINS
+    ├── eligibility-matrix.builder.ts  # Charge produits depuis DB, cache Redis
+    ├── eligibility-scoring.engine.ts  # scoreProduct(), normalizedScoreToStatus(), ADVICE_TEMPLATES
+    ├── matrix-eligibility.engine.ts   # Moteur principal (orchestre le calcul)
+    └── eligibility-matrix.module.ts   # Sous-module NestJS
 ```
 
 ## Différence avec l'ancien système
 
 | Aspect | Ancien (rules) | Nouveau (matrix) |
 |--------|---------------|------------------|
-| Évaluation | `if/else` par règle | Produit scalaire vectorisé |
+| Évaluation | `if/else` par règle | Somme pondérée continue |
 | Score | PASS/FAIL binaire | Continu 0-1 |
 | Seuils | Coupure brutale | Transition linéaire (marge) |
-| Règles DB | Lues à chaque appel | Chargées + cache Redis |
-| Extensibilité | Nouveau if/else à chaque règle | Nouvelle colonne dans la matrice |
-| Entraînement | Impossible | Possible (gradient descent) |
+| Conseils | NLG via catalog | Templates par champ + NLG |
+| Règles DB | Lues à chaque appel | Cache Redis 1h |
 
-## Entraînement futur
+## Endpoints admin
 
-Le système est conçu pour supporter l'entraînement par descente de gradient (même principe que `trainSingleLayer()` dans `analytics/training/`) :
-
-1. Collecter des données historiques : `{metrics, productCode, decision}` où `decision` = ELIGIBLE / NOT_ELIGIBLE
-2. Initialiser les poids avec les valeurs issues des règles DB
-3. Lancer `trainSingleLayer()` pour ajuster les poids automatiquement
-4. Les nouveaux poids remplacent la matrice initiale
-
-```typescript
-// Exemple de structure de donnée d'entraînement :
-{
-  context: { debtRatio: 25, monthlyIncome: 500000, overdraftDays: 3, ... },
-  expected: "COMPTES_PART" // produit accordé
-}
-```
-
-## Notes importantes
-
-- Les règles de type **FEE, LIMIT, INTEREST, VALUE_DATE** ne sont pas concernées par la matrice — elles sont toujours stockées en DB et renvoyées comme informations dans la réponse.
-- Les champs métier non mappables en continu (`dat_duree_mois`, `bon_caisse_duree_mois`) sont gérés via `clientInputs` uniquement — si le champ n'est pas fourni, la satisfaction est 0.
-- Le mode `rules` est conservé pour comparaison et fallback.
+L'admin peut accéder aux mêmes endpoints via le proxy `/eligibility` configuré dans `vite.config.ts`.

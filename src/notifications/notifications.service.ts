@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from './push.service';
 import { MailService } from '../mail/mail.service';
+import { NotificationsGateway } from './notifications.gateway';
 import type { NotificationType, NotificationChannel } from '../../generated/prisma/client';
 import type { UpdatePrefsDto } from './dto/update-prefs.dto';
 type NotificationInput = {
@@ -26,6 +27,7 @@ export class NotificationsService {
     private prisma: PrismaService,
     private pushService: PushService,
     private mailService: MailService,
+    private notificationsGateway: NotificationsGateway,
   ) {}
 
   async create(userId: string, input: NotificationInput) {
@@ -35,7 +37,7 @@ export class NotificationsService {
 
     const isTypeAllowed =
       !prefs?.types ||
-      (prefs.types as string[]).includes(input.type);
+      (prefs.types as Record<string, boolean>)[input.type] !== false;
 
     const notification = await this.prisma.notification.create({
       data: {
@@ -78,6 +80,17 @@ export class NotificationsService {
       }
     }
 
+    this.notificationsGateway.sendToUser(userId, 'notification', {
+      id: notification.id,
+      type: notification.type,
+      title: notification.title,
+      body: notification.body,
+      data: notification.data,
+      severity: notification.severity,
+      link: notification.link,
+      createdAt: notification.createdAt,
+    });
+
     return notification;
   }
 
@@ -85,19 +98,33 @@ export class NotificationsService {
     userIds: string[],
     input: NotificationInput,
   ) {
-    const batchData = userIds.map((userId) => ({
-      userId,
-      type: input.type,
-      channel: input.channel ?? 'IN_APP',
-      title: input.title,
-      body: input.body,
-      data: (input.data ?? undefined) as any,
-      severity: input.severity ?? 'INFO',
-      link: input.link ?? undefined,
-    }));
+    const prefs = await this.prisma.notificationPreference.findMany({
+      where: { userId: { in: userIds } },
+    });
+    const prefMap = new Map(
+      prefs.map((p) => [p.userId, p.types as Record<string, boolean>]),
+    );
 
-    await this.prisma.notification.createMany({ data: batchData });
-    return { count: userIds.length };
+    const notifications = userIds
+      .filter((uid) => {
+        const types = prefMap.get(uid);
+        return !types || types[input.type] !== false;
+      })
+      .map((userId) => ({
+        userId,
+        type: input.type,
+        channel: input.channel ?? 'IN_APP',
+        title: input.title,
+        body: input.body,
+        data: (input.data ?? undefined) as any,
+        severity: input.severity ?? 'INFO',
+        link: input.link ?? undefined,
+      }));
+
+    if (notifications.length === 0) return { count: 0 };
+
+    await this.prisma.notification.createMany({ data: notifications });
+    return { count: notifications.length };
   }
 
   async getHistory(
@@ -198,6 +225,8 @@ export class NotificationsService {
     'WEEKLY_DIGEST',
     'SYSTEM',
     'ADMIN_BROADCAST',
+    'LESSON_RECOMMENDED',
+    'PATH_COMPLETED',
   ];
 
   async getPreferences(userId: string) {

@@ -1,9 +1,10 @@
-import { Controller, Get, Param, Patch, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Post, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UserId } from '../auth/user-id.decorator';
 import { EducationService } from './education.service';
 import { UpdateProgressDto } from './dto/update-progress.dto';
+import { SubmitQuizDto } from './dto/submit-quiz.dto';
 
 @ApiTags('Education')
 @ApiBearerAuth()
@@ -49,5 +50,15 @@ export class EducationController {
   @ApiOperation({ summary: 'Leçons recommandées (matrice + score)' })
   getRecommendations(@UserId() userId: string) {
     return this.educationService.getRecommendationsForUser(userId);
+  }
+
+  @Post('quizzes/:id/submit')
+  @ApiOperation({ summary: 'Soumettre un quiz' })
+  submitQuiz(
+    @Param('id') quizId: string,
+    @UserId() userId: string,
+    @Body() dto: SubmitQuizDto,
+  ) {
+    return this.educationService.submitQuiz(quizId, userId, dto.answers);
   }
 }

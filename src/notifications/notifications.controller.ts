@@ -9,7 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { SkipThrottle } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { PushService } from './push.service';
@@ -20,7 +20,6 @@ import { RegisterPushTokenDto, UnregisterPushTokenDto } from './dto/register-pus
 
 @ApiTags('Notifications')
 @ApiBearerAuth()
-@SkipThrottle()
 @UseGuards(JwtAuthGuard)
 @Controller('notifications')
 export class NotificationsController {
@@ -96,6 +95,7 @@ export class NotificationsController {
   }
 
   @Post('push/register')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: "Enregistrer un token push Expo" })
   async registerPushToken(
     @UserId() userId: string,
@@ -105,6 +105,7 @@ export class NotificationsController {
   }
 
   @Post('push/unregister')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: "Désenregistrer un token push" })
   async unregisterPushToken(
     @UserId() userId: string,

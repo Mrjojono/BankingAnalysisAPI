@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Pencil, Trash2 } from '@lucide/svelte';
+  import { Pencil } from '@lucide/svelte';
+  import ToggleSwitch from '../ToggleSwitch.svelte';
 
   const DIFFICULTIES = [
     { value: 'BEGINNER', label: 'Débutant', class: 'bg-green-50 text-green-700 ring-green-200' },
@@ -11,11 +12,11 @@
   let {
     paths = $bindable([]),
     onEdit,
-    onDelete,
+    onToggle,
   }: {
     paths?: any[];
     onEdit?: (p: any) => void;
-    onDelete?: (id: string) => void;
+    onToggle?: (p: any, next: boolean) => void;
   } = $props();
 
   let page = $state(1);
@@ -62,23 +63,18 @@
           <td class="px-4 py-3 text-sm text-on-surface-variant">{p.order}</td>
           <td class="px-4 py-3 text-sm">{p._count?.lessons ?? p.lessons?.length ?? 0}</td>
           <td class="px-4 py-3">
-            {#if p.isActive}
-              <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
-                <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>Actif
-              </span>
-            {:else}
-              <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-outline">
-                <span class="w-1.5 h-1.5 rounded-full bg-outline"></span>Inactif
-              </span>
-            {/if}
+            <ToggleSwitch
+              checked={p.isActive}
+              onchange={(next) => onToggle?.(p, next)}
+              activeLabel="Actif"
+              inactiveLabel="Inactif"
+              title={p.isActive ? 'Cliquer pour désactiver' : 'Cliquer pour activer'}
+            />
           </td>
           <td class="px-4 py-3">
             <div class="flex gap-1">
               <button onclick={() => onEdit?.(p)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container transition-all cursor-pointer border-none text-on-surface-variant" title="Modifier">
                 <Pencil size={18} />
-              </button>
-              <button onclick={() => onDelete?.(p.id)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 hover:text-error transition-all cursor-pointer border-none text-on-surface-variant" title="Supprimer">
-                <Trash2 size={18} />
               </button>
             </div>
           </td>

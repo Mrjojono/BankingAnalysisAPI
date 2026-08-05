@@ -13,7 +13,7 @@ import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { EligibilityService } from './eligibility.service';
-import { EvaluateEligibilityDto } from './dto/eligibility.dto';
+import { EvaluateEligibilityDto, SimulateEligibilityDto } from './dto/eligibility.dto';
 
 @ApiTags('Eligibility') // Groupe Swagger
 @ApiBearerAuth() // Authentification requise
@@ -81,5 +81,23 @@ export class EligibilityController {
   @ApiOperation({ summary: "Obtenir les regles d'un produit" })
   async getProductRules(@Param('code') code: string) {
     return this.service.getProductRules(code);
+  }
+
+  @Post('simulate')
+  @ApiOperation({ summary: "Simuler l'impact d'ajustements sur l'éligibilité", description: 'Permet de tester des scénarios "what if" en modifiant des métriques (ex: monthlyIncome, debtRatio) pour voir l\'impact sur le score.' })
+  async simulate(@Body() dto: SimulateEligibilityDto) {
+    return this.service.simulate(dto);
+  }
+
+  @Get('improvement-plan/:customerId')
+  @ApiOperation({ summary: "Plan d'amélioration de l'éligibilité", description: 'Liste toutes les règles non respectées avec des conseils personnalisés et le score potentiel si elles étaient corrigées.' })
+  async improvementPlan(@Param('customerId') customerId: string) {
+    return this.service.improvementPlan(customerId);
+  }
+
+  @Get('dashboard/:customerId')
+  @ApiOperation({ summary: "Tableau de bord éligibilité", description: 'Vue d\'ensemble des scores éligibilité pour tous les produits, avec les règles critiques.' })
+  async dashboard(@Param('customerId') customerId: string) {
+    return this.service.dashboard(customerId);
   }
 }

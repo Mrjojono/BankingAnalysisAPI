@@ -6,17 +6,21 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Logger, Injectable } from '@nestjs/common';
+import { Logger, Injectable, OnModuleDestroy, UnauthorizedException } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { validateToken } from '../auth/auth.utils';
 
 @Injectable()
 @WebSocketGateway({
-  cors: { origin: '*' },
+  cors: {
+    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173', 'http://localhost:3000'],
+  },
 })
 export class DashboardGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
 {
   private readonly logger = new Logger(DashboardGateway.name);
+  private heartbeatInterval: ReturnType<typeof setInterval>;
 
   @WebSocketServer()
   server: Server;
@@ -25,7 +29,7 @@ export class DashboardGateway
     this.logger.log('WebSocket Gateway initialisé');
 
     // Heartbeat toutes les 10 secondes pour prouver que le flux est vivant
-    setInterval(() => {
+    this.heartbeatInterval = setInterval(() => {
       this.emit('heartbeat', {
         time: new Date().toLocaleTimeString('fr-FR', { hour12: false }),
         status: 'UP',
@@ -33,8 +37,31 @@ export class DashboardGateway
     }, 10000);
   }
 
+  onModuleDestroy() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+  }
+
   handleConnection(client: Socket) {
-    this.logger.log(`Client connecté : ${client.id}`);
+    try {
+      const token =
+        client.handshake.auth?.token || client.handshake.query?.token;
+
+      if (!token) {
+        client.emit('error', 'Token manquant');
+        client.disconnect();
+        return;
+      }
+
+      const payload = validateToken(token as string);
+      client.data.userId = payload.id;
+      client.data.role = payload.role;
+      this.logger.log(`Client dashboard connecté : ${client.id} (${payload.role})`);
+    } catch {
+      client.emit('error', 'Token invalide');
+      client.disconnect();
+    }
   }
 
   handleDisconnect(client: Socket) {

@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { DbSource } from './db-source.service';
-import { PrismaService } from '../../../prisma/prisma.service';
 
 /**
  * Module de la source de base de données.
@@ -12,7 +11,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
  * via le token TRANSACTION_SOURCE_PROVIDER.
  */
 @Module({
-  providers: [DbSource, PrismaService],
+  providers: [DbSource],
   exports: [DbSource],
 })
 export class DbSourceModule {}

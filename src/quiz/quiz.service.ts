@@ -256,6 +256,7 @@ export class QuizService {
       where: { id: lessonId },
       include: {
         quizLinks: {
+          where: { quiz: { status: 'PUBLISHED' } },
           include: {
             quiz: {
               include: {
@@ -286,6 +287,13 @@ export class QuizService {
 
   async startAttempt(quizId: string, userId: string) {
     await this.getQuiz(quizId);
+    const quizStatus = await this.prisma.quiz.findUnique({
+      where: { id: quizId },
+      select: { status: true },
+    });
+    if (!quizStatus || quizStatus.status !== 'PUBLISHED') {
+      throw new NotFoundException('Quiz introuvable');
+    }
     await this.prisma.quizAttempt.updateMany({
       where: { userId, quizId, completedAt: null },
       data: { completedAt: new Date(), passed: false },
@@ -301,7 +309,7 @@ export class QuizService {
     answers: { questionId: string; choiceId: string }[] | number[],
   ) {
     const quiz = await this.prisma.quiz.findUnique({
-      where: { id: quizId },
+      where: { id: quizId, status: 'PUBLISHED' },
       include: {
         questions: {
           include: { choices: true },
@@ -362,7 +370,7 @@ export class QuizService {
 
     const passed = total > 0 && (score / total) * 100 >= quiz.passingScore;
 
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx: any) => {
       await tx.quizAttempt.update({
         where: { id: attempt.id },
         data: { score, total, passed, completedAt: new Date() },

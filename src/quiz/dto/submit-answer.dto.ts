@@ -1,12 +1,12 @@
 import { IsArray } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class AnswerEntryDto {
+export class QuizAnswerEntryDto {
   questionId: string;
   choiceId: string;
 }
 
-export class SubmitQuizDto {
+export class QuizSubmitDto {
   @ApiProperty({
     oneOf: [
       { type: 'array', items: { type: 'number' } },

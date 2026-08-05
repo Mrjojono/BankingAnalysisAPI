@@ -24,6 +24,7 @@ describe('ScoreEngine', () => {
       overdraftScore: 80,
       revenueVolatilityScore: 80,
       balanceVolatilityScore: 80,
+      negativeBalanceScore: 80,
       debtRatio: 40,
       monthsData: 12,
     };
@@ -44,6 +45,7 @@ describe('ScoreEngine', () => {
       overdraftScore: 80,
       revenueVolatilityScore: 80,
       balanceVolatilityScore: 80,
+      negativeBalanceScore: 80,
       debtRatio: 20,
       monthsData: 12,
     };

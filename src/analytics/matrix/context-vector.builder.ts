@@ -22,7 +22,6 @@ export const CATEGORIES = [
   'CREDIT',
   'SALAIRE',
   'DIVERS',
-  'LOISIRS',
 ] as const;
 
 /**
@@ -36,7 +35,7 @@ export const CATEGORIES = [
  * ```
  */
 export const FEATURE_INDEX: FeatureIndex = {
-  // One-hot catégories : position 0 à 15
+  // One-hot catégories : position 0 à 14
   cat_LOGEMENT: 0,
   cat_ALIMENTATION: 1,
   cat_TRANSPORT: 2,
@@ -52,29 +51,28 @@ export const FEATURE_INDEX: FeatureIndex = {
   cat_CREDIT: 12,
   cat_SALAIRE: 13,
   cat_DIVERS: 14,
-  cat_LOISIRS: 15,
 
-  // Features numériques : position 16 à 20
-  percent: 16,
-  change: 17,
-  amount_ratio: 18,
-  expense_ratio: 19,
-  prev_amount_ratio: 20,
+  // Features numériques : position 15 à 19
+  percent: 15,
+  change: 16,
+  amount_ratio: 17,
+  expense_ratio: 18,
+  prev_amount_ratio: 19,
 };
 
 /** Nombre total de features dans le vecteur (sans embeddings) */
-export const FEATURE_COUNT = Object.keys(FEATURE_INDEX).length; // 21
+export const FEATURE_COUNT = Object.keys(FEATURE_INDEX).length; // 20
 
 /**
  * Nombre total de features AVEC embeddings NLP.
- * 21 features de base + 300 dimensions d'embedding.
+ * 20 features de base + 300 dimensions d'embedding.
  */
-export const TOTAL_FEATURE_COUNT = FEATURE_COUNT + EMBEDDING_DIM; // 321
+export const TOTAL_FEATURE_COUNT = FEATURE_COUNT + EMBEDDING_DIM; // 320
 
 /**
  * Index où commence la zone d'embedding dans le vecteur.
  */
-export const EMBEDDING_START = FEATURE_COUNT; // 21
+export const EMBEDDING_START = FEATURE_COUNT; // 20
 
 /**
  * Transforme un contexte financier en vecteur numérique.

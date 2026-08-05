@@ -72,6 +72,8 @@ async function upsertLesson(data: {
   difficulty: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
   order: number;
   estimatedMinutes: number;
+  minScore?: number;
+  maxScore?: number;
   contentBlocks?: ContentBlock[];
 }) {
   const existing = await prisma.lesson.findFirst({
@@ -127,6 +129,18 @@ async function upsertChoice(data: {
   return prisma.quizChoice.create({ data });
 }
 
+async function upsertAdviceLink(lessonId: string, adviceType: string, priority = 0) {
+  try {
+    await prisma.lessonAdviceLink.upsert({
+      where: { lessonId_adviceType: { lessonId, adviceType } },
+      update: { priority },
+      create: { lessonId, adviceType, priority },
+    });
+  } catch {
+    // ignore duplicate
+  }
+}
+
 async function linkQuizToLesson(quizId: string, lessonId: string) {
   try {
     await prisma.quizLessonLink.upsert({
@@ -177,8 +191,13 @@ async function seedBudget() {
     difficulty: 'BEGINNER',
     order: 1,
     estimatedMinutes: 10,
+    minScore: 0,
+    maxScore: 40,
     contentBlocks: lesson1Blocks,
   });
+  await upsertAdviceLink(lesson1.id, 'BUDGET_NEEDED', 0);
+  await upsertAdviceLink(lesson1.id, 'EXPENSE_HIGH', 1);
+  await upsertAdviceLink(lesson1.id, 'SCORE_LOW', 2);
 
   // Lesson 2 — Gérer efficacement son budget (BEGINNER)
   const lesson2Blocks: ContentBlock[] = [
@@ -207,8 +226,13 @@ async function seedBudget() {
     difficulty: 'BEGINNER',
     order: 2,
     estimatedMinutes: 12,
+    minScore: 0,
+    maxScore: 60,
     contentBlocks: lesson2Blocks,
   });
+  await upsertAdviceLink(lesson2.id, 'EXPENSE_HIGH', 0);
+  await upsertAdviceLink(lesson2.id, 'BUDGET_NEEDED', 1);
+  await upsertAdviceLink(lesson2.id, 'EMERGENCY_FUND', 2);
 
   // Quiz : Budget
   const quiz = await upsertQuiz({
@@ -297,8 +321,12 @@ async function seedCredit() {
     difficulty: 'BEGINNER',
     order: 1,
     estimatedMinutes: 8,
+    minScore: 0,
+    maxScore: 100,
     contentBlocks: lesson3Blocks,
   });
+  await upsertAdviceLink(lesson3.id, 'DEBT_OK', 0);
+  await upsertAdviceLink(lesson3.id, 'SCORE_MEDIUM', 1);
 
   // Lesson 4 — Crédit renouvelable (INTERMEDIATE)
   const lesson4Blocks: ContentBlock[] = [
@@ -326,8 +354,12 @@ async function seedCredit() {
     difficulty: 'INTERMEDIATE',
     order: 2,
     estimatedMinutes: 8,
+    minScore: 20,
+    maxScore: 60,
     contentBlocks: lesson4Blocks,
   });
+  await upsertAdviceLink(lesson4.id, 'DEBT_HIGH', 0);
+  await upsertAdviceLink(lesson4.id, 'DEBT_MODERATE', 1);
 
   // Lesson 5 — Difficultés à rembourser (BEGINNER)
   const lesson5Blocks: ContentBlock[] = [
@@ -355,8 +387,12 @@ async function seedCredit() {
     difficulty: 'BEGINNER',
     order: 3,
     estimatedMinutes: 10,
+    minScore: 0,
+    maxScore: 60,
     contentBlocks: lesson5Blocks,
   });
+  await upsertAdviceLink(lesson5.id, 'DEBT_HIGH', 0);
+  await upsertAdviceLink(lesson5.id, 'OVERDRAFT_FREQUENT', 1);
 
   // Lesson 6 — Microcrédit (INTERMEDIATE)
   const lesson6Blocks: ContentBlock[] = [
@@ -384,8 +420,12 @@ async function seedCredit() {
     difficulty: 'INTERMEDIATE',
     order: 4,
     estimatedMinutes: 8,
+    minScore: 0,
+    maxScore: 40,
     contentBlocks: lesson6Blocks,
   });
+  await upsertAdviceLink(lesson6.id, 'DEBT_HIGH', 0);
+  await upsertAdviceLink(lesson6.id, 'SCORE_LOW', 1);
 
   // Lesson 7 — Prêt étudiant (BEGINNER)
   const lesson7Blocks: ContentBlock[] = [
@@ -413,8 +453,12 @@ async function seedCredit() {
     difficulty: 'BEGINNER',
     order: 5,
     estimatedMinutes: 12,
+    minScore: 0,
+    maxScore: 100,
     contentBlocks: lesson7Blocks,
   });
+  await upsertAdviceLink(lesson7.id, 'DEBT_OK', 0);
+  await upsertAdviceLink(lesson7.id, 'SCORE_MEDIUM', 1);
 
   // Quiz : Crédits
   const quiz = await upsertQuiz({
@@ -523,8 +567,12 @@ async function seedCarteBancaire() {
     difficulty: 'BEGINNER',
     order: 1,
     estimatedMinutes: 10,
+    minScore: 0,
+    maxScore: 100,
     contentBlocks: lesson8Blocks,
   });
+  await upsertAdviceLink(lesson8.id, 'OVERDRAFT_OK', 0);
+  await upsertAdviceLink(lesson8.id, 'SAVINGS_OK', 1);
 
   // Lesson 9 — Nouveaux moyens de paiement (BEGINNER)
   const lesson9Blocks: ContentBlock[] = [
@@ -552,8 +600,12 @@ async function seedCarteBancaire() {
     difficulty: 'BEGINNER',
     order: 2,
     estimatedMinutes: 12,
+    minScore: 0,
+    maxScore: 100,
     contentBlocks: lesson9Blocks,
   });
+  await upsertAdviceLink(lesson9.id, 'SAVINGS_OK', 0);
+  await upsertAdviceLink(lesson9.id, 'EXPENSE_OK', 1);
 
   // Lesson 10 — Carte et jeunes (BEGINNER)
   const lesson10Blocks: ContentBlock[] = [
@@ -580,8 +632,12 @@ async function seedCarteBancaire() {
     difficulty: 'BEGINNER',
     order: 3,
     estimatedMinutes: 8,
+    minScore: 0,
+    maxScore: 40,
     contentBlocks: lesson10Blocks,
   });
+  await upsertAdviceLink(lesson10.id, 'BUDGET_NEEDED', 0);
+  await upsertAdviceLink(lesson10.id, 'SAVINGS_LOW', 1);
 
   // Quiz : Carte bancaire
   const quiz = await upsertQuiz({
@@ -681,8 +737,11 @@ async function seedCrypto() {
     difficulty: 'ADVANCED',
     order: 1,
     estimatedMinutes: 8,
+    minScore: 60,
+    maxScore: 100,
     contentBlocks: lesson11Blocks,
   });
+  await upsertAdviceLink(lesson11.id, 'SCORE_HIGH', 0);
 
   // Lesson 12 — Crypto risques (ADVANCED)
   const lesson12Blocks: ContentBlock[] = [
@@ -712,8 +771,12 @@ async function seedCrypto() {
     difficulty: 'ADVANCED',
     order: 2,
     estimatedMinutes: 10,
+    minScore: 40,
+    maxScore: 100,
     contentBlocks: lesson12Blocks,
   });
+  await upsertAdviceLink(lesson12.id, 'SCORE_MEDIUM', 0);
+  await upsertAdviceLink(lesson12.id, 'SAVINGS_OK', 1);
 
   // Lesson 13 — Crypto vs monnaie (ADVANCED)
   const lesson13Blocks: ContentBlock[] = [
@@ -742,8 +805,11 @@ async function seedCrypto() {
     difficulty: 'ADVANCED',
     order: 3,
     estimatedMinutes: 10,
+    minScore: 40,
+    maxScore: 100,
     contentBlocks: lesson13Blocks,
   });
+  await upsertAdviceLink(lesson13.id, 'SAVINGS_OK', 0);
 
   // Quiz : Crypto
   const quiz = await upsertQuiz({
@@ -841,8 +907,12 @@ async function seedConsoResponsable() {
     difficulty: 'BEGINNER',
     order: 1,
     estimatedMinutes: 10,
+    minScore: 0,
+    maxScore: 60,
     contentBlocks: lesson14Blocks,
   });
+  await upsertAdviceLink(lesson14.id, 'EXPENSE_HIGH', 0);
+  await upsertAdviceLink(lesson14.id, 'BUDGET_NEEDED', 1);
 
   // Lesson 15 — Achats responsables (BEGINNER)
   const lesson15Blocks: ContentBlock[] = [
@@ -870,8 +940,12 @@ async function seedConsoResponsable() {
     difficulty: 'BEGINNER',
     order: 2,
     estimatedMinutes: 10,
+    minScore: 0,
+    maxScore: 60,
     contentBlocks: lesson15Blocks,
   });
+  await upsertAdviceLink(lesson15.id, 'SAVINGS_LOW', 0);
+  await upsertAdviceLink(lesson15.id, 'EXPENSE_HIGH', 1);
 
   // Lesson 16 — Économiser l'eau (BEGINNER)
   const lesson16Blocks: ContentBlock[] = [
@@ -899,8 +973,12 @@ async function seedConsoResponsable() {
     difficulty: 'BEGINNER',
     order: 3,
     estimatedMinutes: 8,
+    minScore: 0,
+    maxScore: 60,
     contentBlocks: lesson16Blocks,
   });
+  await upsertAdviceLink(lesson16.id, 'EXPENSE_HIGH', 0);
+  await upsertAdviceLink(lesson16.id, 'SAVINGS_LOW', 1);
 
   // Quiz : Consommation responsable
   const quiz = await upsertQuiz({
@@ -986,8 +1064,12 @@ async function seedArnaques() {
     difficulty: 'BEGINNER',
     order: 1,
     estimatedMinutes: 8,
+    minScore: 0,
+    maxScore: 100,
     contentBlocks: lesson17Blocks,
   });
+  await upsertAdviceLink(lesson17.id, 'OVERDRAFT_FREQUENT', 0);
+  await upsertAdviceLink(lesson17.id, 'SCORE_LOW', 1);
 
   // Lesson 18 — Contester une opération (INTERMEDIATE)
   const lesson18Blocks: ContentBlock[] = [
@@ -1014,8 +1096,11 @@ async function seedArnaques() {
     difficulty: 'INTERMEDIATE',
     order: 2,
     estimatedMinutes: 10,
+    minScore: 0,
+    maxScore: 100,
     contentBlocks: lesson18Blocks,
   });
+  await upsertAdviceLink(lesson18.id, 'OVERDRAFT_FREQUENT', 0);
 
   // Lesson 19 — Arnaques en ligne (BEGINNER)
   const lesson19Blocks: ContentBlock[] = [
@@ -1043,8 +1128,12 @@ async function seedArnaques() {
     difficulty: 'BEGINNER',
     order: 3,
     estimatedMinutes: 10,
+    minScore: 0,
+    maxScore: 100,
     contentBlocks: lesson19Blocks,
   });
+  await upsertAdviceLink(lesson19.id, 'SCORE_LOW', 0);
+  await upsertAdviceLink(lesson19.id, 'SCORE_MEDIUM', 1);
 
   // Lesson 20 — Utilisation frauduleuse (INTERMEDIATE)
   const lesson20Blocks: ContentBlock[] = [
@@ -1071,8 +1160,12 @@ async function seedArnaques() {
     difficulty: 'INTERMEDIATE',
     order: 4,
     estimatedMinutes: 10,
+    minScore: 0,
+    maxScore: 100,
     contentBlocks: lesson20Blocks,
   });
+  await upsertAdviceLink(lesson20.id, 'OVERDRAFT_FREQUENT', 0);
+  await upsertAdviceLink(lesson20.id, 'SCORE_LOW', 1);
 
   // Quiz : Arnaques
   const quiz = await upsertQuiz({
@@ -1170,6 +1263,7 @@ async function main() {
     questions: await prisma.quizQuestion.count(),
     choices: await prisma.quizChoice.count(),
     links: await prisma.quizLessonLink.count(),
+    adviceLinks: await prisma.lessonAdviceLink.count(),
   };
 
   console.log(`\n✅ Seed terminé :
@@ -1178,7 +1272,8 @@ async function main() {
     ${counts.quizzes} quiz
     ${counts.questions} questions
     ${counts.choices} réponses
-    ${counts.links} liens quiz ↔ leçon\n`);
+    ${counts.links} liens quiz ↔ leçon
+    ${counts.adviceLinks} liens conseil ↔ leçon\n`);
 }
 
 main()

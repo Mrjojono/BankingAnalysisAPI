@@ -498,3 +498,17 @@ export const EXPENSE_KEYWORDS: Record<ExpenseCategory, string[]> = {
 
   [ExpenseCategory.DIVERS]: [],
 };
+
+/**
+ * Catégories qui ne sont PAS de vraies dépenses.
+ * Ce sont des mouvements de fonds (virements, retraits, dépôts, salaire, etc.)
+ * qui ne doivent pas apparaître dans le breakdown des dépenses.
+ */
+export const NON_EXPENSE_CATEGORIES = new Set<ExpenseCategory>([
+  ExpenseCategory.SALAIRE,
+  ExpenseCategory.VIREMENTS,
+  ExpenseCategory.RETRAITS,
+  ExpenseCategory.DEPOTS,
+  ExpenseCategory.INTERETS,
+  ExpenseCategory.CREDIT,
+]);

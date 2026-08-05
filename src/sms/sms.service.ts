@@ -1,22 +1,27 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../encryption/encryption.service';
-import { parseSms } from '../analytics/sources/sms/sms-parser';
+import { parseSms, buildFingerprint } from '../analytics/sources/sms/sms-parser';
 import { Classifier } from '../analytics/shared/classifier';
 import { ExpenseCategory } from '../analytics/config/expense-keywords';
 import { CamenBertService } from './camenbert/camenbert.service';
+import { normalizeDateSent } from './sms-date';
 
 interface RawSms {
   id: number;
   address: string;
   body: string;
-  dateSent: string | Date;
+  dateSent?: string | Date | number | null;
+  /** Champ Android natif (retourné par les APIs de lecture SMS) */
+  date?: string | Date | number | null;
 }
 
 export interface SyncResult {
   synced: number;
   duplicates: number;
   skipped: number;
+  /** Point de reprise pour la sync incrémentale : dernier SMS reçu */
+  watermark?: { smsId: number; dateSent: Date } | null;
 }
 
 @Injectable()
@@ -50,6 +55,33 @@ export class SmsService {
     return this.syncSms(customerId, messages);
   }
 
+  /**
+   * État de synchronisation d'un client (watermark de reprise).
+   * Renvoie le dernier SMS reçu, utile pour la sync incrémentale côté mobile.
+   */
+  async getState(customerId: string) {
+    const last = await this.prisma.smsTransaction.findFirst({
+      where: { customerId },
+      orderBy: { dateSent: 'desc' },
+      select: { smsId: true, dateSent: true },
+    });
+    return {
+      watermark: last ? { smsId: last.smsId, dateSent: last.dateSent } : null,
+    };
+  }
+
+  async getStateFromUser(userId: string) {
+    const connection = await this.prisma.userBankConnection.findFirst({
+      where: { userId },
+    });
+    if (!connection) {
+      throw new UnauthorizedException(
+        'Aucun compte bancaire lié à cet utilisateur',
+      );
+    }
+    return this.getState(connection.bankCustomerId);
+  }
+
   async syncSms(customerId: string, messages: RawSms[]): Promise<SyncResult> {
     if (!messages || !Array.isArray(messages)) {
       return { synced: 0, duplicates: 0, skipped: 0 };
@@ -67,16 +99,25 @@ export class SmsService {
 
     const existing = await this.prisma.smsTransaction.findMany({
       where: { customerId },
-      select: { smsId: true },
+      select: { smsId: true, fingerprint: true },
     });
     const existingIds = new Set(existing.map((e) => e.smsId));
+    const existingFingerprints = new Set(
+      existing.map((e) => e.fingerprint).filter((f): f is string => !!f),
+    );
+
+    const rules = await this.prisma.smsFilterRule.findMany({
+      where: { isActive: true, OR: [{ customerId: null }, { customerId }] },
+    });
 
     const toCreate: any[] = [];
 
     for (const msg of messages) {
       if (msg.id == null) {
-        skipReasons.noId++;
-        continue;
+        msg.id = hashSms(msg.address, msg.body, msg.dateSent);
+        this.logger.warn(
+          `ID synthétique pour SMS ${msg.address}: ${msg.body.slice(0, 40)}... → ${msg.id}`,
+        );
       }
 
       if (existingIds.has(msg.id)) {
@@ -84,9 +125,15 @@ export class SmsService {
         continue;
       }
 
-      const dateSent = new Date(msg.dateSent);
-      if (isNaN(dateSent.getTime())) {
+      const rawDate = msg.dateSent ?? msg.date ?? null;
+      const dateSent = normalizeDateSent(rawDate);
+      if (!dateSent) {
         skipReasons.invalidDate++;
+        if (skipReasons.invalidDate <= 3) {
+          this.logger.warn(
+            `Date SMS invalide (${typeof rawDate}): ${JSON.stringify(rawDate)?.slice(0, 80)}`,
+          );
+        }
         continue;
       }
 
@@ -97,32 +144,57 @@ export class SmsService {
         continue;
       }
 
-      if (parsed.amount === null || parsed.direction === null) {
-        let filled = false;
+      if (parsed.amount === null) {
+        skipReasons.parseEmpty++;
+        continue;
+      }
 
-        if (this.camenBert.isReady() && parsed.direction === null) {
+      if (parsed.direction === null) {
+        if (this.camenBert.isReady()) {
           const cbResult = await this.camenBert.classify(msg.body);
           if (cbResult && cbResult.confidence >= 0.75 && cbResult.direction) {
             parsed.direction = cbResult.direction;
-            filled = true;
+            parsed.confidence = Math.min(parsed.confidence, cbResult.confidence);
             this.logger.debug(
               `CamenBert a rempli la direction: ${cbResult.direction} (${(cbResult.confidence * 100).toFixed(0)}%)`,
             );
           }
         }
 
-        if (!filled) {
+        if (parsed.direction === null) {
           try {
-            const result = await this.classifier.categorizeWithCache(msg.body);
-            if (result === ExpenseCategory.DIVERS) {
+            const category = await this.classifier.categorizeWithCache(msg.body);
+            if (category === ExpenseCategory.DIVERS) {
               skipReasons.classifierDivers++;
               continue;
             }
+            parsed.confidence = Math.min(parsed.confidence, 0.6);
           } catch {
             skipReasons.classifierError++;
             continue;
           }
         }
+      }
+
+      const fingerprint = buildFingerprint(parsed, dateSent);
+      if (existingFingerprints.has(fingerprint)) {
+        duplicates++;
+        continue;
+      }
+
+      const matchRule = rules.find((r) => this.ruleMatches(r, msg, parsed));
+      const status = matchRule
+        ? 'IGNORED'
+        : parsed.confidence >= 0.8
+          ? 'APPROVED'
+          : 'PENDING';
+
+      let category: string | null = null;
+      if (parsed.direction) {
+        try {
+          const cat = await this.classifier.categorizeWithCache(msg.body);
+          if (cat !== ExpenseCategory.DIVERS) category = cat;
+        } catch {}
       }
 
       toCreate.push({
@@ -134,10 +206,18 @@ export class SmsService {
         direction: parsed.direction,
         operator: parsed.operator,
         sender: parsed.sender,
+        counterparty: parsed.counterparty,
+        balanceAfter: parsed.balanceAfter,
+        referenceNo: parsed.referenceNo,
+        confidence: parsed.confidence,
+        fingerprint,
+        status,
+        matchRuleId: matchRule?.id ?? null,
         dateSent,
       });
 
       existingIds.add(msg.id);
+      existingFingerprints.add(fingerprint);
     }
 
     if (toCreate.length > 0) {
@@ -159,7 +239,38 @@ export class SmsService {
       );
     }
 
-    return { synced, duplicates, skipped: totalSkipped };
+    let watermark: SyncResult['watermark'] = null;
+    if (toCreate.length > 0) {
+      const newest = toCreate.reduce((a, b) =>
+        a.dateSent.getTime() >= b.dateSent.getTime() ? a : b,
+      );
+      watermark = { smsId: newest.smsId, dateSent: newest.dateSent };
+    }
+
+    return { synced, duplicates, skipped: totalSkipped, watermark };
+  }
+
+  /**
+   * Teste si une règle d'ignorance correspond au message/parsage.
+   */
+  private ruleMatches(
+    rule: {
+      operator?: string | null;
+      address?: string | null;
+      keyword?: string | null;
+      direction?: string | null;
+    },
+    msg: RawSms,
+    parsed: { operator: string; direction: string | null },
+  ): boolean {
+    if (rule.operator && rule.operator.toUpperCase() !== parsed.operator.toUpperCase()) return false;
+    if (rule.direction && rule.direction.toUpperCase() !== (parsed.direction ?? '').toUpperCase()) return false;
+    if (rule.address) {
+      const term = rule.address.toLowerCase();
+      if (!msg.address.toLowerCase().includes(term) && !msg.body.toLowerCase().includes(term)) return false;
+    }
+    if (rule.keyword && !msg.body.toLowerCase().includes(rule.keyword.toLowerCase())) return false;
+    return true;
   }
 
   async debugFilter(address: string, body: string, rawDate?: string) {
@@ -260,4 +371,19 @@ export class SmsService {
       metrics: this.camenBert.getMetrics(),
     };
   }
+}
+
+function hashSms(
+  address: string,
+  body: string,
+  dateSent: string | Date | number | null | undefined,
+): number {
+  const parsed = normalizeDateSent(dateSent ?? null);
+  const dateStr = parsed ? parsed.toISOString().slice(0, 10) : 'unknown';
+  const raw = `${address}|${body.trim()}|${dateStr}`;
+  let hash = 5381;
+  for (let i = 0; i < raw.length; i++) {
+    hash = ((hash << 5) + hash + raw.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
 }

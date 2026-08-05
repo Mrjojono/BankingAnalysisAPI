@@ -1,12 +1,5 @@
-/**
- *
- * Permet de générer automatiquement "le logement", "la santé",
- * "l'alimentation", "les crédits" selon le genre du mot.
- */
-
 const VOWEL_START = /^[aeiouyêéèëêîïôûùü]/i;
 
-// Genre des catégories de dépenses
 const CATEGORY_GENDER: Record<string, 'm' | 'f' | 'mp' | 'fp'> = {
   LOGEMENT: 'm',
   ALIMENTATION: 'f',
@@ -36,12 +29,9 @@ const CATEGORY_GENDER: Record<string, 'm' | 'f' | 'mp' | 'fp'> = {
 export function getArticle(category: string): string {
   const cat = category.toUpperCase();
   const gender = CATEGORY_GENDER[cat];
-
   if (gender === 'mp' || gender === 'fp') return 'les';
-
   const startsWithVowel = VOWEL_START.test(category);
   if (startsWithVowel) return "l'";
-
   if (gender === 'f') return 'la';
   return 'le';
 }
@@ -52,9 +42,6 @@ export function withArticle(category: string): string {
   return `${article} ${category.toLowerCase()}`;
 }
 
-/**
- * Détecte si un mot français commence par une voyelle (pour l'élision)
- */
 export function startsWithVowel(word: string): boolean {
   return VOWEL_START.test(word);
 }

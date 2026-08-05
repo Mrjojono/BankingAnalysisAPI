@@ -203,7 +203,10 @@ export class DbSource implements TransactionSourceProvider {
       take: 10000,
     });
 
-    return entries as unknown as Entry[];
+    return (entries as unknown as Entry[]).map((e) => ({
+      ...e,
+      source: 'bank',
+    }));
   }
 
   /** Écritures pour un compte spécifique */

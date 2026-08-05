@@ -2,7 +2,10 @@
   import { Plus, Pencil, Trash2, Search, Info, GitGraph } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import { toast } from '../lib/stores/toast.svelte';
   import Drawer from '../lib/components/Drawer.svelte';
+  import ConfirmDialog from '../lib/components/ConfirmDialog.svelte';
+  import ToggleSwitch from '../lib/components/ToggleSwitch.svelte';
 
   let {
     onNavigate = undefined as ((p: string, id?: string | null) => void) | undefined,
@@ -16,6 +19,8 @@
   let drawerOpen = $state(false);
   let helpOpen = $state(false);
   let search = $state('');
+  let statusFilter = $state<'all' | 'active' | 'inactive'>('all');
+  let confirmDel = $state<any | null>(null);
 
   const RULE_TYPES = [
     { value: 'ELIGIBILITY', label: 'Éligibilité (scorée)', desc: 'Détermine le score du client' },
@@ -126,15 +131,20 @@
   const PER_PAGE = 15;
 
   let filtered = $derived.by(() => {
-    if (!search) return rules;
-    const q = search.toLowerCase();
-    return rules.filter(r =>
-      r.type?.toLowerCase().includes(q) ||
-      r.code?.toLowerCase().includes(q) ||
-      r.label?.toLowerCase().includes(q) ||
-      r.field?.toLowerCase().includes(q) ||
-      r.operator?.toLowerCase().includes(q)
-    );
+    let list = rules;
+    if (statusFilter === 'active') list = list.filter(r => r.isActive);
+    else if (statusFilter === 'inactive') list = list.filter(r => !r.isActive);
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(r =>
+        r.type?.toLowerCase().includes(q) ||
+        r.code?.toLowerCase().includes(q) ||
+        r.label?.toLowerCase().includes(q) ||
+        r.field?.toLowerCase().includes(q) ||
+        r.operator?.toLowerCase().includes(q)
+      );
+    }
+    return list;
   });
 
   let totalPages = $derived(Math.max(1, Math.ceil(filtered.length / PER_PAGE)));
@@ -214,7 +224,7 @@
       };
       if (editing.id) {
         const updated = await api.updateRule(editing.id, payload);
-        rules = rules.map(r => r.id === updated.id ? updated : r);
+        rules = rules.map(r => r.id === updated.id ? { ...r, ...updated } : r);
       } else {
         const created = await api.createRule(payload);
         rules = [...rules, created];
@@ -224,10 +234,33 @@
     finally { saving = false; }
   }
 
-  async function remove(id: string) {
-    if (!confirm('Supprimer cette règle ?')) return;
-    await api.deleteRule(id);
-    rules = rules.filter(r => r.id !== id);
+  async function toggleActive(r: any, next: boolean) {
+    try {
+      await api.toggleRuleStatus(r.id, next);
+      r.isActive = next;
+      toast.success(next ? 'Règle activée' : 'Règle désactivée');
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  }
+
+  function askDelete(r: any) {
+    confirmDel = r;
+  }
+
+  async function execDelete() {
+    if (!confirmDel) return;
+    try {
+      await api.deleteRule(confirmDel.id);
+      rules = rules.filter(r => r.id !== confirmDel.id);
+      toast.success('Règle supprimée définitivement');
+      drawerOpen = false;
+      editing = null;
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      confirmDel = null;
+    }
   }
 </script>
 
@@ -246,7 +279,7 @@
 
     <h4 class="font-bold text-base mt-2">Types de règles</h4>
     <ul class="list-disc pl-5 flex flex-col gap-1.5">
-      <li><span class="font-semibold text-blue-700">Éligibilité (ELIGIBILITY)</span> — règle scorée. L'ensemble des règles ELIGIBILITY d'un produit produit un score global. Poids (weight) de 1 à 10 : plus le poids est élevé, plus la règle est importante dans la décision.</li>
+      <li><span class="font-semibold text-blue-700">Éligibilité (ELIGIBILITY)</span> — règle scorée. L'ensemble des règles ELIGIBILITY d'un produit produit un score global. Poids (weight) de 1 à 100 : plus le poids est élevé, plus la règle est importante dans la décision.</li>
       <li><span class="font-semibold text-red-700">Frais (FEE)</span> — définit des frais (montant fixe <code>flatAmount</code>, pourcentage <code>percentage</code>, avec min/max optionnels). Non scorée.</li>
       <li><span class="font-semibold text-amber-700">Limite (LIMIT)</span> — plafond opérationnel (retrait DAB, paiement TPE, etc.). Non scorée.</li>
       <li><span class="font-semibold text-purple-700">Intérêt (INTEREST)</span> — taux d'intérêt (ex: 3,5%/an). Non scorée.</li>
@@ -260,7 +293,7 @@
       <li>Règle <strong>PARTIAL</strong> → la valeur est proche du seuil (écart ≤ 20%) → rapporte 40% du poids</li>
       <li>Règle <strong>FAIL</strong> → la valeur dépasse le seuil → rapporte 0</li>
     </ul>
-    <p>Seuils de décision : <span class="font-semibold text-primary">≥ 80% → Éligible</span>, <span class="font-semibold text-amber-600">≥ 50% → Partiel</span>, <span class="font-semibold text-red-600">&lt; 50% → Inéligible</span>.</p>
+    <p>Seuils de décision : <span class="font-semibold text-primary">≥ 70% → Éligible</span>, <span class="font-semibold text-amber-600">≥ 40% → Partiel</span>, <span class="font-semibold text-red-600">&lt; 40% → Inéligible</span>.</p>
 
     <h4 class="font-bold text-base mt-2">Champs métier (field)</h4>
     <p>Le champ <code class="font-mono">field</code> de la règle est mappé automatiquement aux métriques calculées par le moteur analytics via <code>ANALYTICS_FIELD_MAP</code>. Exemples : <code class="font-mono">monthlyIncome</code> → revenus mensuels, <code class="font-mono">debtRatio</code> → taux d'endettement.</p>
@@ -346,7 +379,7 @@
     {#if isScoreType}
       <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
         Poids (weight)
-        <input type="number" bind:value={editing!.weight} min="1" max="10" class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+        <input type="number" bind:value={editing!.weight} min="1" max="100" class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
       </label>
     {/if}
     {#if isFeeType}
@@ -408,6 +441,17 @@
         Active
       </label>
     </div>
+    {#if editing!.id}
+      <div class="mt-4 pt-4 border-t border-red-200">
+        <h4 class="text-sm font-bold text-error mb-1">Zone dangereuse</h4>
+        <p class="text-xs text-on-surface-variant mb-3">La suppression est définitive : la règle sera retirée de la base.</p>
+        <button onclick={() => askDelete(editing)}
+          class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-red-50 text-error border border-red-200 hover:bg-red-100 transition-all cursor-pointer">
+          <Trash2 size={16} />
+          Supprimer définitivement
+        </button>
+      </div>
+    {/if}
     <div class="flex gap-3 justify-end mt-4 pt-4 border-t border-mint-subtle">
       <button onclick={() => { drawerOpen = false; editing = null; }} class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white border border-mint-subtle hover:bg-surface-container transition-all cursor-pointer">
         Annuler
@@ -454,6 +498,21 @@
   </div>
 </div>
 
+<div class="flex gap-1 mb-4 w-fit">
+  <button onclick={() => statusFilter = 'all'}
+    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer border-none {statusFilter === 'all' ? 'bg-primary text-white' : 'bg-surface border border-mint-subtle text-on-surface-variant hover:bg-surface-container'}">
+    Toutes ({rules.length})
+  </button>
+  <button onclick={() => statusFilter = 'active'}
+    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer border-none {statusFilter === 'active' ? 'bg-primary text-white' : 'bg-surface border border-mint-subtle text-on-surface-variant hover:bg-surface-container'}">
+    Actives ({rules.filter(r => r.isActive).length})
+  </button>
+  <button onclick={() => statusFilter = 'inactive'}
+    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer border-none {statusFilter === 'inactive' ? 'bg-primary text-white' : 'bg-surface border border-mint-subtle text-on-surface-variant hover:bg-surface-container'}">
+    Inactives ({rules.filter(r => !r.isActive).length})
+  </button>
+</div>
+
 <div class="bg-surface rounded-2xl overflow-x-auto border border-mint-subtle">
   <table class="w-full border-collapse min-w-[900px]">
     <thead>
@@ -463,7 +522,6 @@
         <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Code</th>
         <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Label</th>
         <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Valeur</th>
-        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Poids</th>
         <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Statut</th>
         <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant"></th>
       </tr>
@@ -508,17 +566,14 @@
               </span>
             {/if}
           </td>
-          <td class="px-4 py-3 text-sm">{r.type === 'ELIGIBILITY' ? r.weight : '—'}</td>
           <td class="px-4 py-3">
-            {#if r.isActive}
-              <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
-                <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>Active
-              </span>
-            {:else}
-              <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-outline">
-                <span class="w-1.5 h-1.5 rounded-full bg-outline"></span>Inactive
-              </span>
-            {/if}
+            <ToggleSwitch
+              checked={r.isActive}
+              onchange={(next) => toggleActive(r, next)}
+              activeLabel="Active"
+              inactiveLabel="Inactive"
+              title={r.isActive ? 'Cliquer pour désactiver' : 'Cliquer pour activer'}
+            />
           </td>
           <td class="px-4 py-3">
             <div class="flex gap-1">
@@ -527,9 +582,6 @@
               </button>
               <button onclick={() => openForm(r)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container transition-all cursor-pointer border-none text-on-surface-variant">
                 <Pencil size={18} />
-              </button>
-              <button onclick={() => remove(r.id)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 hover:text-error transition-all cursor-pointer border-none text-on-surface-variant">
-                <Trash2 size={18} />
               </button>
             </div>
           </td>
@@ -569,3 +621,14 @@
     </div>
   {/if}
 </div>
+
+{#if confirmDel}
+  <ConfirmDialog
+    open={true}
+    title="Supprimer cette règle ?"
+    message={`La règle "${confirmDel.code ?? confirmDel.label}" sera supprimée définitivement de la base. Cette action est irréversible.`}
+    confirmText="Supprimer"
+    onconfirm={execDelete}
+    oncancel={() => confirmDel = null}
+  />
+{/if}

@@ -159,6 +159,7 @@ export class RuleEvaluator {
       ruleId: rule.id,
       ruleCode: rule.code,
       label: rule.label,
+      field: rule.field ?? '',
       status,
       valueSource,
       clientValue,

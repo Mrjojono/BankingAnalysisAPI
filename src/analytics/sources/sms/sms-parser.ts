@@ -1,15 +1,42 @@
 /**
  * Parseur de SMS bancaires (Mobile Money).
  *
- * Extrait le montant, le sens (débit/crédit) et l'opérateur
- * à partir du contenu texte des SMS.
+ * Extrait le montant, le sens (débit/crédit), l'opérateur, la contrepartie,
+ * le solde après opération et la référence de transaction à partir du
+ * contenu texte des SMS.
  *
- * Opérateurs supportés :
- * - TMoney (Togocel)
- * - Flooz (Moov)
- * - Moov MTN / Moov Money
- * - Autres → UNKNOWN
+ * Opérateurs supportés (marché togolais) :
+ * - MIXX (Yas / ex-TMoney, Togocom)
+ * - FLOOZ (Moov Africa Togo)
+ * - MOOV (Moov Money)
+ * - Autres → UNKNOWN (ignoré sauf pattern très fort sur adresse connue)
+ *
+ * Fiabilité :
+ * - Une adresse émettrice connue (short code) est exigée pour le fallback générique.
+ * - Le solde (Solde: X F) et la référence (Ref/ID/N°) sont extraits quand présents.
+ * - `buildFingerprint` produit une empreinte stable pour la déduplication
+ *   (remplace l'ancien hash à la précision du jour).
  */
+
+export type Direction = 'DEBIT' | 'CREDIT';
+
+export type ParsedSms = {
+  operator: string;
+  direction: Direction | null;
+  amount: number | null;
+  sender: string | null;
+  counterparty: string | null;
+  balanceAfter: number | null;
+  referenceNo: string | null;
+  confidence: number;
+};
+
+type SmsPattern = {
+  operator: string;
+  regex: RegExp;
+  direction: Direction;
+  amountGroup: number;
+};
 
 export function getPatternStats() {
   const operators = [...new Set(PATTERNS.map((p) => p.operator))];
@@ -21,44 +48,47 @@ export function getPatternStats() {
   };
 }
 
-export type ParsedSms = {
-  operator: string;
-  direction: 'DEBIT' | 'CREDIT' | null;
-  amount: number | null;
-  sender: string | null;
+/**
+ * Adresses émettrices connues (short codes) par opérateur.
+ * Un SMS provenant d'une adresse reconnue est traité en confiance ;
+ * les autres ne sont acceptés que s'ils correspondent à un pattern très fort.
+ */
+export const OPERATOR_ADDRESS_TOKENS: Record<string, string[]> = {
+  MIXX: ['MIXX', 'MIXTONE', 'YAS', 'TMONEY', 'TOGOCOM', 'TOGOCEL'],
+  FLOOZ: ['FLOOZ', 'MOOVFLOOZ'],
+  MOOV: ['MOOVMONEY', 'MOOV MONEY', 'MOOV', 'MTN'],
+  ORABANK: ['ORABANK'],
 };
 
-const PATTERNS: {
-  operator: string;
-  regex: RegExp;
-  direction: 'DEBIT' | 'CREDIT';
-  amountGroup: number;
-}[] = [
-  // TMoney — Réception
-  { operator: 'TMONEY', regex: /VOUS AVEZ RECU (\d[\d ]*) F/i, direction: 'CREDIT', amountGroup: 1 },
-  // TMoney — Paiement
-  { operator: 'TMONEY', regex: /PAIEMENT (\d[\d ]*) F/i, direction: 'DEBIT', amountGroup: 1 },
-  // TMoney — Transfert
-  { operator: 'TMONEY', regex: /TRANSFERT (\d[\d ]*) F/i, direction: 'DEBIT', amountGroup: 1 },
-  // TMoney — Achat crédit
-  { operator: 'TMONEY', regex: /ACHAT CREDIT (\d[\d ]*) F/i, direction: 'DEBIT', amountGroup: 1 },
-  // Flooz — Réception
-  { operator: 'FLOOZ', regex: /RECU (\d[\d ]*) F/i, direction: 'CREDIT', amountGroup: 1 },
-  // Flooz — Envoi
-  { operator: 'FLOOZ', regex: /ENVOYE (\d[\d ]*) F/i, direction: 'DEBIT', amountGroup: 1 },
-  // Flooz — Paiement
-  { operator: 'FLOOZ', regex: /PAIEMENT (\d[\d ]*) F/i, direction: 'DEBIT', amountGroup: 1 },
-  // Moov MTN — Réception
-  { operator: 'MOOV', regex: /RECU (\d[\d ]*) F/i, direction: 'CREDIT', amountGroup: 1 },
-  // Moov MTN — Envoi
-  { operator: 'MOOV', regex: /ENVOYE (\d[\d ]*) F/i, direction: 'DEBIT', amountGroup: 1 },
-  // Moov MTN — Paiement
-  { operator: 'MOOV', regex: /PAIEMENT (\d[\d ]*) F CFA/i, direction: 'DEBIT', amountGroup: 1 },
-  // Wave — Réception
-  { operator: 'WAVE', regex: /RECU (\d[\d ]*) F/i, direction: 'CREDIT', amountGroup: 1 },
-  // Wave — Paiement
-  { operator: 'WAVE', regex: /PAIEMENT (\d[\d ]*) F/i, direction: 'DEBIT', amountGroup: 1 },
+const PATTERNS: SmsPattern[] = [
+  // ===== MIXX (ex-TMoney / Yas) =====
+  // Réception
+  { operator: 'MIXX', regex: /(?:VOUS AVEZ RECU|RECU)\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'CREDIT', amountGroup: 1 },
+  // Paiement
+  { operator: 'MIXX', regex: /PAIEMENT\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
+  // Transfert
+  { operator: 'MIXX', regex: /TRANSFERT\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
+  // Achat crédit
+  { operator: 'MIXX', regex: /ACHAT CREDIT\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
+  // Retrait
+  { operator: 'MIXX', regex: /RETRAIT\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
+
+  // ===== FLOOZ (Moov Africa Togo) =====
+  { operator: 'FLOOZ', regex: /(?:RECU|VOUS AVEZ RECU)\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'CREDIT', amountGroup: 1 },
+  { operator: 'FLOOZ', regex: /ENVOYE\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
+  { operator: 'FLOOZ', regex: /PAIEMENT\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
+  { operator: 'FLOOZ', regex: /RETRAIT\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
+
+  // ===== MOOV Money =====
+  { operator: 'MOOV', regex: /(?:RECU|VOUS AVEZ RECU)\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'CREDIT', amountGroup: 1 },
+  { operator: 'MOOV', regex: /ENVOYE\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
+  { operator: 'MOOV', regex: /PAIEMENT\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
+  { operator: 'MOOV', regex: /RETRAIT\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
 ];
+
+/** Verbes financiers forts — exigés par le fallback générique. */
+const STRONG_DEBIT = /DEBIT|PAIEMENT|ENVOYE|ENVOI|RETRAIT|ACHAT|FACTURE|TRANSFERT/i;
+const STRONG_CREDIT = /CREDIT|RECU|VIREMENT|DEPOT|SALAIRE/i;
 
 /**
  * Parse un SMS bancaire pour en extraire les informations.
@@ -69,70 +99,164 @@ const PATTERNS: {
  */
 export function parseSms(address: string, body: string): ParsedSms {
   const upper = body.toUpperCase().trim();
+  // Normalisation des accents pour le matching ("reçu" → "recu", "débit" → "debit").
+  // L'extraction de la contrepartie utilise `upper` (accents préservés).
+  const norm = stripAccents(upper);
+  const addressOperator = guessOperatorFromAddress(address);
 
-  // Cherche un pattern correspondant
+  // 1. Pattern opérateur explicite (adresse connue OU contenu très marqué)
   for (const p of PATTERNS) {
-    const match = upper.match(p.regex);
+    if (addressOperator && addressOperator !== p.operator) continue;
+    const match = norm.match(p.regex);
     if (match) {
-      const raw = match[p.amountGroup]?.replace(/\s+/g, '');
+      const raw = match[p.amountGroup]?.replace(/[\s.,]/g, '');
       const amount = raw ? parseInt(raw, 10) : null;
+      if (amount === null || Number.isNaN(amount)) continue;
+      const counterparty = extractCounterparty(upper, p.operator);
       return {
         operator: p.operator,
         direction: p.direction,
-        amount: Number.isNaN(amount) ? null : amount,
-        sender: extractSender(upper, p.operator),
+        amount,
+        sender: counterparty,
+        counterparty,
+        balanceAfter: extractBalance(upper),
+        referenceNo: extractReference(upper),
+        confidence: addressOperator === p.operator ? 1 : 0.8,
       };
     }
   }
 
-  // Fallback : détection basique
-  const hasCredit = /CREDIT|RECU|RECU|VIREMENT|DEPOT/i.test(upper);
-  const hasDebit = /DEBIT|PAIEMENT|ENVOI|RETRAIT|ACHAT|FACTURE/i.test(upper);
-  const amountMatch = upper.match(/(\d[\d ]*)\s*F(CFA)?/i);
-  const rawAmount = amountMatch ? amountMatch[1]?.replace(/\s+/g, '') : null;
-  const amount = rawAmount ? parseInt(rawAmount, 10) : null;
+  // 2. Fallback générique — seulement si l'adresse est reconnue (short code)
+  const hasAmount = norm.match(/(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i);
+  if (!hasAmount) {
+    return {
+      operator: addressOperator ?? 'UNKNOWN',
+      direction: null,
+      amount: null,
+      sender: null,
+      counterparty: null,
+      balanceAfter: null,
+      referenceNo: null,
+      confidence: 0,
+    };
+  }
 
+  const amount = parseInt(hasAmount[1].replace(/[\s.,]/g, ''), 10);
+  const isCredit = STRONG_CREDIT.test(norm) && !STRONG_DEBIT.test(norm);
+  const isDebit = STRONG_DEBIT.test(norm) && !STRONG_CREDIT.test(norm);
+
+  if (!addressOperator || (!isCredit && !isDebit)) {
+    return {
+      operator: addressOperator ?? 'UNKNOWN',
+      direction: null,
+      amount: null,
+      sender: null,
+      counterparty: null,
+      balanceAfter: null,
+      referenceNo: null,
+      confidence: 0,
+    };
+  }
+
+  const direction: Direction = isCredit ? 'CREDIT' : 'DEBIT';
+  const counterparty = extractCounterparty(upper, addressOperator);
   return {
-    operator: guessOperator(address, body),
-    direction: hasCredit ? 'CREDIT' : hasDebit ? 'DEBIT' : null,
+    operator: addressOperator,
+    direction,
     amount: Number.isNaN(amount) ? null : amount,
-    sender: null,
+    sender: counterparty,
+    counterparty,
+    balanceAfter: extractBalance(upper),
+    referenceNo: extractReference(upper),
+    confidence: 0.8,
   };
 }
 
-/**
- * Devine l'opérateur à partir de l'adresse et du contenu.
- */
-function guessOperator(address: string, body: string): string {
-  const addr = address.toUpperCase();
-  const text = body.toUpperCase();
-
-  if (addr.includes('TMONEY') || text.includes('TMONEY')) return 'TMONEY';
-  if (addr.includes('FLOOZ') || text.includes('FLOOZ')) return 'FLOOZ';
-  if (addr.includes('MOOV') || text.includes('MOOV')) return 'MOOV';
-  if (addr.includes('WAVE') || text.includes('WAVE')) return 'WAVE';
-  if (addr.includes('MTN') || text.includes('MTN')) return 'MTN';
-  if (addr.includes('ORANGE') || text.includes('ORANGE')) return 'ORANGE';
-  if (addr.includes('FREE') || text.includes('FREE')) return 'FREE';
-
-  return 'UNKNOWN';
+function stripAccents(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 /**
- * Extrait le nom de l'expéditeur/destinataire du message.
+ * Identifie l'opérateur depuis l'adresse émettrice (short code).
  */
-function extractSender(text: string, operator: string): string | null {
+export function guessOperatorFromAddress(address: string): string | null {
+  const addr = address.toUpperCase();
+  for (const [operator, tokens] of Object.entries(OPERATOR_ADDRESS_TOKENS)) {
+    for (const token of tokens) {
+      if (addr.includes(token)) return operator;
+    }
+  }
+  // Toute adresse inconnue commençant par un numéro court à 5 chiffres
+  // peut être un short code opérateur, mais on ne le suppose pas.
+  return null;
+}
+
+/**
+ * Extrait le solde après opération (ex. "Solde: 150000 FCFA").
+ */
+export function extractBalance(text: string): number | null {
+  const m = text.match(/SOLDE\s*[:=]?\s*(\d[\d ,.]*)\s*(?:F(?:CFA)?|CFA)\b/i);
+  if (!m) return null;
+  const n = parseFloat(m[1].replace(/[\s.,]/g, ''));
+  return Number.isNaN(n) ? null : n;
+}
+
+/**
+ * Extrait la référence de transaction (ex. "Ref: 2345", "N°: ABC123", "ID transaction: ...").
+ */
+export function extractReference(text: string): string | null {
+  const patterns = [
+    /(?:REF(?:ERENCE)?|N°|NO|ID TRANSACTION|TRANSACTION ID|CODE)\s*[:.]?\s*([A-Z0-9-]{4,})/i,
+  ];
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m?.[1]) return m[1].trim();
+  }
+  return null;
+}
+
+/**
+ * Extrait la contrepartie (nom du tiers) du message.
+ */
+export function extractCounterparty(text: string, operator: string): string | null {
   const patterns: Record<string, RegExp> = {
-    TMONEY: /DE (.*?)(?:\.|\s+LE|\s+POUR|\s+N)/i,
-    FLOOZ: /DE LA PART DE (.*?)(?:\.|\s+LE|\s+POUR)/i,
-    MOOV: /DE (.*?)(?:\.|\s+LE|\s+POUR)/i,
+    MIXX: /(?:DE LA PART DE|DE)\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ' -]{1,60}?)(?:\s+(?:LE|POUR|NUMERO|N°|REF|SOLDE|VOUS))?(?=\.|\s+(?:LE|POUR|NUMERO|N°|REF|SOLDE)|$)/i,
+    FLOOZ: /DE LA PART DE\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ' -]{1,60}?)(?:\s+(?:LE|POUR|NUMERO|N°|REF|SOLDE))?(?=\.|\s+(?:LE|POUR|NUMERO|N°|REF|SOLDE)|$)/i,
+    MOOV: /(?:DE LA PART DE|DE)\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ' -]{1,60}?)(?:\s+(?:LE|POUR|NUMERO|N°|REF|SOLDE))?(?=\.|\s+(?:LE|POUR|NUMERO|N°|REF|SOLDE)|$)/i,
   };
 
   const regex = patterns[operator];
   if (regex) {
     const match = text.match(regex);
-    if (match?.[1]) return match[1].trim();
+    if (match?.[1]) return match[1].trim().replace(/\.$/, '');
   }
 
+  // Générique
+  const generic = text.match(/(?:DE LA PART DE|DE|FROM)\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ' -]{1,60}?)(?=\.|\s+(?:LE|POUR|NUMERO|N°|REF|SOLDE)|$)/i);
+  if (generic?.[1]) return generic[1].trim().replace(/\.$/, '');
+
   return null;
+}
+
+/**
+ * Empreinte stable de déduplication d'une transaction.
+ *
+ * Utilise la référence quand elle existe, sinon un composite
+ * opérateur|sens|montant|contrepartie|minute. Résout le bug de l'ancien hash
+ * journalier qui ignorait deux transferts identiques le même jour.
+ */
+export function buildFingerprint(
+  parsed: Pick<ParsedSms, 'operator' | 'direction' | 'amount' | 'counterparty'> & {
+    referenceNo?: string | null;
+  },
+  dateSent: Date,
+): string {
+  const minute = dateSent.toISOString().slice(0, 16);
+  const counterparty = (parsed.counterparty ?? '').toLowerCase().trim() || '?';
+  return [
+    parsed.referenceNo
+      ? `ref:${parsed.referenceNo}`
+      : `${parsed.operator}|${parsed.direction}|${parsed.amount ?? '?'}|${counterparty}|${minute}`,
+    dateSent.toISOString().slice(0, 10),
+  ].join('#');
 }

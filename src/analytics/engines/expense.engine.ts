@@ -12,6 +12,7 @@ import { Classifier } from '../shared/classifier';
 import { filterEntries, normalizeDescription } from '../helper';
 
 import { ANALYTICS_CONSTANTS } from '../config/constants';
+import { NON_EXPENSE_CATEGORIES } from '../config/expense-keywords';
 
 /**
  * Resultat de la detection des depenses recurrentes.
@@ -42,6 +43,7 @@ export class ExpenseEngine {
       direction: 'DEBIT',
       accountType: 'CHECKING',
       includeMobileMoney: true,
+      excludeSelfTransfers: true,
       year,
       month,
       from,
@@ -59,10 +61,19 @@ export class ExpenseEngine {
 
     let totalDebitAmount = new Decimal(0);
     let largestExpenseEntry: Entry | null = null;
+    let count = 0;
 
     for (const entry of debits) {
+      const category = await this.classifier.categorizeWithCache(
+        entry.transaction.description ?? '',
+        customerId,
+      );
+
+      if (NON_EXPENSE_CATEGORIES.has(category as any)) continue;
+
       const amount = new Decimal(entry.amount.toString());
       totalDebitAmount = totalDebitAmount.plus(amount);
+      count++;
 
       if (
         !largestExpenseEntry ||
@@ -74,18 +85,22 @@ export class ExpenseEngine {
 
     return {
       totalExpenses: totalDebitAmount.toNumber(),
-      count: debits.length,
-      averageTransactionAmount: totalDebitAmount
-        .div(debits.length)
-        .toDP(0)
-        .toNumber(),
-      largestExpense: {
-        amount: new Decimal(largestExpenseEntry!.amount.toString()).toNumber(),
-        description: largestExpenseEntry!.transaction.description ?? '',
-        date: new Date(largestExpenseEntry!.transaction.transactionDate)
-          .toISOString()
-          .split('T')[0],
-      },
+      count,
+      averageTransactionAmount: count > 0
+        ? totalDebitAmount
+            .div(count)
+            .toDP(0)
+            .toNumber()
+        : 0,
+      largestExpense: largestExpenseEntry
+        ? {
+            amount: new Decimal(largestExpenseEntry.amount.toString()).toNumber(),
+            description: largestExpenseEntry.transaction.description ?? '',
+            date: new Date(largestExpenseEntry.transaction.transactionDate)
+              .toISOString()
+              .split('T')[0],
+          }
+        : { amount: 0, description: '', date: '1970-01-01' },
     };
   }
 
@@ -104,6 +119,7 @@ export class ExpenseEngine {
       direction: 'DEBIT',
       accountType: 'CHECKING',
       includeMobileMoney: true,
+      excludeSelfTransfers: true,
       year,
       month,
       from,
@@ -117,6 +133,9 @@ export class ExpenseEngine {
         entry.transaction.description ?? '',
         customerId,
       );
+
+      if (NON_EXPENSE_CATEGORIES.has(category as any)) continue;
+
       const amount = new Decimal(entry.amount.toString());
       const existing = grouped.get(category);
 
@@ -184,6 +203,7 @@ export class ExpenseEngine {
       direction: 'DEBIT',
       accountType: 'CHECKING',
       includeMobileMoney: true,
+      excludeSelfTransfers: true,
       from: cutoffDate,
       to: analysisDate,
     });
@@ -191,6 +211,12 @@ export class ExpenseEngine {
     const groupedByDescription = new Map<string, Entry[]>();
     for (const entry of debits) {
       if (entry.transaction.description) {
+        const category = await this.classifier.categorizeWithCache(
+          entry.transaction.description ?? '',
+          customerId,
+        );
+        if (NON_EXPENSE_CATEGORIES.has(category as any)) continue;
+
         const normalizedDesc = normalizeDescription(
           entry.transaction.description,
         );
@@ -297,12 +323,24 @@ export class ExpenseEngine {
       direction: 'DEBIT',
       accountType: 'CHECKING',
       includeMobileMoney: true,
+      excludeSelfTransfers: true,
       year,
       month,
       from,
       to,
     });
-    const totalExpenses = periodDebits.reduce(
+
+    const filteredDebits: Entry[] = [];
+    for (const entry of periodDebits) {
+      const category = await this.classifier.categorizeWithCache(
+        entry.transaction.description ?? '',
+        customerId,
+      );
+      if (NON_EXPENSE_CATEGORIES.has(category as any)) continue;
+      filteredDebits.push(entry);
+    }
+
+    const totalExpenses = filteredDebits.reduce(
       (sum, e) => sum.plus(new Decimal(e.amount.toString())),
       new Decimal(0),
     );
@@ -317,7 +355,7 @@ export class ExpenseEngine {
       to,
     );
 
-    const variableTransactions = periodDebits
+    const variableTransactions = filteredDebits
       .filter((e) => !recurringTransactionIds.has(e.transactionId))
       .map((e) => ({
         id: e.transactionId,
@@ -328,7 +366,7 @@ export class ExpenseEngine {
           .split('T')[0],
       }));
 
-    const recurringAmountInPeriod = periodDebits
+    const recurringAmountInPeriod = filteredDebits
       .filter((e) => recurringTransactionIds.has(e.transactionId))
       .reduce(
         (s, e) => s.plus(new Decimal(e.amount.toString())),

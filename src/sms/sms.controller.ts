@@ -14,20 +14,22 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   UseGuards,
   HttpCode,
   HttpStatus,
   Req,
+  BadRequestException,
 } from '@nestjs/common';
-import { SkipThrottle } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SmsService } from './sms.service';
 
 @ApiTags('SMS Sync')
 @ApiBearerAuth()
-@SkipThrottle()
+@Throttle({ default: { limit: 30, ttl: 60000 } })
 @UseGuards(JwtAuthGuard)
 @Controller('sms')
 export class SmsController {
@@ -51,6 +53,23 @@ export class SmsController {
       dateSent: string | Date;
     }[],
   ) {
+    if (!Array.isArray(messages)) {
+      throw new BadRequestException('messages doit être un tableau');
+    }
+    if (messages.length > 200) {
+      throw new BadRequestException('Maximum 200 SMS par synchronisation');
+    }
     return this.smsService.syncSmsFromUser(req.user.id, messages);
+  }
+
+  @Get('state')
+  @ApiOperation({
+    summary: 'État de synchronisation (watermark de reprise)',
+    description:
+      "Renvoie le dernier SMS reçu par le serveur pour le client. " +
+      "L'app mobile peut reprendre la sync à partir de ce point.",
+  })
+  async getState(@Req() req: any) {
+    return this.smsService.getStateFromUser(req.user.id);
   }
 }

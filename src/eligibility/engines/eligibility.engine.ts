@@ -14,7 +14,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OverviewService } from '../../analytics/overview/overview.service';
 import { RuleEvaluator } from './rule-evaluator';
 import type { EligibilityResult, RuleResult } from '../types';
-import { ANALYTICS_FIELD_MAP, ELIGIBLE_THRESHOLD, PARTIAL_THRESHOLD } from '../types';
+import { ANALYTICS_FIELD_MAP, ELIGIBLE_THRESHOLD, PARTIAL_THRESHOLD, buildInfoRules } from '../types';
 
 @Injectable()
 export class EligibilityEngine {
@@ -47,6 +47,25 @@ export class EligibilityEngine {
 
     if (!product) {
       throw new Error(`Produit "${productCode}" introuvable`);
+    }
+
+    if (!product.isActive) {
+      return {
+        productCode: product.code,
+        productName: product.name,
+        productDescription: product.description ?? '',
+        hasEligibilityRules: false,
+        globalScore: 0,
+        maxScore: 0,
+        scorePercent: 0,
+        status: 'NOT_ELIGIBLE',
+        reason: 'Produit désactivé',
+        ruleResults: [],
+        infoRules: [],
+        passedRules: [],
+        failedRules: [],
+        partialRules: [],
+      };
     }
 
     // ─── Étape 2 : Séparer les règles ELIGIBILITY des autres ──────
@@ -86,40 +105,7 @@ export class EligibilityEngine {
             ? 'PARTIAL'
             : 'NOT_ELIGIBLE';
 
-    // ─── Étape 6 : Formater les infos complémentaires (frais, limites, taux) ──
-    const infoItems: RuleResult[] = infoRules.map((rule) => {
-      const seuil = rule.value?.toLocaleString('fr-FR') ?? '';
-      const pct = rule.percentage != null ? `${rule.percentage}%` : '';
-      const montant = rule.flatAmount?.toLocaleString('fr-FR') ?? '';
-      const periode = rule.period ?? '';
-
-      let detail = '';
-      if (rule.flatAmount != null) {
-        detail = `${montant} FCFA${periode ? `/${periode}` : ''}`;
-      } else if (rule.percentage != null) {
-        detail = `${pct}${rule.minAmount ? ` (min ${rule.minAmount.toLocaleString('fr-FR')} FCFA)` : ''}`;
-      } else if (rule.value != null) {
-        const op =
-          (rule.operator as string) === 'GREATER_OR_EQUAL' ? 'max' : 'min';
-        detail = `${op === 'max' ? '≤' : '≥'} ${seuil} FCFA`;
-      }
-
-      return {
-        ruleId: rule.id,
-        ruleCode: rule.code,
-        label: rule.label,
-        status: 'PASS' as const,
-        valueSource: 'input' as const,
-        clientValue: null,
-        threshold: rule.value ?? rule.percentage ?? null,
-        thresholdMin: null,
-        thresholdMax: null,
-        scoreEarned: 0,
-        scoreMax: 0,
-        message: `${rule.label} : ${detail}`.replace(/ : $/, ''),
-        advice: null,
-      };
-    });
+    const infoItems = buildInfoRules(infoRules);
 
     return {
       productCode: product.code,

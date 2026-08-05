@@ -13,6 +13,7 @@ import { MatrixEligibilityEngine } from './matrix/matrix-eligibility.engine';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EducationService } from '../education/education.service';
+import { OverviewService } from '../analytics/overview/overview.service';
 
 describe('EligibilityService', () => {
   let service: EligibilityService;
@@ -51,6 +52,7 @@ describe('EligibilityService', () => {
         { provide: EligibilityEngine, useValue: mockEligibilityEngine },
         { provide: MatrixEligibilityEngine, useValue: mockMatrixEngine },
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: OverviewService, useValue: {} },
         { provide: NotificationsService, useValue: mockNotificationsService },
         { provide: EducationService, useValue: mockEducationService },
       ],

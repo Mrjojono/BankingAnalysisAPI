@@ -51,10 +51,36 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return result === 1;
   }
 
+  async ttl(key: string): Promise<number> {
+    return await this.client.ttl(key);
+  }
+
+  async incr(key: string): Promise<number> {
+    return await this.client.incr(key);
+  }
+
+  async expire(key: string, ttlSeconds: number): Promise<void> {
+    await this.client.expire(key, ttlSeconds);
+  }
+
   async deletePattern(pattern: string): Promise<number> {
-    const keys = await this.client.keys(pattern);
-    if (keys.length === 0) return 0;
-    return await this.client.del(...keys);
+    let deleted = 0;
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await this.client.scan(
+        cursor,
+        'MATCH',
+        pattern,
+        'COUNT',
+        100,
+      );
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        await this.client.del(...keys);
+        deleted += keys.length;
+      }
+    } while (cursor !== '0');
+    return deleted;
   }
 
   async lpush(key: string, value: string): Promise<void> {

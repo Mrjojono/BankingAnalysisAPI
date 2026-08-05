@@ -246,14 +246,23 @@
     if (!editingProduct) return
     saving = true
     try {
+      const clean: Record<string, any> = {
+        code: editingProduct.code,
+        name: editingProduct.name,
+        description: editingProduct.description ?? undefined,
+        reference: editingProduct.reference ?? undefined,
+        category: editingProduct.category ?? undefined,
+        isActive: editingProduct.isActive ?? true,
+      }
+      Object.keys(clean).forEach(k => clean[k] === undefined && delete clean[k])
       let created: any
       if (editingProduct.id) {
-        created = await api.updateProduct(editingProduct.id, editingProduct)
+        created = await api.updateProduct(editingProduct.id, clean)
       } else {
-        created = await api.createProduct(editingProduct)
+        created = await api.createProduct(clean)
       }
       products = products.map(p => p.id === created.id ? created : p)
-      if (!products.find(p => p.id === created.id)) products = [...products, created]
+      if (!products.find(p => p.id === created.id)) products = [...products, { ...created, rules: [] }]
       nodes = nodes.map(n =>
         n.id === `p-${created.id}`
           ? { ...n, data: { ...n.data, name: created.name, code: created.code, category: created.category, isActive: created.isActive } }

@@ -5,6 +5,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
+import { createHash } from 'crypto';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { Logger } from '@nestjs/common';
@@ -44,7 +45,7 @@ function getJwtRefreshSecret(): string {
  * @returns Le mot de passe haché
  */
 export async function hashPassword(password: string): Promise<string> {
-  const salt = await bcrypt.genSalt();
+  const salt = await bcrypt.genSalt(12);
   return bcrypt.hash(password, salt);
 }
 
@@ -71,6 +72,10 @@ export function generateOtp(): string {
     lowerCaseAlphabets: false,
     specialChars: false,
   });
+}
+
+export function hashOtp(otp: string): string {
+  return createHash('sha256').update(otp).digest('hex');
 }
 
 /**
@@ -122,7 +127,7 @@ export const signMfaToken = (payload: object): string => {
 
 export const validateMfaToken = (token: string): jwt.JwtPayload => {
   try {
-    return jwt.verify(token, getJwtSecret()) as jwt.JwtPayload;
+    return jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] }) as jwt.JwtPayload;
   } catch {
     throw new UnauthorizedException('Session MFA expirée. Reconnectez-vous.');
   }
@@ -130,7 +135,7 @@ export const validateMfaToken = (token: string): jwt.JwtPayload => {
 
 export const validateToken = (token: string): jwt.JwtPayload => {
   try {
-    return jwt.verify(token, getJwtSecret()) as jwt.JwtPayload;
+    return jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] }) as jwt.JwtPayload;
   } catch {
     throw new UnauthorizedException('Invalid or expired token');
   }
@@ -138,7 +143,7 @@ export const validateToken = (token: string): jwt.JwtPayload => {
 
 export const validateRefreshToken = (token: string): jwt.JwtPayload => {
   try {
-    return jwt.verify(token, getJwtRefreshSecret()) as jwt.JwtPayload;
+    return jwt.verify(token, getJwtRefreshSecret(), { algorithms: ['HS256'] }) as jwt.JwtPayload;
   } catch {
     throw new UnauthorizedException('Invalid or expired refresh token');
   }
@@ -150,7 +155,7 @@ export const signSetPasswordToken = (payload: object): string => {
 
 export const validateSetPasswordToken = (token: string): jwt.JwtPayload => {
   try {
-    return jwt.verify(token, getJwtSecret()) as jwt.JwtPayload;
+    return jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] }) as jwt.JwtPayload;
   } catch {
     throw new UnauthorizedException('Lien invalide ou expiré.');
   }

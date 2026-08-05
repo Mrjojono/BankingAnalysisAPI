@@ -62,6 +62,7 @@ export type PartitionCriteria = {
     | 'CORPORATE'
     | 'MOBILE_MONEY';
   includeMobileMoney?: boolean;
+  excludeSelfTransfers?: boolean;
   year?: number;
   month?: number;
   from?: Date;
@@ -69,7 +70,7 @@ export type PartitionCriteria = {
 };
 
 function entryMatches(entry: Entry, options: PartitionCriteria): boolean {
-  const { direction, accountType, includeMobileMoney, year, month, from, to } =
+  const { direction, accountType, includeMobileMoney, excludeSelfTransfers, year, month, from, to } =
     options;
 
   if (direction && entry.direction !== direction) return false;
@@ -82,6 +83,14 @@ function entryMatches(entry: Entry, options: PartitionCriteria): boolean {
       accountType === 'CHECKING' &&
       entry.account.bankAccount?.accountType === 'MOBILE_MONEY'
     )
+  )
+    return false;
+
+  if (
+    excludeSelfTransfers &&
+    entry.transaction.senderCustomerId &&
+    entry.transaction.receiverCustomerId &&
+    entry.transaction.senderCustomerId === entry.transaction.receiverCustomerId
   )
     return false;
 

@@ -45,7 +45,14 @@
   let revokingSessions = $state(false);
   let confirmDelete = $state<string | null>(null);
 
-  const roles = ['CLIENT', 'AGENT', 'ADMIN', 'SUPER_ADMIN'];
+  let showCreateDrawer = $state(false);
+  let createEmail = $state('');
+  let createPassword = $state('');
+  let createConfirm = $state('');
+  let createRole = $state('ADMIN');
+  let creating = $state(false);
+
+  const roles = ['CLIENT', 'ADMIN'];
   const statuses = ['ACTIVE', 'SUSPENDED', 'BANNED'];
 
   onMount(() => loadUsers());
@@ -146,10 +153,37 @@
     }
   }
 
+  async function handleCreateUser() {
+    if (!createEmail.trim() || !createPassword) return;
+    if (createPassword !== createConfirm) {
+      toast.error('Les mots de passe ne correspondent pas');
+      return;
+    }
+    creating = true;
+    try {
+      const user = await api.createUser({
+        email: createEmail.trim(),
+        password: createPassword,
+        role: createRole,
+      });
+      toast.success(`Admin créé: ${user.email}`);
+      showCreateDrawer = false;
+      createEmail = '';
+      createPassword = '';
+      createConfirm = '';
+      createRole = 'ADMIN';
+      loadUsers();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      creating = false;
+    }
+  }
+
   const totalPages = $derived(Math.ceil(total / pageSize));
 
   function roleBadge(role: string) {
-    const colors: Record<string, string> = { CLIENT: '', AGENT: 'bg-amber-100 text-amber-800', ADMIN: 'bg-blue-100 text-blue-800', SUPER_ADMIN: 'bg-purple-100 text-purple-800' };
+    const colors: Record<string, string> = { CLIENT: '', ADMIN: 'bg-blue-100 text-blue-800' };
     return colors[role] ?? '';
   }
 
@@ -166,7 +200,12 @@
 
 <div class="flex items-center justify-between mb-6">
   <h2 class="text-2xl font-extrabold text-on-surface tracking-tight">Utilisateurs</h2>
-  <span class="text-sm text-outline font-medium">{total} utilisateur{total !== 1 ? 's' : ''}</span>
+  <div class="flex items-center gap-3">
+    <span class="text-sm text-outline font-medium">{total} utilisateur{total !== 1 ? 's' : ''}</span>
+    <button onclick={() => showCreateDrawer = true} class="px-4 py-2 rounded-xl bg-primary text-on-primary text-sm font-semibold hover:opacity-90 transition-all cursor-pointer border-none shadow-sm">
+      Créer un admin
+    </button>
+  </div>
 </div>
 
 <Card>
@@ -380,4 +419,26 @@
       </div>
     </div>
   {/if}
+</Drawer>
+
+<Drawer open={showCreateDrawer} onclose={() => { showCreateDrawer = false; }} title="Créer un administrateur">
+  <form onsubmit={(e) => { e.preventDefault(); handleCreateUser(); }} class="space-y-4">
+    <Input label="Email" type="email" bind:value={createEmail} placeholder="admin@orabank.tg" />
+    <Input label="Mot de passe" type="password" bind:value={createPassword} placeholder="Min. 8 caractères" />
+    <Input label="Confirmer le mot de passe" type="password" bind:value={createConfirm} placeholder="Retapez le mot de passe" />
+    <div>
+      <label class="block text-sm font-semibold text-on-surface mb-1.5" for="create-role">Rôle</label>
+      <select id="create-role" bind:value={createRole} class="w-full px-3 py-2.5 rounded-xl border border-mint-subtle bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+        <option value="ADMIN">ADMIN</option>
+      </select>
+    </div>
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit" disabled={creating} class="px-5 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-semibold hover:opacity-90 transition-all disabled:opacity-50 cursor-pointer border-none shadow-sm">
+        {creating ? 'Création…' : 'Créer'}
+      </button>
+      <button type="button" onclick={() => showCreateDrawer = false} class="px-5 py-2.5 rounded-xl bg-surface text-on-surface text-sm font-semibold hover:bg-surface-container transition-colors cursor-pointer border border-mint-subtle">
+        Annuler
+      </button>
+    </div>
+  </form>
 </Drawer>

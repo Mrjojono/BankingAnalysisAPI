@@ -4,6 +4,7 @@ import {
   Logger,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type * as jwt from 'jsonwebtoken';
@@ -15,6 +16,7 @@ import {
   generateOtp,
   comparePassword,
   hashPassword,
+  hashOtp,
   registerKey,
   parseState,
   registerOtpKey,
@@ -38,10 +40,21 @@ import { MailService } from '../mail/mail.service';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { MfaLoginDto } from './dto/mfa.dto';
 import { authenticator, totp as totpClient } from '@otplib/preset-default';
+import { timingSafeEqual } from 'crypto';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+
+  private readonly MAX_LOGIN_ATTEMPTS = 5;
+  private readonly LOGIN_LOCKOUT_DURATION = 15 * 60; // 15 minutes
+  private readonly MAX_MFA_ATTEMPTS = 5;
+  private readonly MFA_LOCKOUT_DURATION = 15 * 60;
+
+  private loginAttemptsKey(userId: string) { return `login_attempts:${userId}`; }
+  private loginLockoutKey(userId: string) { return `login_locked:${userId}`; }
+  private mfaAttemptsKey(userId: string) { return `mfa_attempts:${userId}`; }
+  private mfaLockoutKey(userId: string) { return `mfa_locked:${userId}`; }
 
   constructor(
     private prisma: PrismaService,
@@ -54,6 +67,19 @@ export class AuthService {
       ipAddress: req?.ip || req?.connection?.remoteAddress || null,
       userAgent: req?.headers?.['user-agent'] || null,
     };
+  }
+
+  private safeCompare(a: string, b: string): boolean {
+    try {
+      const bufA = Buffer.from(a);
+      const bufB = Buffer.from(b);
+      const maxLen = Math.max(bufA.length, bufB.length);
+      const paddedA = Buffer.alloc(maxLen, bufA);
+      const paddedB = Buffer.alloc(maxLen, bufB);
+      return timingSafeEqual(paddedA, paddedB);
+    } catch {
+      return false;
+    }
   }
 
   private sendOtp = async (contact: string, otp: string) => {
@@ -109,7 +135,7 @@ export class AuthService {
       await this.prisma.otpCode.create({
         data: {
           userId,
-          code: otp,
+          code: hashOtp(otp),
           type: type as any,
           expiresAt: new Date(Date.now() + 300 * 1000),
         },
@@ -121,7 +147,7 @@ export class AuthService {
 
   private async sendAndStoreOtp(accountNumber: string, contact: string) {
     const otp = generateOtp();
-    await this.redis.set(registerOtpKey(accountNumber), otp, 300);
+    await this.redis.set(registerOtpKey(accountNumber), hashOtp(otp), 300);
     await this.sendOtp(contact, otp);
 
     const state = await this.getRegisterState(accountNumber);
@@ -137,7 +163,7 @@ export class AuthService {
     if (!storedOtp) {
       throw new UnauthorizedException('Code OTP expiré.');
     }
-    if (storedOtp !== otp) {
+    if (!this.safeCompare(storedOtp, hashOtp(otp))) {
       throw new UnauthorizedException('Code OTP invalide');
     }
     await this.redis.delete(registerOtpKey(accountNumber));
@@ -148,7 +174,15 @@ export class AuthService {
       where: { email: state.contact },
     });
 
-    if (existingUser) {
+    // Email déjà utilisé mais registration inachevée → on nettoie
+    if (existingUser && !existingUser.password) {
+      this.logger.warn(
+        `Nettoyage user inachevé avec le même email: ${existingUser.email}`,
+      );
+      await this.prisma.user.delete({
+        where: { id: existingUser.id },
+      });
+    } else if (existingUser) {
       throw new BadRequestException('Un compte app existe déjà avec cet email');
     }
 
@@ -158,9 +192,23 @@ export class AuthService {
     });
 
     if (bankCustomer?.userConnection) {
-      throw new BadRequestException(
-        'Ce compte bancaire a déjà un compte app activé',
-      );
+      const linkedUser = await this.prisma.user.findUnique({
+        where: { id: bankCustomer.userConnection.userId },
+      });
+
+      // Registration inachevée → on nettoie
+      if (linkedUser && !linkedUser.password) {
+        this.logger.warn(
+          `Nettoyage user inachevé lié au compte: ${linkedUser.email}`,
+        );
+        await this.prisma.user.delete({
+          where: { id: linkedUser.id },
+        });
+      } else {
+        throw new BadRequestException(
+          'Ce compte bancaire a déjà un compte app activé',
+        );
+      }
     }
 
     const user = await this.prisma.user.create({
@@ -200,18 +248,35 @@ export class AuthService {
       const bankCustomer = await this.findBankCustomer(dto.accountNumber);
 
       if (bankCustomer.userConnection) {
-        logAuth(
-          this.prisma,
-          'registration_verify_contact',
-          false,
-          bankCustomer.email,
-          null,
-          ipAddress,
-          userAgent,
-          { reason: 'account_already_linked' },
-        );
+        const existingUser = await this.prisma.user.findUnique({
+          where: { id: bankCustomer.userConnection.userId },
+        });
 
-        throw new BadRequestException('Ce compte a déjà un compte app activé');
+        // Registration inachevée (pas de password) → on nettoie
+        if (existingUser && !existingUser.password) {
+          this.logger.warn(
+            `Nettoyage registration inachevée: ${existingUser.email} (${existingUser.id})`,
+          );
+          await this.prisma.userBankConnection.delete({
+            where: { id: bankCustomer.userConnection.id },
+          });
+          await this.prisma.user.delete({
+            where: { id: existingUser.id },
+          });
+        } else {
+          logAuth(
+            this.prisma,
+            'registration_verify_contact',
+            false,
+            bankCustomer.email,
+            null,
+            ipAddress,
+            userAgent,
+            { reason: 'account_already_linked' },
+          );
+
+          throw new BadRequestException('Ce compte a déjà un compte app activé');
+        }
       }
 
       await this.redis.set(
@@ -311,7 +376,8 @@ export class AuthService {
         accountNumber: dto.accountNumber,
       });
 
-      const magicLink = `https://app.orabank.ci/auth/set-password?token=${setPasswordJwt}&acc=${dto.accountNumber}`;
+      const baseUrl = process.env.APP_URL || 'http://localhost:4000';
+      const magicLink = `${baseUrl}/auth/set-password?token=${setPasswordJwt}&acc=${dto.accountNumber}`;
 
       await this.mailService.sendMail({
         to: state.contact,
@@ -387,7 +453,7 @@ export class AuthService {
     }
 
     const otp = generateOtp();
-    await this.redis.set(registerOtpKey(accountNumber), otp, 300);
+    await this.redis.set(registerOtpKey(accountNumber), hashOtp(otp), 300);
     await this.sendOtp(state.contact, otp);
 
     logAuth(
@@ -439,6 +505,25 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (user.status === 'BANNED') {
+      throw new ForbiddenException('Votre compte a été banni.');
+    }
+    if (user.status === 'SUSPENDED') {
+      throw new ForbiddenException('Votre compte a été suspendu.');
+    }
+    if (user.status === 'INACTIVE') {
+      throw new ForbiddenException('Votre compte est inactif.');
+    }
+
+    const lockoutKey = this.loginLockoutKey(user.id);
+    const locked = await this.redis.get(lockoutKey);
+    if (locked) {
+      const remaining = await this.redis.ttl(lockoutKey);
+      throw new UnauthorizedException(
+        `Trop de tentatives. Réessayez dans ${Math.ceil(remaining / 60)} minute(s).`,
+      );
+    }
+
     if (!user.password) {
       logAuth(
         this.prisma,
@@ -456,6 +541,28 @@ export class AuthService {
     const isPasswordValid = await comparePassword(dto.password, user.password);
 
     if (!isPasswordValid) {
+      const attemptsKey = this.loginAttemptsKey(user.id);
+      const attempts = await this.redis.incr(attemptsKey);
+      if (attempts === 1) await this.redis.expire(attemptsKey, this.LOGIN_LOCKOUT_DURATION);
+
+      if (Number(attempts) >= this.MAX_LOGIN_ATTEMPTS) {
+        await this.redis.set(lockoutKey, '1', this.LOGIN_LOCKOUT_DURATION);
+        await this.redis.delete(attemptsKey);
+        logAuth(
+          this.prisma,
+          'login_locked',
+          false,
+          dto.contact,
+          user.id,
+          ipAddress,
+          userAgent,
+          { reason: 'too_many_attempts' },
+        );
+        throw new UnauthorizedException(
+          `Trop de tentatives. Réessayez dans ${this.LOGIN_LOCKOUT_DURATION / 60} minute(s).`,
+        );
+      }
+
       logAuth(
         this.prisma,
         'login',
@@ -469,9 +576,26 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    await this.redis.delete(this.loginAttemptsKey(user.id));
+    await this.redis.delete(lockoutKey);
+
     // Si MFA activé, retourner un token temporaire
     if (user.mfaEnabled) {
       const mfaToken = signMfaToken({ id: user.id, mfa: true });
+
+      // Email MFA → envoyer OTP
+      const method = await this.redis.get(`mfa_method:${user.id}`);
+      if (method === 'EMAIL') {
+        const otp = generateOtp();
+        await this.redis.set(`mfa_email_otp:login:${user.id}`, hashOtp(otp), 300);
+        await this.mailService.sendMail({
+          to: user.email,
+          subject: 'Votre code de vérification MFA',
+          template: 'otp-code',
+          context: { otpCode: otp },
+        });
+        this.logger.log(`OTP MFA envoyé à ${user.email}`);
+      }
 
       logAuth(
         this.prisma,
@@ -555,29 +679,68 @@ export class AuthService {
       throw new UnauthorizedException('Token MFA invalide');
     }
 
+    const userId = payload.id as string;
+
+    const mfaLockoutKey = this.mfaLockoutKey(userId);
+    const mfaLocked = await this.redis.get(mfaLockoutKey);
+    if (mfaLocked) {
+      const remaining = await this.redis.ttl(mfaLockoutKey);
+      throw new UnauthorizedException(
+        `Trop de tentatives MFA. Réessayez dans ${Math.ceil(remaining / 60)} minute(s).`,
+      );
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: payload.id as string },
       include: { bankConnections: { include: { bankCustomer: true } } },
     });
 
-    if (!user || !user.mfaEnabled || !user.mfaSecret) {
+    if (!user || !user.mfaEnabled) {
       throw new UnauthorizedException('MFA non configuré');
     }
 
-    try {
-      totpClient.verify({ token: dto.code, secret: user.mfaSecret });
-    } catch {
-      logAuth(
-        this.prisma,
-        'login_mfa_verify',
-        false,
-        user.email,
-        user.id,
-        ipAddress,
-        userAgent,
-        { reason: 'invalid_totp' },
-      );
-      throw new UnauthorizedException('Code MFA invalide');
+    const method = await this.redis.get(`mfa_method:${user.id}`);
+
+    if (method === 'EMAIL') {
+      const stored = await this.redis.get(`mfa_email_otp:login:${user.id}`);
+      if (!stored) {
+        throw new UnauthorizedException('Session expirée. Reconnectez-vous.');
+      }
+      if (!this.safeCompare(stored, hashOtp(dto.code))) {
+        await this.trackMfaFailure(user.id);
+        logAuth(
+          this.prisma,
+          'login_mfa_verify',
+          false,
+          user.email,
+          user.id,
+          ipAddress,
+          userAgent,
+          { reason: 'invalid_email_otp' },
+        );
+        throw new UnauthorizedException('Code invalide');
+      }
+      await this.redis.delete(`mfa_email_otp:login:${user.id}`);
+    } else {
+      if (!user.mfaSecret) {
+        throw new UnauthorizedException('MFA non configuré');
+      }
+      try {
+        totpClient.verify({ token: dto.code, secret: user.mfaSecret });
+      } catch {
+        await this.trackMfaFailure(user.id);
+        logAuth(
+          this.prisma,
+          'login_mfa_verify',
+          false,
+          user.email,
+          user.id,
+          ipAddress,
+          userAgent,
+          { reason: 'invalid_totp' },
+        );
+        throw new UnauthorizedException('Code MFA invalide');
+      }
     }
 
     logAuth(
@@ -589,6 +752,9 @@ export class AuthService {
       ipAddress,
       userAgent,
     );
+
+    await this.redis.delete(this.mfaAttemptsKey(user.id));
+    await this.redis.delete(mfaLockoutKey);
 
     this.logger.log(`Connexion MFA réussie : ${user.email}`);
 
@@ -629,6 +795,18 @@ export class AuthService {
       refreshToken,
       user: { id: user.id, email: user.email, role: user.role, username },
     };
+  }
+
+  private async trackMfaFailure(userId: string) {
+    const attemptsKey = this.mfaAttemptsKey(userId);
+    const lockoutKey = this.mfaLockoutKey(userId);
+    const attempts = await this.redis.incr(attemptsKey);
+    if (attempts === 1) await this.redis.expire(attemptsKey, this.MFA_LOCKOUT_DURATION);
+
+    if (Number(attempts) >= this.MAX_MFA_ATTEMPTS) {
+      await this.redis.set(lockoutKey, '1', this.MFA_LOCKOUT_DURATION);
+      await this.redis.delete(attemptsKey);
+    }
   }
 
   async me(
@@ -739,6 +917,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.contact },
     });
+
     if (!user) {
       logAuth(
         this.prisma,
@@ -750,7 +929,7 @@ export class AuthService {
         userAgent,
         { reason: 'user_not_found' },
       );
-      throw new NotFoundException('User not found');
+      return { step: 'verify_otp', message: 'Si ce compte existe, un code vous a été envoyé.' };
     }
 
     if (!dto.otp && !dto.newPassword) {
@@ -765,7 +944,7 @@ export class AuthService {
       }
 
       const otp = generateOtp();
-      await this.redis.set(forgotPasswordOtpKey(user.email), otp, 300);
+      await this.redis.set(forgotPasswordOtpKey(user.email), hashOtp(otp), 300);
       await this.redis.set(
         forgotPasswordKey(user.email),
         JSON.stringify({
@@ -805,7 +984,7 @@ export class AuthService {
         );
       }
 
-      if (storedOtp !== dto.otp) {
+      if (!this.safeCompare(storedOtp, hashOtp(dto.otp))) {
         logAuth(
           this.prisma,
           'forgot_password_verify_otp',
@@ -854,6 +1033,8 @@ export class AuthService {
         where: { id: state.userId },
         data: { password: await hashPassword(dto.newPassword) },
       });
+
+      await this.prisma.session.deleteMany({ where: { userId: state.userId } });
 
       await this.redis.delete(forgotPasswordKey(user.email));
       logAuth(
@@ -1057,8 +1238,63 @@ export class AuthService {
       data: { mfaEnabled: false, mfaSecret: null },
     });
 
+    const method = await this.redis.get(`mfa_method:${userId}`);
+    if (method) {
+      await this.redis.delete(`mfa_method:${userId}`);
+    }
+
     this.logger.log(`MFA désactivé pour l'utilisateur : ${userId}`);
     return { message: 'MFA désactivé avec succès' };
+  }
+
+  async enableEmailMfa(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.mfaEnabled) {
+      throw new BadRequestException('Le MFA est déjà activé');
+    }
+
+    const otp = generateOtp();
+    await this.redis.set(`mfa_email_otp:${userId}`, hashOtp(otp), 300);
+    await this.mailService.sendMail({
+      to: user.email,
+      subject: 'Votre code de vérification MFA',
+      template: 'otp-code',
+      context: { otpCode: otp },
+    });
+
+    this.logger.log(`OTP MFA email envoyé à ${user.email}`);
+    return { message: 'Code de vérification envoyé par email' };
+  }
+
+  async verifyEmailMfa(userId: string, code: string) {
+    const stored = await this.redis.get(`mfa_email_otp:${userId}`);
+
+    if (!stored) {
+      throw new UnauthorizedException(
+        'Session expirée. Recommencez la configuration MFA.',
+      );
+    }
+
+    if (!this.safeCompare(stored, hashOtp(code))) {
+      throw new UnauthorizedException('Code de vérification invalide');
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { mfaEnabled: true },
+    });
+    await this.redis.set(`mfa_method:${userId}`, 'EMAIL', 31536000);
+    await this.redis.delete(`mfa_email_otp:${userId}`);
+
+    this.logger.log(`MFA email activé pour l'utilisateur : ${userId}`);
+    return { message: 'MFA email activé avec succès' };
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto) {
@@ -1073,6 +1309,8 @@ export class AuthService {
       where: { id: userId },
       data: { password: await hashPassword(dto.newPassword) },
     });
+
+    await this.prisma.session.deleteMany({ where: { userId: user.id } });
 
     this.logger.log(`Mot de passe changé pour l'utilisateur : ${userId}`);
     return { message: 'Mot de passe modifié avec succès' };
@@ -1090,7 +1328,7 @@ export class AuthService {
 
     return {
       enabled: user.mfaEnabled,
-      method: user.mfaEnabled ? 'TOTP' : null,
+      method: user.mfaEnabled ? await this.redis.get(`mfa_method:${userId}`) || 'TOTP' : null,
     };
   }
 

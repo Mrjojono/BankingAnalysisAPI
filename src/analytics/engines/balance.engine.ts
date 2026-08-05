@@ -35,6 +35,7 @@ export class BalanceEngine {
       year,
       month,
       includeMobileMoney: true,
+      excludeSelfTransfers: true,
     }).sort(
       (a, b) =>
         new Date(a.transaction.transactionDate).getTime() -

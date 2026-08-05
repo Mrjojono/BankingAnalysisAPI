@@ -34,6 +34,8 @@
     users: 'Utilisateurs',
     logs: 'Logs',
     dashboard: 'Dashboard',
+    eligibility: 'Éligibilité',
+    sms: 'SMS',
   };
 
   async function handleLogout() {

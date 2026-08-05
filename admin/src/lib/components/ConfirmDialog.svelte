@@ -30,8 +30,7 @@
 
 {#if open}
   <div class="fixed inset-0 z-[90] flex items-center justify-center" role="dialog" aria-modal="true">
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div class="absolute inset-0 bg-black/30 backdrop-blur-sm" onclick={oncancel}></div>
+    <button class="absolute inset-0 bg-black/30 backdrop-blur-sm cursor-default border-none p-0" onclick={oncancel} aria-label="Annuler"></button>
     <div class="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 animate-scale-in">
       <button onclick={oncancel} class="absolute top-3 right-3 p-1 rounded-lg cursor-pointer bg-transparent border-none text-outline hover:text-on-surface transition-colors">
         <X size={18} />

@@ -1,0 +1,504 @@
+{
+  "observations": {
+    "spike": {
+      "templates": [
+        "Tes dépenses {catégorie} ont bondi de {pct}% ce mois-ci",
+        "{Catégorie} : +{pct}% par rapport au mois dernier",
+        "Attention, tes dépenses {catégorie} grimpent de {pct}%",
+        "Les {catégorie} explosent ce mois avec {pct}% d'augmentation",
+        "Grosse hausse sur {catégorie} : {pct}% de plus"
+      ]
+    },
+    "high": {
+      "templates": [
+        "Tes dépenses {catégorie} atteignent {montant} FCFA ce mois",
+        "{Catégorie} pèse {montant} FCFA dans ton budget",
+        "Les {catégorie} sont élevées : {montant} FCFA",
+        "Tu as dépensé {montant} FCFA en {catégorie}",
+        "{montant} FCFA pour {catégorie} ce mois-ci"
+      ]
+    },
+    "critical": {
+      "templates": [
+        "Urgent : {catégorie} atteint {montant} FCFA ({pct}% des dépenses)",
+        "Alerte sur {catégorie} : {montant} FCFA, ça devient trop",
+        "Tes {catégorie} sont critiques : {montant} FCFA ce mois",
+        "{Catégorie} : {montant} FCFA, un niveau préoccupant"
+      ]
+    },
+    "ok": {
+      "templates": [
+        "Tes dépenses {catégorie} ({montant} FCFA) sont sous contrôle",
+        "RAS pour {catégorie} : {montant} FCFA, dans la norme",
+        "Les {catégorie} sont stables ce mois ({montant} FCFA)",
+        "Bon point : {catégorie} reste raisonnable ({montant} FCFA)"
+      ]
+    },
+    "near_limit": {
+      "templates": [
+        "Tu approches la limite sur {catégorie} : {montant} FCFA ({pct}%)",
+        "Attention, {catégorie} est proche du seuil ({montant} FCFA)",
+        "Tes {catégorie} frôlent la limite : {montant} FCFA"
+      ]
+    },
+    "increase": {
+      "templates": [
+        "Tes {catégorie} augmentent régulièrement : +{pct}%",
+        "Hausse progressive sur {catégorie} : {pct}% de plus",
+        "Les dépenses {catégorie} sont en hausse de {pct}%"
+      ]
+    },
+    "drop": {
+      "templates": [
+        "Tes revenus ont baissé de {pct}% ce mois-ci",
+        "Baisse des revenus : {pct}% par rapport au mois dernier",
+        "Attention, tes entrées d'argent diminuent de {pct}%"
+      ]
+    },
+    "good": {
+      "templates": [
+        "Bonne nouvelle : tu maîtrises bien {catégorie}",
+        "Tu gères bien {catégorie} ce mois-ci",
+        "Bravo, les dépenses {catégorie} sont sous contrôle"
+      ]
+    },
+    "overdraft": {
+      "templates": [
+        "Tu as {count} frais de découvert ce mois-ci",
+        "{count} agios détectés sur ton compte",
+        "Des frais de découvert ({count}) ont été prélevés"
+      ]
+    },
+    "overdraft_critical": {
+      "templates": [
+        "Les découverts se répètent : {count} fois ce mois",
+        "Attention aux frais : {count} agios en un mois",
+        "Tes découverts s'accumulent ({count} rejets)"
+      ]
+    },
+    "expense_ratio_high": {
+      "templates": [
+        "Tu dépenses {pct}% de tes revenus ce mois-ci",
+        "{pct}% de tes revenus partent en dépenses",
+        "Sur 100 FCFA gagnés, tu en dépenses {pct}"
+      ]
+    },
+    "expense_ratio_critical": {
+      "templates": [
+        "Il ne te reste que {reste}% de tes revenus après dépenses",
+        "Tes dépenses ({pct}% des revenus) sont trop élevées",
+        "Alerte : {pct}% de tes revenus sont dépensés"
+      ]
+    },
+    "expense_ratio_good": {
+      "templates": [
+        "Tu ne dépenses que {pct}% de tes revenus",
+        "Bon ratio : seulement {pct}% des revenus dépensés"
+      ]
+    },
+    "savings_potential": {
+      "templates": [
+        "Tu pourrais économiser {montant} FCFA par mois",
+        "Un potentiel d'épargne de {montant} FCFA/mois",
+        "Tu as de la marge : {montant} FCFA d'économie possible"
+      ]
+    }
+  },
+  "interpretations": {
+    "vs_income": {
+      "templates": [
+        "soit {pct_revenus}% de tes revenus",
+        "ce qui représente {pct_revenus}% de ce que tu gagnes",
+        "ça correspond à {pct_revenus}% de tes entrées d'argent"
+      ]
+    },
+    "vs_prev": {
+      "templates": [
+        "contre {prev_montant} FCFA le mois dernier",
+        "alors que le mois dernier c'était {prev_montant} FCFA",
+        "le mois précédent : {prev_montant} FCFA"
+      ]
+    },
+    "above_threshold": {
+      "templates": [
+        "au-dessus du seuil recommandé de {seuil}%",
+        "c'est plus que les {seuil}% conseillés",
+        "dépasse la limite conseillée de {seuil}%"
+      ]
+    },
+    "below_threshold": {
+      "templates": [
+        "en dessous du seuil recommandé de {seuil}%",
+        "c'est dans les clous (max conseillé : {seuil}%)",
+        "bien en dessous des {seuil}% maximum"
+      ]
+    },
+    "savings_opportunity": {
+      "templates": [
+        "tu pourrais libérer {montant} FCFA pour épargner",
+        "une économie de {montant} FCFA est envisageable",
+        "tu peux dégager {montant} FCFA en réduisant ce poste"
+      ]
+    },
+    "impact_month": {
+      "templates": [
+        "sur l'ensemble du mois, ça compte",
+        "sur le mois, ça pèse dans le budget",
+        "cumulé sur le mois, ça devient significatif"
+      ]
+    }
+  },
+  "recommendations": {
+    "reduce_amount": {
+      "templates": [
+        "Essaie de réduire de {montant} FCFA",
+        "Vise une baisse de {montant} FCFA",
+        "Un effort de {montant} FCFA suffirait",
+        "Peux-tu diminuer de {montant} FCFA ?"
+      ],
+      "conditions": {
+        "max_severity": [
+          "WARNING",
+          "CRITICAL"
+        ]
+      }
+    },
+    "reduce_percent": {
+      "templates": [
+        "Réduis ce poste de {pct}% pour tenir le budget",
+        "Vise {pct}% de moins sur cette catégorie",
+        "Une baisse de {pct}% serait idéale"
+      ],
+      "conditions": {
+        "max_severity": [
+          "WARNING",
+          "CRITICAL"
+        ]
+      }
+    },
+    "cut_variable": {
+      "templates": [
+        "Réduis les dépenses variables comme {catégorie}",
+        "Concentre-toi sur les dépenses {catégorie} superflues",
+        "Fais le tri dans tes dépenses {catégorie}"
+      ],
+      "conditions": {
+        "max_severity": [
+          "WARNING",
+          "CRITICAL"
+        ]
+      }
+    },
+    "build_reserve": {
+      "templates": [
+        "Constitue une réserve de {montant} FCFA",
+        "Mets de côté {montant} FCFA pour faire face",
+        "Essaie d'économiser {montant} FCFA pour les imprévus"
+      ]
+    },
+    "avoid_debt": {
+      "templates": [
+        "Évite tout nouvel engagement financier",
+        "Pas de nouveau crédit pour l'instant",
+        "Priorité : rembourser avant d'emprunter"
+      ],
+      "conditions": {
+        "max_severity": [
+          "CRITICAL"
+        ]
+      }
+    },
+    "cut_expenses": {
+      "templates": [
+        "Priorité : réduire tes plus gros postes de dépenses",
+        "Attaque d'abord les dépenses les plus lourdes",
+        "Commence par réduire ce qui coûte le plus"
+      ],
+      "conditions": {
+        "max_severity": [
+          "CRITICAL"
+        ]
+      }
+    },
+    "increase_savings": {
+      "templates": [
+        "Augmente ton épargne de {montant} FCFA/mois",
+        "Vise {montant} FCFA d'épargne mensuelle",
+        "Mets {montant} FCFA de côté chaque mois"
+      ]
+    },
+    "auto_transfer": {
+      "templates": [
+        "Mets en place un virement automatique de {montant} FCFA",
+        "Programme un virement de {montant} FCFA vers ton épargne",
+        "Automatise ton épargne : {montant} FCFA/mois"
+      ]
+    },
+    "review_subscriptions": {
+      "templates": [
+        "Fais le point sur tes abonnements en cours",
+        "Vérifie les abonnements que tu n'utilises plus",
+        "Résilie les abonnements inutiles"
+      ]
+    },
+    "track_budget": {
+      "templates": [
+        "Continue à suivre ton budget régulièrement",
+        "Garde un œil sur tes dépenses chaque semaine",
+        "Utilise l'appli pour suivre ton budget au quotidien"
+      ]
+    }
+  },
+  "encouragements": {
+    "excellent": {
+      "templates": [
+        "Excellent travail ! Continue comme ça.",
+        "Bravo, tes efforts portent leurs fruits !",
+        "Super gestion, tu es sur la bonne voie."
+      ]
+    },
+    "good": {
+      "templates": [
+        "Continue comme ça, tu progresses.",
+        "Bien joué, reste sur cette lancée.",
+        "Tu gères bien tes finances, continue."
+      ]
+    },
+    "keep_going": {
+      "templates": [
+        "Un petit effort supplémentaire et tu y es.",
+        "Presque au but, continue.",
+        "Encore un peu de discipline et c'est gagné."
+      ]
+    },
+    "progress": {
+      "templates": [
+        "Chaque petit pas compte. Continue.",
+        "Les efforts réguliers paient sur le long terme.",
+        "Continue à avancer, tu es sur la bonne voie."
+      ]
+    },
+    "first_step": {
+      "templates": [
+        "C'est un bon début, félicitations !",
+        "Le plus dur est fait : tu as commencé.",
+        "Première étape réussie, continue !"
+      ]
+    }
+  },
+  "compositions": {
+    "LOGEMENT_HIGH": {
+      "severity": {
+        "WARNING": [
+          "spike",
+          "vs_income",
+          "above_threshold",
+          "reduce_amount"
+        ],
+        "CRITICAL": [
+          "critical",
+          "vs_income",
+          "above_threshold",
+          "cut_expenses"
+        ]
+      }
+    },
+    "LOGEMENT_CRITICAL": {
+      "severity": {
+        "WARNING": [
+          "critical",
+          "vs_income",
+          "above_threshold",
+          "cut_expenses"
+        ],
+        "CRITICAL": [
+          "critical",
+          "vs_income",
+          "above_threshold",
+          "avoid_debt"
+        ]
+      }
+    },
+    "LOGEMENT_OK": {
+      "severity": {
+        "INFO": [
+          "ok",
+          "below_threshold",
+          "good"
+        ]
+      }
+    },
+    "CREDIT_HIGH": {
+      "severity": {
+        "WARNING": [
+          "high",
+          "vs_income",
+          "above_threshold",
+          "reduce_amount"
+        ],
+        "CRITICAL": [
+          "critical",
+          "vs_income",
+          "above_threshold",
+          "avoid_debt"
+        ]
+      }
+    },
+    "CREDIT_NEAR_LIMIT": {
+      "severity": {
+        "WARNING": [
+          "near_limit",
+          "vs_income",
+          "above_threshold",
+          "reduce_amount"
+        ]
+      }
+    },
+    "CREDIT_INCREASE": {
+      "severity": {
+        "INFO": [
+          "increase",
+          "vs_income",
+          "below_threshold",
+          "reduce_amount"
+        ],
+        "WARNING": [
+          "increase",
+          "vs_income",
+          "near_limit",
+          "keep_going"
+        ]
+      }
+    },
+    "ALIMENTATION_SPIKE": {
+      "severity": {
+        "WARNING": [
+          "spike",
+          "vs_income",
+          "savings_opportunity",
+          "reduce_amount"
+        ],
+        "CRITICAL": [
+          "critical",
+          "vs_income",
+          "above_threshold",
+          "cut_variable"
+        ]
+      }
+    },
+    "ALIMENTATION_HIGH": {
+      "severity": {
+        "WARNING": [
+          "high",
+          "vs_income",
+          "above_threshold",
+          "reduce_amount"
+        ]
+      }
+    },
+    "TRANSPORT_SPIKE": {
+      "severity": {
+        "WARNING": [
+          "spike",
+          "vs_prev",
+          "savings_opportunity",
+          "reduce_amount"
+        ]
+      }
+    },
+    "TRANSPORT_HIGH": {
+      "severity": {
+        "WARNING": [
+          "high",
+          "vs_income",
+          "above_threshold",
+          "reduce_amount"
+        ]
+      }
+    },
+    "COMMERCE_SPIKE": {
+      "severity": {
+        "WARNING": [
+          "spike",
+          "vs_income",
+          "savings_opportunity",
+          "reduce_amount"
+        ],
+        "CRITICAL": [
+          "critical",
+          "vs_income",
+          "above_threshold",
+          "cut_variable"
+        ]
+      }
+    },
+    "CARBURANT_SPIKE": {
+      "severity": {
+        "WARNING": [
+          "spike",
+          "vs_prev",
+          "savings_opportunity",
+          "reduce_amount"
+        ]
+      }
+    },
+    "SANTE_HIGH": {
+      "severity": {
+        "WARNING": [
+          "high",
+          "vs_income",
+          "above_threshold",
+          "keep_going"
+        ],
+        "CRITICAL": [
+          "critical",
+          "vs_income",
+          "above_threshold",
+          "build_reserve"
+        ]
+      }
+    },
+    "MOBILE_MONEY_HIGH": {
+      "severity": {
+        "WARNING": [
+          "high",
+          "vs_income",
+          "above_threshold",
+          "reduce_amount"
+        ]
+      }
+    },
+    "FEES_HIGH": {
+      "severity": {
+        "WARNING": [
+          "high",
+          "savings_opportunity",
+          "review_subscriptions"
+        ]
+      }
+    },
+    "INCOME_DROP": {
+      "severity": {
+        "CRITICAL": [
+          "drop",
+          "impact_month",
+          "avoid_debt",
+          "cut_expenses",
+          "build_reserve"
+        ]
+      }
+    },
+    "GOOD_HABIT": {
+      "severity": {
+        "INFO": [
+          "good",
+          "excellent"
+        ],
+        "WARNING": [
+          "good",
+          "progress"
+        ]
+      }
+    }
+  }
+}

@@ -2,13 +2,11 @@ import { Global, Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaService } from '../prisma/prisma.service';
-import { RedisService } from '../redis/redis.service';
 
 @Global()
 @Module({
   imports: [ConfigModule],
-  providers: [AuthService, PrismaService, RedisService],
+  providers: [AuthService],
   controllers: [AuthController],
   exports: [AuthService],
 })

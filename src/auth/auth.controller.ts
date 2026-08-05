@@ -1,10 +1,11 @@
-import { Controller, Post, Get, Body, Req, UseGuards, Query } from '@nestjs/common';
+import { Controller, Post, Get, Body, Req, UseGuards, Query, Res } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -25,6 +26,7 @@ import {
   DisableMfaDto,
   MfaLoginDto,
   MfaStatusResponseDto,
+  VerifyEmailMfaDto,
 } from './dto/mfa.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { User } from './user.decorator';
@@ -37,6 +39,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary: "Inscription d'un nouvel utilisateur (flux en 3 étapes + lien magique)",
     description:
@@ -61,6 +64,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: "Connexion d'un utilisateur" })
   @ApiResponse({
     status: 200,
@@ -143,6 +147,45 @@ export class AuthController {
     return this.authService.verifySetPasswordToken(token);
   }
 
+  @Get('set-password')
+  @ApiOperation({ summary: 'Page de redirection vers le deep link mobile pour la création de mot de passe' })
+  @ApiResponse({ status: 200, description: 'Page HTML de redirection' })
+  getSetPasswordRedirect(
+    @Query('token') token: string,
+    @Query('acc') acc: string,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    const deepLink = `oraapp://set-password?token=${encodeURIComponent(token)}&acc=${encodeURIComponent(acc)}`;
+    const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="1;url=${deepLink}">
+  <title>Redirection Orabank</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
+    .card { background: white; border-radius: 16px; padding: 40px; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.1); max-width: 360px; }
+    h2 { color: #1a1a2e; margin: 0 0 8px; }
+    p { color: #666; margin: 0 0 24px; line-height: 1.5; }
+    a.button { display: inline-block; background: #1a1a2e; color: white; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-weight: 600; }
+    a.button:hover { opacity: 0.9; }
+    .fallback { margin-top: 24px; font-size: 13px; color: #999; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Orabank</h2>
+    <p>Redirection vers l'application...</p>
+    <a class="button" href="${deepLink}">Ouvrir dans l'app</a>
+    <p class="fallback">Si rien ne se passe, cliquez sur le bouton ci-dessus.</p>
+  </div>
+</body>
+</html>`;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  }
+
   @Post('set-password')
   @ApiOperation({ summary: 'Définir le mot de passe via le lien magique reçu par email' })
   @ApiResponse({ status: 200, description: 'Mot de passe créé, retourne les tokens', type: LoginResponseDto })
@@ -169,6 +212,7 @@ export class AuthController {
     description: 'OTP expiré, invalide ou étape incorrecte',
   })
   @ApiResponse({ status: 404, description: 'Utilisateur non trouvé' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   async forgotPassword(
     @Body() forgotPasswordDto: ForgotPasswordDto,
     @Req() req: Request,
@@ -223,6 +267,26 @@ export class AuthController {
   })
   async mfaStatus(@User() user: any) {
     return this.authService.mfaStatus(user.id);
+  }
+
+  @Post('mfa/enable-email')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Activer le MFA par email (envoie un OTP)' })
+  @ApiResponse({ status: 200, description: 'OTP envoyé par email' })
+  @ApiResponse({ status: 400, description: 'MFA déjà activé' })
+  async enableEmailMfa(@User() user: any) {
+    return this.authService.enableEmailMfa(user.id);
+  }
+
+  @Post('mfa/verify-email')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Vérifier et activer le MFA par email avec le code OTP' })
+  @ApiResponse({ status: 200, description: 'MFA email activé' })
+  @ApiResponse({ status: 401, description: 'Code invalide ou expiré' })
+  async verifyEmailMfa(@User() user: any, @Body() dto: VerifyEmailMfaDto) {
+    return this.authService.verifyEmailMfa(user.id, dto.code);
   }
 
   @Post('change-password')

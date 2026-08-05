@@ -15,6 +15,10 @@ export default defineConfig({
         target: 'http://localhost:4000',
         changeOrigin: true,
       },
+      '/eligibility': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+      },
     },
   },
   build: {

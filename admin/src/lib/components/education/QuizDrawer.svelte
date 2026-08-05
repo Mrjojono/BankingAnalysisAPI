@@ -1,17 +1,20 @@
 <script lang="ts">
   import Input from '../Input.svelte';
   import Button from '../Button.svelte';
+  import { Trash2 } from '@lucide/svelte';
 
   let {
     quiz = null as any | null,
     saving = false,
     onsave,
     onclose,
+    ondelete,
   }: {
     quiz?: any | null;
     saving?: boolean;
     onsave: () => void;
     onclose: () => void;
+    ondelete?: () => void;
   } = $props();
 
   const STATUSES = [
@@ -40,6 +43,15 @@
     </label>
     <Input label="Score de passage (%)" type="number" bind:value={quiz!.passingScore} min={0} max={100} />
   </div>
+  {#if quiz?.id}
+    <div class="mt-4 pt-4 border-t border-red-200">
+      <h4 class="text-sm font-bold text-error mb-1">Zone dangereuse</h4>
+      <p class="text-xs text-on-surface-variant mb-3">La suppression est définitive : questions, choix, tentatives et liens seront supprimés.</p>
+      <Button variant="danger" size="sm" onclick={ondelete}>
+        <Trash2 size={14} /> Supprimer définitivement
+      </Button>
+    </div>
+  {/if}
   <div class="flex gap-3 justify-end mt-4 pt-4 border-t border-mint-subtle">
     <Button variant="secondary" onclick={onclose}>Annuler</Button>
     <Button onclick={onsave} disabled={saving}>{saving ? 'Enregistrement...' : 'Enregistrer'}</Button>

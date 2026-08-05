@@ -71,10 +71,13 @@
   {#each blocks as block, i}
     <div
       class="group relative border border-mint-subtle rounded-xl bg-white transition-all hover:border-primary/40 hover:shadow-sm {dragIdx === i ? 'opacity-60 border-primary' : ''}"
+      role="button"
+      tabindex="0"
       draggable="true"
       ondragstart={(e) => handleDragStart(e, i)}
       ondragover={(e) => handleDragOver(e, i)}
       ondragend={handleDragEnd}
+      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); } }}
     >
       <!-- Toolbar -->
       <div class="flex items-center gap-0.5 px-2 py-1.5 bg-surface-container/50 border-b border-mint-subtle/50 rounded-t-xl">

@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsObject,
   IsIn,
+  IsNumber,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -42,5 +43,23 @@ export class EvaluateEligibilityDto {
   @IsString()
   @IsOptional()
   @IsIn(['matrix', 'rules'])
+  mode?: 'matrix' | 'rules' = 'matrix';
+}
+
+export class SimulateEligibilityDto {
+  @ApiProperty({ description: 'ID du client bancaire (UUID)' })
+  @IsString() @IsNotEmpty()
+  customerId: string;
+
+  @ApiProperty({ description: 'Code du produit à simuler' })
+  @IsString() @IsNotEmpty()
+  productCode: string;
+
+  @ApiProperty({ description: 'Ajustements à appliquer aux métriques (champ -> valeur absolue)', example: { monthlyIncome: 800000, debtRatio: 15 } })
+  @IsObject()
+  adjustments: Record<string, number>;
+
+  @ApiPropertyOptional({ description: "Mode d'évaluation", default: 'matrix' })
+  @IsString() @IsOptional() @IsIn(['matrix', 'rules'])
   mode?: 'matrix' | 'rules' = 'matrix';
 }

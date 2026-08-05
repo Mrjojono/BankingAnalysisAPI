@@ -43,6 +43,7 @@ export class DebtEngine {
       direction: 'DEBIT',
       accountType: 'CHECKING',
       includeMobileMoney: true,
+      excludeSelfTransfers: true,
       year,
       month,
       from,
@@ -282,6 +283,7 @@ export class DebtEngine {
       direction: 'DEBIT',
       accountType: 'CHECKING',
       includeMobileMoney: true,
+      excludeSelfTransfers: true,
     });
 
     const creditEntries: Entry[] = [];

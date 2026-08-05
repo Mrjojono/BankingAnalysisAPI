@@ -9,12 +9,14 @@ import {
   Body,
   Query,
   ParseUUIDPipe,
-  Optional,
   UseGuards,
   NotFoundException,
+  ConflictException,
+  ForbiddenException,
   Req,
   Sse,
   Res,
+  Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
@@ -26,11 +28,12 @@ import { EXPENSE_KEYWORDS } from '../analytics/config/expense-keywords';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
-import { SkipThrottle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { SmsService } from '../sms/sms.service';
 import { CamenBertService } from '../sms/camenbert/camenbert.service';
 import { CamenBertTrainingService } from '../sms/camenbert/camenbert-training.service';
 import { ModelRegistryService } from '../sms/models/model-registry.service';
+import { EncryptionService } from '../encryption/encryption.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushService } from '../notifications/push.service';
 import { BroadcastDto } from '../notifications/dto/broadcast.dto';
@@ -41,7 +44,15 @@ import {
 } from '../notifications/dto/scheduled-notification.dto';
 import { Role, UserAccountStatus } from '../../generated/prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { EligibilityService } from '../eligibility/eligibility.service';
+import { MailService } from '../mail/mail.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { CreateUserDto } from './dto/create-user.dto';
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
+import { CreateRuleDto } from './dto/create-rule.dto';
+import { UpdateRuleDto } from './dto/update-rule.dto';
+import * as bcrypt from 'bcryptjs';
 import { CamenBertTestDto } from './dto/camenbert-test.dto';
 import { SmsDebugDto } from './dto/sms-debug.dto';
 import { Response } from 'express';
@@ -59,13 +70,16 @@ export class AdminController {
     private readonly notificationsService: NotificationsService,
     private readonly pushService: PushService,
     private readonly auditService: AuditService,
+    private readonly eligibilityService: EligibilityService,
     private readonly camenBert: CamenBertService,
     private readonly modelRegistry: ModelRegistryService,
     private readonly camenBertTraining: CamenBertTrainingService,
-    @Optional() private readonly classifier?: Classifier,
-    @Optional() private readonly embeddingLoader?: EmbeddingLoader,
-    @Optional() private readonly embeddingClassifier?: EmbeddingClassifier,
-    @Optional() private readonly trainCommand?: TrainCommand,
+    private readonly classifier: Classifier,
+    private readonly embeddingLoader: EmbeddingLoader,
+    private readonly embeddingClassifier: EmbeddingClassifier,
+    private readonly trainCommand: TrainCommand,
+    private readonly mailService: MailService,
+    private readonly encryption: EncryptionService,
   ) {}
 
   @Get('products')
@@ -85,16 +99,16 @@ export class AdminController {
   }
 
   @Post('products')
-  async createProduct(@Body() body: any) {
-    return this.prisma.bankProduct.create({ data: body });
+  async createProduct(@Body() dto: CreateProductDto) {
+    return this.prisma.bankProduct.create({ data: dto as any });
   }
 
   @Put('products/:id')
   async updateProduct(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: any,
+    @Body() dto: UpdateProductDto,
   ) {
-    return this.prisma.bankProduct.update({ where: { id }, data: body });
+    return this.prisma.bankProduct.update({ where: { id }, data: dto as any });
   }
 
   @Put('products/:id/rules')
@@ -113,6 +127,21 @@ export class AdminController {
       }),
     ]);
     return { cleared: cleared.count, updated: updated.count };
+  }
+
+  @Patch('products/:id/status')
+  @ApiOperation({ summary: 'Activer/désactiver un produit' })
+  async toggleProduct(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { isActive: boolean },
+  ) {
+    if (typeof body.isActive !== 'boolean') {
+      throw new ConflictException('Le champ isActive doit être un booléen');
+    }
+    return this.prisma.bankProduct.update({
+      where: { id },
+      data: { isActive: body.isActive },
+    });
   }
 
   @Delete('products/:id')
@@ -137,13 +166,28 @@ export class AdminController {
   }
 
   @Post('rules')
-  async createRule(@Body() body: any) {
-    return this.prisma.rule.create({ data: body });
+  async createRule(@Body() dto: CreateRuleDto) {
+    return this.prisma.rule.create({ data: dto as any });
   }
 
   @Put('rules/:id')
-  async updateRule(@Param('id', ParseUUIDPipe) id: string, @Body() body: any) {
-    return this.prisma.rule.update({ where: { id }, data: body });
+  async updateRule(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateRuleDto) {
+    return this.prisma.rule.update({ where: { id }, data: dto as any });
+  }
+
+  @Patch('rules/:id/status')
+  @ApiOperation({ summary: 'Activer/désactiver une règle' })
+  async toggleRule(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { isActive: boolean },
+  ) {
+    if (typeof body.isActive !== 'boolean') {
+      throw new ConflictException('Le champ isActive doit être un booléen');
+    }
+    return this.prisma.rule.update({
+      where: { id },
+      data: { isActive: body.isActive },
+    });
   }
 
   @Delete('rules/:id')
@@ -172,6 +216,65 @@ export class AdminController {
       'utf-8',
     );
     return { ok: true };
+  }
+
+  @Get('catalog-fragments')
+  async getCatalogFragments() {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const raw = await fs.readFile(
+      path.join(process.cwd(), 'src/messages/catalog-fragments.json'),
+      'utf-8',
+    );
+    return JSON.parse(raw);
+  }
+
+  @Put('catalog-fragments')
+  async updateCatalogFragments(@Body() body: any) {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    await fs.writeFile(
+      path.join(process.cwd(), 'src/messages/catalog-fragments.json'),
+      JSON.stringify(body, null, 2),
+      'utf-8',
+    );
+    return { ok: true };
+  }
+
+  @Post('nlg/preview')
+  async previewNlg(@Body() body: { kind: string; severity: string; vars?: Record<string, any> }) {
+    const { NLGEngineService } = await import('../messages/nlg-engine.service.js');
+    const { DocumentPlanner } = await import('../messages/document-planner.js');
+    const { FragmentSelector } = await import('../messages/fragment-selector.js');
+    const { EmbeddingLoader } = await import('../analytics/embeddings/embedding-loader.js');
+    const { TextVectorizer } = await import('../analytics/embeddings/text-vectorizer.js');
+
+    const loader = new EmbeddingLoader();
+    const vectorizer = new TextVectorizer(loader);
+    const selector = new FragmentSelector(loader, vectorizer);
+    const planner = new DocumentPlanner(selector);
+    const engine = new NLGEngineService(planner);
+
+    const intent: any = {
+      kind: body.kind,
+      severity: body.severity ?? 'INFO',
+      vars: (body.vars ?? {}) as Record<string, string | number>,
+    };
+
+    const result = engine.generateFromIntent(intent);
+    return result;
+  }
+
+  @Get('nlg/intents')
+  async getNlgIntents() {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const raw = await fs.readFile(
+      path.join(process.cwd(), 'src/messages/catalog-fragments.json'),
+      'utf-8',
+    );
+    const data = JSON.parse(raw);
+    return Object.keys(data.compositions ?? {});
   }
 
   // ──────────── Nouveautés Analytics ────────────
@@ -282,7 +385,7 @@ export class AdminController {
     };
   }
 
-  @SkipThrottle()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Post('sms/debug')
   @ApiOperation({
     summary: 'Diagnostiquer le filtrage SMS (parseSms + CamenBert + classifier)',
@@ -291,7 +394,178 @@ export class AdminController {
     return this.smsService.debugFilter(dto.address, dto.body, dto.dateSent);
   }
 
-  @SkipThrottle()
+  // ──────────── Contrôle SMS : transactions ────────────
+
+  @Get('sms/stats')
+  @ApiOperation({ summary: 'Statistiques agrégées des SMS (RGPD : aucun contenu ni identité)' })
+  async smsStats(
+    @Query('operator') operator?: string,
+    @Query('status') status?: string,
+    @Query('direction') direction?: string,
+    @Query('customerId') customerId?: string,
+    @Query('days') days?: string,
+  ) {
+    const where: any = {};
+    if (operator) where.operator = operator;
+    if (status) where.status = status;
+    if (direction) where.direction = direction;
+    if (customerId) where.customerId = customerId;
+
+    const daysCount = Math.min(Math.max(parseInt(days || '14', 10) || 14, 1), 90);
+    const since = new Date(Date.now() - (daysCount - 1) * 86400000);
+    const dateFloor = { gte: new Date(since.getFullYear(), since.getMonth(), since.getDate()) };
+    const whereRange = { ...where, dateSent: dateFloor };
+
+    const [perStatus, perOperator, perDirection, perCategory, total, rulesCount] =
+      await Promise.all([
+        this.prisma.smsTransaction.groupBy({ by: ['status'], where: whereRange, _count: true }),
+        this.prisma.smsTransaction.groupBy({ by: ['operator'], where: whereRange, _count: true }),
+        this.prisma.smsTransaction.groupBy({ by: ['direction'], where: whereRange, _count: true }),
+        this.prisma.smsTransaction.groupBy({
+          by: ['category'],
+          where: { ...whereRange, category: { not: null } },
+          _count: true,
+        }),
+        this.prisma.smsTransaction.count({ where: whereRange }),
+        this.prisma.smsFilterRule.count({ where: { isActive: true } }),
+      ]);
+
+    const perDay: { date: string; count: number }[] = [];
+    for (let i = daysCount - 1; i >= 0; i--) {
+      const start = new Date(Date.now() - i * 86400000);
+      const dayStart = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      const dayEnd = new Date(dayStart.getTime() + 86400000);
+      const count = await this.prisma.smsTransaction.count({
+        where: { ...where, dateSent: { gte: dayStart, lt: dayEnd } },
+      });
+      perDay.push({ date: dayStart.toISOString().slice(0, 10), count });
+    }
+
+    return {
+      totals: {
+        total,
+        byStatus: perStatus,
+        byOperator: perOperator,
+        byDirection: perDirection,
+        byCategory: perCategory,
+        perDay,
+      },
+      rulesCount,
+      filters: { operator, status, direction, customerId, days: daysCount },
+    };
+  }
+
+  // ──────────── Contrôle SMS : règles d'ignorance ────────────
+
+  @Get('sms/rules')
+  @ApiOperation({ summary: 'Lister les règles d\'ignorance SMS' })
+  async listSmsRules(@Query('customerId') customerId?: string) {
+    const where: any = {};
+    if (customerId) where.customerId = customerId;
+    const rules = await this.prisma.smsFilterRule.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const customerIds = [
+      ...new Set(rules.map((r) => r.customerId).filter((c): c is string => !!c)),
+    ];
+    const customers = customerIds.length
+      ? await this.prisma.bankCustomer.findMany({
+          where: { id: { in: customerIds } },
+          select: { id: true, firstName: true, lastName: true, accountNumber: true },
+        })
+      : [];
+    const customerMap = new Map(customers.map((c) => [c.id, c]));
+
+    return rules.map((r) => ({
+      ...r,
+      customer: r.customerId ? customerMap.get(r.customerId) ?? null : null,
+    }));
+  }
+
+  @Post('sms/rules')
+  @ApiOperation({ summary: 'Créer une règle d\'ignorance SMS' })
+  async createSmsRule(
+    @Body()
+    body: {
+      customerId?: string;
+      operator?: string;
+      address?: string;
+      keyword?: string;
+      direction?: string;
+      action?: string;
+      description?: string;
+    },
+  ) {
+    return this.prisma.smsFilterRule.create({
+      data: {
+        customerId: body.customerId ?? null,
+        operator: body.operator ?? null,
+        address: body.address ?? null,
+        keyword: body.keyword ?? null,
+        direction: body.direction ?? null,
+        action: body.action ?? 'IGNORE',
+        description: body.description ?? null,
+      },
+    });
+  }
+
+  @Patch('sms/rules/:id')
+  @ApiOperation({ summary: 'Modifier une règle d\'ignorance SMS' })
+  async updateSmsRule(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body()
+    body: {
+      customerId?: string;
+      operator?: string;
+      address?: string;
+      keyword?: string;
+      direction?: string;
+      action?: string;
+      description?: string;
+    },
+  ) {
+    const existing = await this.prisma.smsFilterRule.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Règle SMS introuvable');
+
+    const data: any = {};
+    if (body.customerId !== undefined) data.customerId = body.customerId;
+    if (body.operator !== undefined) data.operator = body.operator;
+    if (body.address !== undefined) data.address = body.address;
+    if (body.keyword !== undefined) data.keyword = body.keyword;
+    if (body.direction !== undefined) data.direction = body.direction;
+    if (body.action !== undefined) data.action = body.action;
+    if (body.description !== undefined) data.description = body.description;
+
+    return this.prisma.smsFilterRule.update({ where: { id }, data });
+  }
+
+  @Patch('sms/rules/:id/status')
+  @ApiOperation({ summary: 'Activer/désactiver une règle SMS' })
+  async toggleSmsRule(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { isActive: boolean },
+  ) {
+    if (typeof body.isActive !== 'boolean') {
+      throw new ConflictException('Le champ isActive doit être un booléen');
+    }
+    return this.prisma.smsFilterRule.update({
+      where: { id },
+      data: { isActive: body.isActive },
+    });
+  }
+
+  @Delete('sms/rules/:id')
+  @ApiOperation({ summary: 'Supprimer une règle d\'ignorance SMS' })
+  async deleteSmsRule(@Param('id', ParseUUIDPipe) id: string) {
+    const existing = await this.prisma.smsFilterRule.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Règle SMS introuvable');
+    await this.prisma.smsFilterRule.delete({ where: { id } });
+    return { message: 'Règle SMS supprimée' };
+  }
+
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Post('camenbert/test')
   @ApiOperation({
     summary: 'Tester le modèle CamenBert sur un SMS',
@@ -744,6 +1018,73 @@ export class AdminController {
     return { data, total, page: Math.floor(skip / take) + 1, limit: take };
   }
 
+  @Post('users')
+  @ApiOperation({ summary: 'Créer un nouvel utilisateur admin' })
+  async createUser(@Body() dto: CreateUserDto, @Req() req: Request) {
+    const actor = (req as any).user;
+    if (dto.role === Role.SUPER_ADMIN && actor?.role !== Role.SUPER_ADMIN) {
+      throw new ForbiddenException('Seuls les SUPER_ADMIN peuvent créer des SUPER_ADMIN');
+    }
+
+    const existing = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+    if (existing) {
+      throw new ConflictException('Un utilisateur avec cet email existe déjà');
+    }
+
+    const salt = await bcrypt.genSalt();
+    const hashed = await bcrypt.hash(dto.password, salt);
+
+    const user = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        password: hashed,
+        role: dto.role,
+        emailVerifiedAt: new Date(),
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        status: true,
+        emailVerifiedAt: true,
+        createdAt: true,
+      },
+    });
+
+    await this.auditService.log({
+      entityType: 'User',
+      entityId: user.id,
+      action: 'user_created',
+      actorId: (req as any).user?.id,
+      actorRole: (req as any).user?.role,
+      after: { email: user.email, role: user.role },
+      ipAddress: req?.headers?.['x-forwarded-for'] as string ?? (req as any)?.socket?.remoteAddress as string,
+    });
+
+    const appUrl = process.env.ADMIN_URL || 'http://localhost:5173/';
+    const adminEmail = actor?.email;
+    if (adminEmail) {
+      this.mailService.sendMail({
+        to: adminEmail,
+        subject: `Orabank — Compte créé : ${dto.email}`,
+        template: 'welcome-email',
+        context: {
+          email: dto.email,
+          password: dto.password,
+          role: dto.role,
+          appUrl,
+        },
+      }).catch((err) => {
+        const logger = new Logger('AdminController');
+        logger.error(`Échec envoi email confirmation à ${adminEmail}`, err);
+      });
+    }
+
+    return user;
+  }
+
   @Get('users/:id')
   @ApiOperation({ summary: 'Détail d\'un utilisateur' })
   async getUser(@Param('id', ParseUUIDPipe) id: string) {
@@ -1021,5 +1362,48 @@ export class AdminController {
 
     const { count } = await this.prisma.auditLog.deleteMany({ where });
     return { message: `${count} log(s) d\'audit supprimé(s)`, count };
+  }
+
+  // ──────────── Eligibility (proxy vers EligibilityService) ────────────
+
+  @Get('eligibility/dashboard/:customerId')
+  @ApiOperation({ summary: 'Tableau de bord éligibilité pour un client' })
+  async eligibilityDashboard(@Param('customerId') customerId: string) {
+    return this.eligibilityService.dashboard(customerId);
+  }
+
+  @Get('eligibility/improvement-plan/:customerId')
+  @ApiOperation({ summary: 'Plan d\'amélioration éligibilité' })
+  async eligibilityImprovementPlan(@Param('customerId') customerId: string) {
+    return this.eligibilityService.improvementPlan(customerId);
+  }
+
+  @Post('eligibility/evaluate')
+  @ApiOperation({ summary: 'Évaluer l\'éligibilité d\'un client pour un produit' })
+  async eligibilityEvaluate(@Body() body: { customerId: string; productCode: string; inputs?: Record<string, any>; mode?: string }) {
+    return this.eligibilityService.evaluateEligibility(
+      body.customerId,
+      body.productCode,
+      body.inputs,
+      body.mode as 'matrix' | 'rules',
+    );
+  }
+
+  @Post('eligibility/simulate')
+  @ApiOperation({ summary: 'Simuler l\'impact d\'ajustements sur l\'éligibilité' })
+  async eligibilitySimulate(@Body() body: { customerId: string; productCode: string; adjustments: Record<string, number>; mode?: string }) {
+    return this.eligibilityService.simulate(body as any);
+  }
+
+  @Get('eligibility/products')
+  @ApiOperation({ summary: 'Lister les produits bancaires' })
+  async eligibilityProducts() {
+    return this.eligibilityService.listProducts();
+  }
+
+  @Get('eligibility/products/:code/rules')
+  @ApiOperation({ summary: 'Règles d\'un produit' })
+  async eligibilityProductRules(@Param('code') code: string) {
+    return this.eligibilityService.getProductRules(code);
   }
 }

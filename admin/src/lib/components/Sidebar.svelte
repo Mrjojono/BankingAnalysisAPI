@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Landmark, FileCheck, MessageSquare, BookOpen, FileText, LogOut, GitGraph, Bell, GraduationCap, Users, ScrollText, BarChart3, Cpu } from '@lucide/svelte';
+  import { Landmark, FileCheck, MessageSquare, BookOpen, FileText, LogOut, GitGraph, Bell, GraduationCap, Users, ScrollText, BarChart3, Cpu, ShieldCheck, MessagesSquare } from '@lucide/svelte';
   import { getAuth } from '../stores/auth.svelte';
 
   let {
@@ -23,6 +23,8 @@
       { id: 'users', icon: Users, label: 'Utilisateurs' },
       { id: 'logs', icon: ScrollText, label: 'Logs' },
       { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
+      { id: 'eligibility', icon: ShieldCheck, label: 'Éligibilité' },
+      { id: 'sms', icon: MessagesSquare, label: 'SMS' },
     ]},
     { section: 'Analytics', items: [
       { id: 'centreIA', icon: Cpu, label: 'Centre IA' },

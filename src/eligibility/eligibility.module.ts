@@ -22,7 +22,6 @@ import { RuleEvaluator } from './engines/rule-evaluator';
 import { EligibilityCalibrator } from './calibration.service';
 import { EligibilityMatrixModule } from './matrix/eligibility-matrix.module';
 import { MatrixEligibilityEngine } from './matrix/matrix-eligibility.engine';
-import { PrismaService } from '../prisma/prisma.service';
 import { AuthModule } from '../auth/auth.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { EducationModule } from '../education/education.module';
@@ -39,7 +38,6 @@ import { EducationModule } from '../education/education.module';
     EligibilityService,
     EligibilityEngine,
     RuleEvaluator,
-    PrismaService,
     MatrixEligibilityEngine,
     EligibilityCalibrator,
   ],

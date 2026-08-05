@@ -51,7 +51,7 @@ export class SmsSource implements TransactionSourceProvider {
     from?: Date,
     to?: Date,
   ): Promise<Entry[]> {
-    const where: any = { customerId };
+    const where: any = { customerId, status: 'APPROVED' };
 
     if (from || to) {
       where.dateSent = {};
@@ -101,6 +101,7 @@ export class SmsSource implements TransactionSourceProvider {
       amount: BigInt(amount),
       transactionId: `sms-tx-${sms.id}`,
       accountId: isDebit ? 'sms-debit' : 'sms-credit',
+      source: 'sms',
       transaction: {
         id: `sms-tx-${sms.id}`,
         amount: BigInt(amount),

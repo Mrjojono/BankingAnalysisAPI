@@ -537,9 +537,9 @@
           class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-mint-subtle bg-surface-container-low text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary" />
       </div>
       <div>
-        <label class="block text-sm font-medium text-on-surface-variant mb-1">Ou saisir des emails</label>
+        <label class="block text-sm font-medium text-on-surface-variant mb-1" for="notif-email-input">Ou saisir des emails</label>
         <div class="flex gap-2">
-          <input bind:value={emailInput} placeholder="emails séparés par des virgules"
+          <input id="notif-email-input" bind:value={emailInput} placeholder="emails séparés par des virgules"
             class="flex-1 px-4 py-2 rounded-xl border border-mint-subtle bg-surface-container-low text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary" />
           <button onclick={handleEmailAdd} disabled={!emailInput.trim()}
             class="px-4 py-2 rounded-xl bg-primary text-on-primary font-medium hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer border-none">
@@ -598,19 +598,19 @@
     {#if editingScheduled}
       <div class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-on-surface-variant mb-1">Titre</label>
-          <input bind:value={editingScheduled.title} placeholder="Titre"
+          <label class="block text-sm font-medium text-on-surface-variant mb-1" for="sched-title">Titre</label>
+          <input id="sched-title" bind:value={editingScheduled.title} placeholder="Titre"
             class="w-full px-4 py-2.5 rounded-xl border border-mint-subtle bg-surface-container-low text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary" />
         </div>
         <div>
-          <label class="block text-sm font-medium text-on-surface-variant mb-1">Message</label>
-          <textarea bind:value={editingScheduled.body} placeholder="Corps du message" rows="3"
+          <label class="block text-sm font-medium text-on-surface-variant mb-1" for="sched-body">Message</label>
+          <textarea id="sched-body" bind:value={editingScheduled.body} placeholder="Corps du message" rows="3"
             class="w-full px-4 py-2.5 rounded-xl border border-mint-subtle bg-surface-container-low text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary resize-none"></textarea>
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-on-surface-variant mb-1">Type</label>
-            <select bind:value={editingScheduled.type}
+            <label class="block text-sm font-medium text-on-surface-variant mb-1" for="sched-type">Type</label>
+            <select id="sched-type" bind:value={editingScheduled.type}
               class="w-full px-4 py-2.5 rounded-xl border border-mint-subtle bg-surface-container-low text-on-surface focus:outline-none focus:ring-2 focus:ring-primary">
               {#each types as t}
                 <option value={t.value}>{t.label}</option>
@@ -618,8 +618,8 @@
             </select>
           </div>
           <div>
-            <label class="block text-sm font-medium text-on-surface-variant mb-1">Sévérité</label>
-            <select bind:value={editingScheduled.severity}
+            <label class="block text-sm font-medium text-on-surface-variant mb-1" for="sched-severity">Sévérité</label>
+            <select id="sched-severity" bind:value={editingScheduled.severity}
               class="w-full px-4 py-2.5 rounded-xl border border-mint-subtle bg-surface-container-low text-on-surface focus:outline-none focus:ring-2 focus:ring-primary">
               {#each severities as s}
                 <option value={s.value}>{s.label}</option>
@@ -628,13 +628,13 @@
           </div>
         </div>
         <div>
-          <label class="block text-sm font-medium text-on-surface-variant mb-1">Date de livraison</label>
-          <input type="datetime-local" bind:value={editingScheduled.scheduledAt}
+          <label class="block text-sm font-medium text-on-surface-variant mb-1" for="sched-date">Date de livraison</label>
+          <input id="sched-date" type="datetime-local" bind:value={editingScheduled.scheduledAt}
             class="w-full px-4 py-2.5 rounded-xl border border-mint-subtle bg-surface-container-low text-on-surface focus:outline-none focus:ring-2 focus:ring-primary" />
         </div>
         <div>
-          <label class="block text-sm font-medium text-on-surface-variant mb-1">Répétition</label>
-          <select bind:value={editingScheduled.recurrence}
+          <label class="block text-sm font-medium text-on-surface-variant mb-1" for="sched-recurrence">Répétition</label>
+          <select id="sched-recurrence" bind:value={editingScheduled.recurrence}
             class="w-full px-4 py-2.5 rounded-xl border border-mint-subtle bg-surface-container-low text-on-surface focus:outline-none focus:ring-2 focus:ring-primary">
             {#each recurrenceOptions as r}
               <option value={r.value}>{r.label}</option>
@@ -642,8 +642,8 @@
           </select>
         </div>
         <div>
-          <label class="block text-sm font-medium text-on-surface-variant mb-1">Cible</label>
-          <select bind:value={editingScheduled.targetType}
+          <label class="block text-sm font-medium text-on-surface-variant mb-1" for="sched-target">Cible</label>
+          <select id="sched-target" bind:value={editingScheduled.targetType}
             class="w-full px-4 py-2.5 rounded-xl border border-mint-subtle bg-surface-container-low text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
             onchange={() => { editingScheduled.targetIds = ''; }}>
             {#each targetTypes as t}
@@ -653,10 +653,10 @@
         </div>
         {#if editingScheduled.targetType !== 'all'}
           <div>
-            <label class="block text-sm font-medium text-on-surface-variant mb-1">
+            <label class="block text-sm font-medium text-on-surface-variant mb-1" for="sched-targetids">
               {editingScheduled.targetType === 'user_ids' ? 'IDs utilisateurs' : 'IDs ou emails clients'}
             </label>
-            <textarea bind:value={editingScheduled.targetIds} placeholder="Un par ligne" rows="3"
+            <textarea id="sched-targetids" bind:value={editingScheduled.targetIds} placeholder="Un par ligne" rows="3"
               class="w-full px-4 py-2.5 rounded-xl border border-mint-subtle bg-surface-container-low text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary resize-none"></textarea>
           </div>
         {/if}

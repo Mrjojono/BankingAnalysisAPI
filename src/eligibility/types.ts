@@ -16,6 +16,7 @@ export type EligibilityResult = {
   maxScore: number;
   scorePercent: number;
   status: 'ELIGIBLE' | 'PARTIAL' | 'NOT_ELIGIBLE';
+  reason?: string;
   ruleResults: RuleResult[];
   infoRules: RuleResult[]; // ← NOUVEAU : règles non-ELIGIBILITY (frais, limites, taux)
   passedRules: RuleResult[];
@@ -28,6 +29,7 @@ export type RuleResult = {
   ruleId: string;
   ruleCode: string;
   label: string;
+  field: string;
   status: 'PASS' | 'FAIL' | 'PARTIAL';
   valueSource: 'analytics' | 'input' | 'not_found';
   clientValue: number | boolean | string | null;
@@ -55,14 +57,104 @@ export const ELIGIBLE_THRESHOLD = 0.7;
 export const PARTIAL_THRESHOLD = 0.4;
 
 export const ANALYTICS_FIELD_MAP: Record<string, string> = {
-  monthlyIncome: 'monthlyIncome', // Revenu mensuel moyen
-  debtRatio: 'debtRatio', // Taux d'endettement (%)
-  expenseRatio: 'expenseRatio', // Ratio dépenses/revenus
-  repaymentRegularity: 'repaymentRegularityScore', // Régularité des remboursements
-  savingsRate: 'savingsRate', // Taux d'épargne (%)
-  overdraftDays: 'overdraftDays', // Jours de découvert
-  revenueVolatility: 'revenueVolatilityScore', // Volatilité des revenus
-  savingsRegularity: 'savingsRegularityScore', // Régularité épargne
-  emergencyFundScore: 'emergencyFundScore', // Fonds d'urgence
-  balanceVolatility: 'balanceVolatilityScore', // Volatilité du solde
+  monthlyIncome: 'monthlyIncome',
+  debtRatio: 'debtRatio',
+  expenseRatio: 'expenseRatio',
+  repaymentRegularity: 'repaymentRegularityScore',
+  savingsRate: 'savingsRate',
+  overdraftDays: 'overdraftDays',
+  revenueVolatility: 'revenueVolatilityScore',
+  savingsRegularity: 'savingsRegularityScore',
+  emergencyFundScore: 'emergencyFundScore',
+  balanceVolatility: 'balanceVolatilityScore',
 };
+
+export type ImprovementPlanItem = {
+  ruleId: string;
+  ruleCode: string;
+  label: string;
+  field: string;
+  status: 'PASS' | 'FAIL' | 'PARTIAL';
+  clientValue: number | boolean | string | null;
+  threshold: number | null;
+  advice: string | null;
+  potentialScore: number;
+  improvementGap: number;
+};
+
+export type ImprovementPlan = {
+  customerId: string;
+  currentGlobalScore: number;
+  maxScore: number;
+  potentialScore: number;
+  improvementRate: number;
+  items: ImprovementPlanItem[];
+};
+
+export type SimulationAdjustment = {
+  field: string;
+  from: number;
+  to: number;
+  delta: number;
+};
+
+export type SimulationResult = {
+  current: EligibilityResult;
+  simulated: EligibilityResult;
+  adjustments: SimulationAdjustment[];
+};
+
+export type ProductScoreSummary = {
+  productCode: string;
+  productName: string;
+  scorePercent: number;
+  status: 'ELIGIBLE' | 'PARTIAL' | 'NOT_ELIGIBLE';
+};
+
+export type EligibilityDashboard = {
+  customerId: string;
+  overview: {
+    bestScore: ProductScoreSummary | null;
+    worstScore: ProductScoreSummary | null;
+    averageScore: number;
+    totalProducts: number;
+  };
+  productScores: ProductScoreSummary[];
+  criticalRules: RuleResult[];
+};
+
+export function buildInfoRules(rules: any[]): RuleResult[] {
+  return rules.map((rule) => {
+    const seuil = rule.value?.toLocaleString('fr-FR') ?? '';
+    const pct = rule.percentage != null ? `${rule.percentage}%` : '';
+    const montant = rule.flatAmount?.toLocaleString('fr-FR') ?? '';
+    const periode = rule.period ?? '';
+
+    let detail = '';
+    if (rule.flatAmount != null) {
+      detail = `${montant} FCFA${periode ? `/${periode}` : ''}`;
+    } else if (rule.percentage != null) {
+      detail = `${pct}${rule.minAmount ? ` (min ${rule.minAmount.toLocaleString('fr-FR')} FCFA)` : ''}`;
+    } else if (rule.value != null) {
+      const op = rule.operator === 'GREATER_OR_EQUAL' ? 'max' : 'min';
+      detail = `${op === 'max' ? '\u2264' : '\u2265'} ${seuil} FCFA`;
+    }
+
+    return {
+      ruleId: rule.id,
+      ruleCode: rule.code,
+      label: rule.label,
+      field: rule.field ?? '',
+      status: 'PASS' as const,
+      valueSource: 'input' as const,
+      clientValue: null,
+      threshold: rule.value ?? rule.percentage ?? null,
+      thresholdMin: null,
+      thresholdMax: null,
+      scoreEarned: 0,
+      scoreMax: 0,
+      message: `${rule.label} : ${detail}`.replace(/ : $/, ''),
+      advice: null,
+    };
+  });
+}

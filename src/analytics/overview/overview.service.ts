@@ -257,7 +257,7 @@ export class OverviewService {
     month?: number,
   ) {
     this.gateway.emit('analytics_requested', { type: 'RATIO', customerId });
-    const { startDate, endDate } = await this.resolveRange(
+    const { startDate, endDate, refYear, refMonth } = await this.resolveRange(
       customerId,
       from,
       to,
@@ -270,14 +270,23 @@ export class OverviewService {
       endDate,
     );
 
-    const summary = await this.revenueEngine.buildFinancialSummary(
+    const revenues = await this.revenueEngine.computeRevenueAnalytics(
       entries,
       customerId,
-      { from: startDate, to: endDate },
+      refYear,
+      refMonth,
+    );
+    const expenses = await this.expenseEngine.getExpenses(
+      entries,
+      customerId,
+      refYear,
+      refMonth,
+      startDate,
+      endDate,
     );
     return await this.expenseEngine.calculateExpenseRatio(
-      summary.totalCredits.amount,
-      summary.totalDebits.amount,
+      revenues.currentMonth.total,
+      expenses.totalExpenses,
     );
   }
 
@@ -557,7 +566,9 @@ export class OverviewService {
       year,
       month,
     );
-    const lookbackStart = new Date(Date.UTC(refYear, refMonth - 1, 1));
+    const lookbackStart = new Date(
+      Date.UTC(refYear, refMonth - ANALYTICS_CONSTANTS.DEFAULT_LOOKBACK_MONTHS, 1),
+    );
     const entries = await this.getCertifiedEntries(
       customerId,
       lookbackStart,
@@ -589,7 +600,11 @@ export class OverviewService {
       year,
       month,
     );
-    const entries = await this.getCertifiedEntries(customerId);
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      startDate,
+      endDate,
+    );
     return await this.revenueEngine.computeRevenueSources(
       entries,
       customerId,
@@ -1263,7 +1278,20 @@ export class OverviewService {
       monthlyExpenses: expenses.totalExpenses,
       expenseRatioScore: actualExpenseRatio.score,
       expenseRatio: actualExpenseRatio.ratio,
-      paymentRegularityScore: repaymentHistory.score,
+      paymentRegularityScore: (() => {
+        const debits = entries.filter(
+          (e) =>
+            e.direction === 'DEBIT' &&
+            e.account.bankAccount?.accountType === 'CHECKING',
+        );
+        const monthsWithDebits = new Set(
+          debits.map(
+            (e) =>
+              new Date(e.transaction.transactionDate).toISOString().slice(0, 7),
+          ),
+        ).size;
+        return Math.round((monthsWithDebits / 6) * 100);
+      })(),
       debtRatioScore: actualDebtRatio.score,
       debtRatio: actualDebtRatio.debtRatio,
       repaymentRegularityScore: repaymentHistory.score,
@@ -1279,7 +1307,32 @@ export class OverviewService {
       overdraftDays: overdraftFrequency.overdraftDays,
       revenueVolatilityScore: revenueVariation.volatilityScore,
       balanceVolatilityScore: actualBalanceVolatility.score,
-      monthsData: ANALYTICS_CONSTANTS.DEFAULT_LOOKBACK_MONTHS,
+      negativeBalanceScore: (() => {
+        const avgBal = avgBalanceRes.averageBalance;
+        if (avgBal >= 0) return 100;
+        const monthsOfDeficit = expenses.totalExpenses > 0
+          ? Math.abs(avgBal) / expenses.totalExpenses
+          : Math.abs(avgBal) > 0 ? 6 : 0;
+        const capped = Math.min(monthsOfDeficit, 6);
+        return Math.round(Math.max(0, (1 - capped / 2) * 100));
+      })(),
+      monthsData: Math.max(
+        1,
+        new Set(
+          entries
+            .filter(
+              (e) =>
+                e.direction === 'CREDIT' &&
+                e.account.bankAccount?.accountType === 'CHECKING',
+            )
+            .map(
+              (e) =>
+                new Date(e.transaction.transactionDate)
+                  .toISOString()
+                  .slice(0, 7),
+            ),
+        ).size,
+      ),
     };
 
     this.metricsCache.set(cacheKey, { data: metrics, ts: Date.now() });

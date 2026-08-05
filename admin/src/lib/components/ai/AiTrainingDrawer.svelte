@@ -663,7 +663,7 @@
     <h2 class="text-lg font-bold text-on-surface">
       {editing ? 'Modifier' : 'Ajouter'} un exemple
     </h2>
-    <button onclick={() => exampleDrawer = false}
+    <button onclick={() => exampleDrawer = false} aria-label="Fermer"
       class="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-surface-container transition-all cursor-pointer border-none">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
     </button>

@@ -1,9 +1,6 @@
 export { EligibilityMatrixBuilder } from './eligibility-matrix.builder';
 export { MatrixEligibilityEngine } from './matrix-eligibility.engine';
-export {
-  buildEligibilityVector,
-  computeRuleSatisfaction,
-} from './eligibility-context.builder';
+export { computeRuleSatisfaction } from './eligibility-context.builder';
 export {
   scoreProduct,
   normalizedScoreToStatus,

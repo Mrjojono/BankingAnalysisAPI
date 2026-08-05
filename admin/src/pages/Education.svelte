@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus, Info, BookOpen, GraduationCap, Workflow, Search, HelpCircle } from '@lucide/svelte';
+  import { Plus, Info, BookOpen, GraduationCap, Workflow, Search, HelpCircle, Trash2 } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
   import { toast } from '../lib/stores/toast.svelte';
@@ -119,11 +119,19 @@
   }
 
   function removePath(id: string) {
-    ask('Supprimer le parcours ?', 'Cette action est irréversible. Les leçons seront archivées.', async () => {
+    ask('Désactiver le parcours ?', 'Le parcours sera désactivé et masqué des utilisateurs. Vous pourrez le réactiver à tout moment.', async () => {
       await api.deleteEducationPath(id);
       paths = paths.filter(p => p.id !== id);
-      toast.success('Parcours supprimé');
+      toast.success('Parcours désactivé');
     });
+  }
+
+  async function togglePath(p: any, next: boolean) {
+    try {
+      const updated = await api.updateEducationPath(p.id, { isActive: next });
+      paths = paths.map(x => x.id === p.id ? { ...x, ...updated, isActive: next } : x);
+      toast.success(next ? 'Parcours activé' : 'Parcours désactivé');
+    } catch (e: any) { toast.error(e.message); }
   }
 
   // ===== Lesson CRUD =====
@@ -193,11 +201,20 @@
   }
 
   function removeLesson(id: string) {
-    ask('Archiver la leçon ?', 'La leçon sera archivée et masquée des utilisateurs.', async () => {
+    ask('Archiver la leçon ?', 'La leçon sera archivée et masquée des utilisateurs. Vous pourrez la republier à tout moment.', async () => {
       await api.deleteEducationLesson(id);
       lessons = lessons.filter(l => l.id !== id);
       toast.success('Leçon archivée');
     });
+  }
+
+  async function toggleLesson(l: any, next: boolean) {
+    const target = next ? 'PUBLISHED' : (l.status === 'PUBLISHED' ? 'ARCHIVED' : l.status);
+    try {
+      const updated = await api.updateEducationLesson(l.id, { status: target });
+      lessons = lessons.map(x => x.id === l.id ? { ...x, ...updated, status: target } : x);
+      toast.success(target === 'PUBLISHED' ? 'Leçon publiée' : 'Leçon archivée');
+    } catch (e: any) { toast.error(e.message); }
   }
 
   // ===== Advice Link CRUD =====
@@ -303,7 +320,7 @@
   }
 
   function removeQuiz(id: string) {
-    ask('Supprimer le quiz ?', 'Toutes les questions et réponses seront supprimées.', async () => {
+    ask('Supprimer le quiz ?', 'Toutes les questions, réponses, tentatives et liens seront supprimés définitivement.', async () => {
       try {
         await api.deleteQuiz(id);
         quizzes = quizzes.filter(q => q.id !== id);
@@ -311,6 +328,15 @@
         toast.success('Quiz supprimé');
       } catch (e: any) { toast.error(e.message); }
     });
+  }
+
+  async function toggleQuiz(q: any, next: boolean) {
+    const target = next ? 'PUBLISHED' : (q.status === 'PUBLISHED' ? 'DRAFT' : q.status);
+    try {
+      const updated = await api.updateQuiz(q.id, { status: target });
+      quizzes = quizzes.map(x => x.id === q.id ? { ...x, ...updated, status: target } : x);
+      toast.success(target === 'PUBLISHED' ? 'Quiz publié' : 'Quiz en brouillon');
+    } catch (e: any) { toast.error(e.message); }
   }
 
   async function openQuizView(q: any) {
@@ -481,7 +507,7 @@
       quizzes={quizzes}
       onView={openQuizView}
       onEdit={openQuizForm}
-      onDelete={removeQuiz}
+      onToggle={toggleQuiz}
     />
   {:else}
     <!-- Stats + Search -->
@@ -500,9 +526,9 @@
 
     <!-- Paths -->
     {#if tab === 'paths'}
-      <PathsTable paths={filteredPaths} onEdit={openPathForm} onDelete={removePath} />
+      <PathsTable paths={filteredPaths} onEdit={openPathForm} onToggle={togglePath} />
     {:else if tab === 'lessons'}
-      <LessonsTable lessons={filteredLessons} {paths} onEdit={openLessonForm} onDelete={removeLesson} />
+      <LessonsTable lessons={filteredLessons} {paths} onEdit={openLessonForm} onToggle={toggleLesson} />
     {/if}
   {/if}
 </div>
@@ -531,6 +557,15 @@
       <input type="checkbox" bind:checked={editingPath!.isActive} class="w-4 h-4 rounded border-mint-subtle text-primary focus:ring-primary" />
       Actif
     </label>
+    {#if editingPath?.id}
+      <div class="mt-4 pt-4 border-t border-red-200">
+        <h4 class="text-sm font-bold text-error mb-1">Zone dangereuse</h4>
+        <p class="text-xs text-on-surface-variant mb-3">Désactiver le parcours le masquera des utilisateurs. Il pourra être réactivé à tout moment.</p>
+        <Button variant="danger" size="sm" onclick={() => { drawerOpen = false; removePath(editingPath.id); }}>
+          <Trash2 size={14} /> Désactiver le parcours
+        </Button>
+      </div>
+    {/if}
     <div class="flex gap-3 justify-end mt-4 pt-4 border-t border-mint-subtle">
       <Button variant="secondary" onclick={() => { drawerOpen = false; editingPath = null; }}>Annuler</Button>
       <Button onclick={savePath} disabled={saving}>{saving ? 'Enregistrement...' : 'Enregistrer'}</Button>
@@ -631,6 +666,16 @@
       </div>
     {/if}
 
+    {#if editingLesson?.id}
+      <div class="mt-4 pt-4 border-t border-red-200">
+        <h4 class="text-sm font-bold text-error mb-1">Zone dangereuse</h4>
+        <p class="text-xs text-on-surface-variant mb-3">Archiver la leçon la masquera des utilisateurs. Elle pourra être republiée à tout moment.</p>
+        <Button variant="danger" size="sm" onclick={() => { lessonDrawerOpen = false; removeLesson(editingLesson.id); }}>
+          <Trash2 size={14} /> Archiver la leçon
+        </Button>
+      </div>
+    {/if}
+
     <div class="flex gap-3 justify-end mt-4 pt-4 border-t border-mint-subtle">
       <Button variant="secondary" onclick={() => { lessonDrawerOpen = false; editingLesson = null; }}>Annuler</Button>
       <Button onclick={saveLesson} disabled={saving}>{saving ? 'Enregistrement...' : 'Enregistrer'}</Button>
@@ -661,7 +706,7 @@
 <!-- ===== Drawer: Quiz Form ===== -->
 <Drawer open={quizDrawerOpen} title={editingQuiz?.id ? 'Modifier le quiz' : 'Nouveau quiz'} onclose={() => { quizDrawerOpen = false; editingQuiz = null; }} widthClass="max-w-lg">
   {#if editingQuiz}
-    <QuizDrawer quiz={editingQuiz} saving={savingQuiz} onsave={saveQuiz} onclose={() => { quizDrawerOpen = false; editingQuiz = null; }} />
+    <QuizDrawer quiz={editingQuiz} saving={savingQuiz} onsave={saveQuiz} onclose={() => { quizDrawerOpen = false; editingQuiz = null; }} ondelete={() => { quizDrawerOpen = false; removeQuiz(editingQuiz!.id); }} />
   {/if}
 </Drawer>
 
