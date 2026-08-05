@@ -6,6 +6,18 @@ import { Classifier } from '../analytics/shared/classifier';
 import { ExpenseCategory } from '../analytics/config/expense-keywords';
 import { CamenBertService } from './camenbert/camenbert.service';
 import { normalizeDateSent } from './sms-date';
+import { RedisService } from '../redis/redis.service';
+import { CamenBertResult } from './camenbert/camenbert.types';
+import {
+  arbitrate,
+  mapCbCategoryToAnalysis,
+} from './pipeline/arbitration';
+import {
+  DEFAULT_SMS_PIPELINE_CONFIG,
+  normalizeSmsPipelineConfig,
+  SMS_PIPELINE_CONFIG_KEY,
+  SmsPipelineConfig,
+} from './pipeline/config';
 
 interface RawSms {
   id: number;
@@ -33,6 +45,7 @@ export class SmsService {
     private readonly classifier: Classifier,
     private readonly encryption: EncryptionService,
     private readonly camenBert: CamenBertService,
+    private readonly redis: RedisService,
   ) {}
 
   async syncSmsFromUser(
@@ -110,6 +123,8 @@ export class SmsService {
       where: { isActive: true, OR: [{ customerId: null }, { customerId }] },
     });
 
+    const pipelineConfig = await this.getPipelineConfig();
+
     const toCreate: any[] = [];
 
     for (const msg of messages) {
@@ -149,19 +164,36 @@ export class SmsService {
         continue;
       }
 
-      if (parsed.direction === null) {
-        if (this.camenBert.isReady()) {
-          const cbResult = await this.camenBert.classify(msg.body);
-          if (cbResult && cbResult.confidence >= 0.75 && cbResult.direction) {
-            parsed.direction = cbResult.direction;
-            parsed.confidence = Math.min(parsed.confidence, cbResult.confidence);
-            this.logger.debug(
-              `CamenBert a rempli la direction: ${cbResult.direction} (${(cbResult.confidence * 100).toFixed(0)}%)`,
-            );
-          }
+      // Couche 2 : CamenBert arbitre sur CHAQUE SMS si activé
+      let cbResult: CamenBertResult | null = null;
+      if (pipelineConfig.camenbertEnabled && this.camenBert.isReady()) {
+        try {
+          cbResult = await this.camenBert.classify(msg.body);
+        } catch {
+          cbResult = null;
         }
+      }
 
-        if (parsed.direction === null) {
+      const arbitration = arbitrate({
+        regexDirection: pipelineConfig.regexEnabled
+          ? (parsed.direction as 'DEBIT' | 'CREDIT' | null)
+          : null,
+        regexConfidence: parsed.confidence,
+        cbCategory: cbResult?.category ?? null,
+        cbDirection: cbResult?.direction ?? null,
+        cbConfidence: cbResult?.confidence ?? 0,
+        camenbertEnabled: pipelineConfig.camenbertEnabled,
+        camenbertThreshold: pipelineConfig.camenbertThreshold,
+        amountPresent: parsed.amount !== null,
+      });
+
+      parsed.direction = arbitration.direction;
+
+      let status: string = arbitration.status === 'APPROVED' ? 'APPROVED' : 'PENDING';
+
+      if (parsed.direction === null) {
+        if (pipelineConfig.regexEnabled && !arbitration.camenbertOk) {
+          // Fallback classifier existant : valide que ce n'est pas du bruit
           try {
             const category = await this.classifier.categorizeWithCache(msg.body);
             if (category === ExpenseCategory.DIVERS) {
@@ -173,6 +205,10 @@ export class SmsService {
             skipReasons.classifierError++;
             continue;
           }
+          status = 'PENDING';
+        } else {
+          skipReasons.parseEmpty++;
+          continue;
         }
       }
 
@@ -183,14 +219,11 @@ export class SmsService {
       }
 
       const matchRule = rules.find((r) => this.ruleMatches(r, msg, parsed));
-      const status = matchRule
-        ? 'IGNORED'
-        : parsed.confidence >= 0.8
-          ? 'APPROVED'
-          : 'PENDING';
+      if (matchRule) status = 'IGNORED';
 
-      let category: string | null = null;
-      if (parsed.direction) {
+      // Catégorie d'analyse : type mappé CamenBert, sinon classifier mots-clés
+      let category: string | null = arbitration.analysisCategory;
+      if (category === null && parsed.direction && !arbitration.camenbertOk) {
         try {
           const cat = await this.classifier.categorizeWithCache(msg.body);
           if (cat !== ExpenseCategory.DIVERS) category = cat;
@@ -210,6 +243,11 @@ export class SmsService {
         balanceAfter: parsed.balanceAfter,
         referenceNo: parsed.referenceNo,
         confidence: parsed.confidence,
+        cbCategory: arbitration.cbCategory,
+        cbConfidence: cbResult?.confidence ?? null,
+        category,
+        arbitration: arbitration.arbitration,
+        disagreed: arbitration.disagreed,
         fingerprint,
         status,
         matchRuleId: matchRule?.id ?? null,
@@ -370,6 +408,24 @@ export class SmsService {
       loadError: this.camenBert.getLoadError(),
       metrics: this.camenBert.getMetrics(),
     };
+  }
+
+  async getPipelineConfig(): Promise<SmsPipelineConfig> {
+    const raw = await this.redis.get(SMS_PIPELINE_CONFIG_KEY);
+    return normalizeSmsPipelineConfig(raw);
+  }
+
+  async updatePipelineConfig(
+    partial: Partial<SmsPipelineConfig>,
+  ): Promise<SmsPipelineConfig> {
+    const current = await this.getPipelineConfig();
+    const next: SmsPipelineConfig = { ...current, ...partial };
+    await this.redis.set(
+      SMS_PIPELINE_CONFIG_KEY,
+      JSON.stringify(next),
+      30 * 24 * 60 * 60,
+    );
+    return next;
   }
 }
 
