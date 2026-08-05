@@ -780,6 +780,10 @@ model SmsTransaction {
 
   status       SmsTransactionStatus @default(PENDING)
   category     String?
+  cbCategory   String?
+  cbConfidence Float?
+  arbitration  String?
+  disagreed    Boolean @default(false)
   counterparty String?
   balanceAfter Float?
   referenceNo  String?
