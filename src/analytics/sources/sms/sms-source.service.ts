@@ -108,6 +108,7 @@ export class SmsSource implements TransactionSourceProvider {
         createdAt: sms.dateSent,
         transactionDate: sms.dateSent,
         description,
+        category: sms.category ?? undefined,
       },
       account: {
         id: isDebit ? 'sms-debit' : 'sms-credit',

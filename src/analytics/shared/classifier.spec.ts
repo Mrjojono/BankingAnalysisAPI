@@ -28,4 +28,22 @@ describe('Classifier', () => {
     const result = await classifier.categorizeWithCache('ACHAT CARBURANT');
     expect(result).toBe('CARBURANT');
   });
+
+  it('categorizeEntry préfère la catégorie stockée', async () => {
+    const entry = {
+      direction: 'DEBIT',
+      transaction: { description: 'ACHAT CARBURANT', category: 'SALAIRE' },
+    } as any;
+    const result = await classifier.categorizeEntry(entry, 'cust-1');
+    expect(result).toBe('SALAIRE');
+  });
+
+  it('categorizeEntry retombe sur le classifier si pas de catégorie stockée', async () => {
+    const entry = {
+      direction: 'DEBIT',
+      transaction: { description: 'ACHAT CARBURANT' },
+    } as any;
+    const result = await classifier.categorizeEntry(entry, 'cust-1');
+    expect(result).toBe('CARBURANT');
+  });
 });

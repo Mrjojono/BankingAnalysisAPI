@@ -49,6 +49,8 @@ export type Transaction = {
   createdAt: Date;
   transactionDate: Date;
   description?: string;
+  /** Catégorie d'analyse précalculée (ex. SMS Mobile Money) */
+  category?: string;
   status?: TransactionStatus;
   journalId?: string;
   ledgerId?: string;

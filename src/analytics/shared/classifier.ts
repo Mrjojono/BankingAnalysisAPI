@@ -2,6 +2,7 @@ import { Logger, Injectable, OnModuleInit, Optional } from '@nestjs/common';
 import { RedisService } from '../../redis/redis.service';
 import { EXPENSE_KEYWORDS, ExpenseCategory } from '../config/expense-keywords';
 import { EmbeddingClassifier } from '../embeddings/embedding-classifier';
+import { Entry } from '../types';
 import Fuse from 'fuse.js';
 import * as natural from 'natural';
 import type { ScoredCategory } from '../embeddings/embedding-classifier';
@@ -117,6 +118,22 @@ export class Classifier implements OnModuleInit {
     }
 
     return aiResult;
+  }
+
+  /**
+   * Catégorie d'une écriture : préfère la catégorie précalculée
+   * (ex. SMS Mobile Money arbitrés par CamenBert), sinon classifier.
+   */
+  async categorizeEntry(
+    entry: Pick<Entry, 'transaction'>,
+    customerId?: string,
+  ): Promise<ExpenseCategory> {
+    const stored = entry.transaction?.category;
+    if (stored) return stored as ExpenseCategory;
+    return this.categorizeWithCache(
+      entry.transaction?.description ?? '',
+      customerId,
+    );
   }
 
   private matchExact(desc: string): ExpenseCategory {

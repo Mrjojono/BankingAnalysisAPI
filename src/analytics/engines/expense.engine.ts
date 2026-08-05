@@ -64,10 +64,7 @@ export class ExpenseEngine {
     let count = 0;
 
     for (const entry of debits) {
-      const category = await this.classifier.categorizeWithCache(
-        entry.transaction.description ?? '',
-        customerId,
-      );
+      const category = await this.classifier.categorizeEntry(entry, customerId);
 
       if (NON_EXPENSE_CATEGORIES.has(category as any)) continue;
 
@@ -129,10 +126,7 @@ export class ExpenseEngine {
     const grouped = new Map<string, { amount: Decimal; count: number }>();
 
     for (const entry of debits) {
-      const category = await this.classifier.categorizeWithCache(
-        entry.transaction.description ?? '',
-        customerId,
-      );
+      const category = await this.classifier.categorizeEntry(entry, customerId);
 
       if (NON_EXPENSE_CATEGORIES.has(category as any)) continue;
 
@@ -211,10 +205,7 @@ export class ExpenseEngine {
     const groupedByDescription = new Map<string, Entry[]>();
     for (const entry of debits) {
       if (entry.transaction.description) {
-        const category = await this.classifier.categorizeWithCache(
-          entry.transaction.description ?? '',
-          customerId,
-        );
+        const category = await this.classifier.categorizeEntry(entry, customerId);
         if (NON_EXPENSE_CATEGORIES.has(category as any)) continue;
 
         const normalizedDesc = normalizeDescription(
@@ -292,10 +283,7 @@ export class ExpenseEngine {
               .toISOString()
               .split('T')[0];
           })(),
-          category: await this.classifier.categorizeWithCache(
-            group[0].transaction.description!,
-            customerId,
-          ),
+          category: await this.classifier.categorizeEntry(group[0], customerId),
         });
       }
     }
@@ -332,10 +320,7 @@ export class ExpenseEngine {
 
     const filteredDebits: Entry[] = [];
     for (const entry of periodDebits) {
-      const category = await this.classifier.categorizeWithCache(
-        entry.transaction.description ?? '',
-        customerId,
-      );
+      const category = await this.classifier.categorizeEntry(entry, customerId);
       if (NON_EXPENSE_CATEGORIES.has(category as any)) continue;
       filteredDebits.push(entry);
     }

@@ -56,10 +56,7 @@ export class RevenueEngine {
     });
 
     for (const entry of debitEntries) {
-      const category = await this.classifier.categorizeWithCache(
-        entry.transaction.description ?? '',
-        customerId,
-      );
+      const category = await this.classifier.categorizeEntry(entry, customerId);
 
       if (NON_EXPENSE_CATEGORIES.has(category as any)) continue;
 
@@ -306,10 +303,7 @@ export class RevenueEngine {
 
     const grouped = new Map<string, { amount: Decimal; count: number }>();
     for (const entry of credits) {
-      const category = await this.classifier.categorizeWithCache(
-        entry.transaction.description ?? '',
-        customerId,
-      );
+      const category = await this.classifier.categorizeEntry(entry, customerId);
       const existing = grouped.get(category);
       const amt = new Decimal(entry.amount.toString());
       if (existing)

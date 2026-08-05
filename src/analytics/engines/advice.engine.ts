@@ -237,10 +237,7 @@ export class AdviceEngine {
     >();
 
     for (const entry of entries) {
-      const category = await this.classifier.categorizeWithCache(
-        entry.transaction.description ?? '',
-        customerId,
-      );
+      const category = await this.classifier.categorizeEntry(entry, customerId);
       const amount = Number(entry.amount);
       const desc = entry.transaction.description ?? '';
       const existing = grouped.get(category);
