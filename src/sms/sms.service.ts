@@ -223,7 +223,7 @@ export class SmsService {
 
       // Catégorie d'analyse : type mappé CamenBert, sinon classifier mots-clés
       let category: string | null = arbitration.analysisCategory;
-      if (category === null && parsed.direction && !arbitration.camenbertOk) {
+      if (category === null && parsed.direction) {
         try {
           const cat = await this.classifier.categorizeWithCache(msg.body);
           if (cat !== ExpenseCategory.DIVERS) category = cat;

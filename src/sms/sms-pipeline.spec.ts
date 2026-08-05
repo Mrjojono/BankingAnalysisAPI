@@ -112,7 +112,8 @@ describe('SmsService pipeline v2', () => {
     expect(created.arbitration).toBe('CAMENBERT');
     expect(created.disagreed).toBe(true);
     expect(created.direction).toBe('DEBIT');
-    expect(created.category).toBeNull();
+    // DEBIT_PAIEMENT → null → classifier mots-clés décide (spec)
+    expect(created.category).toBe('ALIMENTATION');
   });
 
   it('camenbertEnabled=false → flux regex seul (backward compatible)', async () => {
