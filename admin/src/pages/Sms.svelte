@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { RefreshCw, Plus, Trash2, ShieldCheck, ShieldOff, FlaskConical, MessagesSquare, FilterX, Info } from '@lucide/svelte';
+  import { RefreshCw, Plus, Trash2, ShieldCheck, ShieldOff, FlaskConical, MessagesSquare, FilterX, Info, Workflow } from '@lucide/svelte';
   import { api } from '../lib/api';
   import { toast } from '../lib/stores/toast.svelte';
   import Button from '../lib/components/Button.svelte';
@@ -11,6 +11,8 @@
   type Tab = 'analyse' | 'rules' | 'tester';
   let tab = $state<Tab>('analyse');
 
+  let { onNavigate }: { onNavigate: (p: string) => void } = $props();
+
   // ========== Onglet Analyse (agrégats RGPD) ==========
   let stats = $state<any>(null);
   let statsLoading = $state(false);
@@ -19,6 +21,33 @@
   let directionFilter = $state('');
   let customerFilter = $state('');
   let daysFilter = $state('14');
+
+  let pipeConfig = $state<{ regexEnabled: boolean; camenbertEnabled: boolean; camenbertThreshold: number } | null>(null);
+  let pipeReady = $state(false);
+
+  async function loadPipelineConfig() {
+    try {
+      const res = await api.smsPipelineConfig();
+      pipeConfig = res.config;
+      pipeReady = true;
+    } catch {
+      pipeReady = false;
+    }
+  }
+
+  async function togglePipeline(key: 'regexEnabled' | 'camenbertEnabled') {
+    if (!pipeConfig) return;
+    const next = { ...pipeConfig, [key]: !pipeConfig[key] };
+    pipeConfig = next;
+    try {
+      const res = await api.updateSmsPipelineConfig({ [key]: next[key] } as any);
+      pipeConfig = res.config;
+      toast.success('Pipeline mis à jour');
+    } catch (e: any) {
+      pipeConfig = { ...pipeConfig, [key]: !next[key] };
+      toast.error(e.message);
+    }
+  }
 
   async function loadStats() {
     statsLoading = true;
@@ -209,6 +238,7 @@
   onMount(() => {
     loadStats();
     loadRules();
+    loadPipelineConfig();
   });
 </script>
 
@@ -224,6 +254,30 @@
       <RefreshCw size={16} /> Rafraîchir
     </Button>
   </div>
+
+  {#if pipeConfig}
+    <div class="mb-5 rounded-xl bg-surface-container-low border border-mint-subtle p-4 flex flex-wrap items-center gap-4">
+      <div class="flex items-center gap-2">
+        <Workflow size={18} class="text-primary" />
+        <span class="text-sm font-semibold text-on-surface">Pipeline d'analyse</span>
+      </div>
+      <label class="flex items-center gap-2 text-sm text-on-surface-variant">
+        <ToggleSwitch checked={pipeConfig.regexEnabled} onchange={() => togglePipeline('regexEnabled')} />
+        Regex
+      </label>
+      <label class="flex items-center gap-2 text-sm text-on-surface-variant">
+        <ToggleSwitch checked={pipeConfig.camenbertEnabled} onchange={() => togglePipeline('camenbertEnabled')} />
+        CamenBert
+      </label>
+      <span class="text-xs text-on-surface-variant">Seuil : {(pipeConfig.camenbertThreshold * 100).toFixed(0)} %</span>
+      <button
+        onclick={() => onNavigate('pipeline')}
+        class="ml-auto text-sm font-medium text-primary hover:underline bg-transparent border-none cursor-pointer"
+      >
+        Ouvrir la page Pipeline →
+      </button>
+    </div>
+  {/if}
 
   <div class="flex gap-1 p-1 bg-surface-container-low rounded-xl w-fit border border-mint-subtle">
     <button onclick={() => tab = 'analyse'}
