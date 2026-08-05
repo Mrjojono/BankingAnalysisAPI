@@ -36,6 +36,7 @@
     dashboard: 'Dashboard',
     eligibility: 'Éligibilité',
     sms: 'SMS',
+    pipeline: "Pipeline d'analyse",
   };
 
   async function handleLogout() {

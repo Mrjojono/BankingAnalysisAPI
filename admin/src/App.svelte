@@ -17,8 +17,9 @@
   import Logs from './pages/Logs.svelte';
   import DashboardAnalytics from './pages/DashboardAnalytics.svelte';
   import Eligibility from './pages/Eligibility.svelte';
-  import Sms from './pages/Sms.svelte';
-  import { getAuth, checkAuth } from './lib/stores/auth.svelte';
+import Sms from './pages/Sms.svelte';
+import Pipeline from './pages/Pipeline.svelte';
+import { getAuth, checkAuth } from './lib/stores/auth.svelte';
 
   const auth = getAuth();
   let page = $state('products');
@@ -86,7 +87,9 @@
     {:else if page === 'eligibility'}
       <Eligibility />
     {:else if page === 'sms'}
-      <Sms />
+      <Sms onNavigate={handleNavigate} />
+    {:else if page === 'pipeline'}
+      <Pipeline />
     {/if}
   </AppLayout>
 {/if}

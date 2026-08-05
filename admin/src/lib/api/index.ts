@@ -393,4 +393,15 @@ export const api = {
       body: JSON.stringify({ isActive }),
     }),
   deleteSmsRule: (id: string) => request<any>(`/sms/rules/${id}`, { method: 'DELETE' }),
+
+  smsPipelineConfig: () => request<any>('/sms/pipeline'),
+  updateSmsPipelineConfig: (data: {
+    regexEnabled?: boolean;
+    camenbertEnabled?: boolean;
+    camenbertThreshold?: number;
+  }) =>
+    request<any>('/sms/pipeline', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 };
