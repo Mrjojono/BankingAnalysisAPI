@@ -19,6 +19,8 @@
   import Eligibility from './pages/Eligibility.svelte';
 import Sms from './pages/Sms.svelte';
 import Pipeline from './pages/Pipeline.svelte';
+import Clients from './pages/Clients.svelte';
+import Monitoring from './pages/Monitoring.svelte';
 import { getAuth, checkAuth } from './lib/stores/auth.svelte';
 
   const auth = getAuth();
@@ -26,6 +28,7 @@ import { getAuth, checkAuth } from './lib/stores/auth.svelte';
   let showLogin = $state(false);
   let graphProductId = $state<string | null>(null);
   let graphRuleId = $state<string | null>(null);
+  let eligibilityCustomer = $state<any>(null);
   let initializing = $state(true);
 
   onMount(async () => {
@@ -47,6 +50,11 @@ import { getAuth, checkAuth } from './lib/stores/auth.svelte';
       graphRuleId = ruleId ?? null;
     }
     page = p;
+  }
+
+  function handleEligibility(customer: any) {
+    eligibilityCustomer = customer;
+    page = 'eligibility';
   }
 </script>
 
@@ -85,11 +93,15 @@ import { getAuth, checkAuth } from './lib/stores/auth.svelte';
     {:else if page === 'dashboard'}
       <DashboardAnalytics />
     {:else if page === 'eligibility'}
-      <Eligibility />
+      <Eligibility initialCustomer={eligibilityCustomer} />
     {:else if page === 'sms'}
       <Sms onNavigate={handleNavigate} />
     {:else if page === 'pipeline'}
       <Pipeline />
+    {:else if page === 'clients'}
+      <Clients onEligibility={handleEligibility} />
+    {:else if page === 'monitoring'}
+      <Monitoring />
     {/if}
   </AppLayout>
 {/if}

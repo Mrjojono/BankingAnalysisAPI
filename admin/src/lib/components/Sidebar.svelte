@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Landmark, FileCheck, MessageSquare, BookOpen, FileText, LogOut, GitGraph, Bell, GraduationCap, Users, ScrollText, BarChart3, Cpu, ShieldCheck, MessagesSquare, Workflow } from '@lucide/svelte';
+  import { Landmark, FileCheck, MessageSquare, BookOpen, FileText, LogOut, GitGraph, Bell, GraduationCap, Users, ScrollText, BarChart3, Cpu, ShieldCheck, MessagesSquare, Workflow, Contact, HeartPulse } from '@lucide/svelte';
   import { getAuth } from '../stores/auth.svelte';
 
   let {
@@ -24,11 +24,15 @@
       { id: 'logs', icon: ScrollText, label: 'Logs' },
       { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
       { id: 'eligibility', icon: ShieldCheck, label: 'Éligibilité' },
+      { id: 'monitoring', icon: HeartPulse, label: 'Monitoring' },
     ]},
-    { section: 'IA & Analyse', items: [
+    { section: 'Clients', items: [
+      { id: 'clients', icon: Contact, label: 'Clients' },
+    ]},
+    { section: 'Analyse & Modèles', items: [
       { id: 'sms', icon: MessagesSquare, label: 'SMS' },
       { id: 'pipeline', icon: Workflow, label: 'Pipeline d\'analyse' },
-      { id: 'centreIA', icon: Cpu, label: 'Centre IA' },
+      { id: 'centreIA', icon: Cpu, label: 'Modèles' },
     ]},
     { section: 'Communication', items: [
       { id: 'notifications', icon: Bell, label: 'Notifications' },
@@ -105,7 +109,7 @@
         </div>
         <div class="min-w-0 flex-1">
           <p class="text-sm font-bold text-on-surface truncate">{auth.user?.username ?? auth.user?.email ?? 'Admin'}</p>
-          <p class="text-xs text-outline">{auth.user?.role ?? '—'}</p>
+          <p class="text-xs text-outline">{auth.user?.role ?? 'Sans rôle'}</p>
           <button onclick={logout} class="text-xs font-medium text-on-surface-variant mt-0.5 hover:text-error transition-colors cursor-pointer bg-transparent border-none p-0">
             Déconnexion
           </button>

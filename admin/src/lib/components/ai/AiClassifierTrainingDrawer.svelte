@@ -282,9 +282,9 @@
                   {#each trainingResult.metrics as m}
                     <tr class="border-t border-mint-subtle/50">
                       <td class="px-3 py-1.5 font-mono text-on-surface">{m.epoch}</td>
-                      <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.loss?.toFixed(4) ?? '—'}</td>
-                      <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.accuracy != null ? (m.accuracy * 100).toFixed(1) + '%' : '—'}</td>
-                      <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.top3Accuracy != null ? (m.top3Accuracy * 100).toFixed(1) + '%' : '—'}</td>
+                      <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.loss?.toFixed(4) ?? '·'}</td>
+                      <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.accuracy != null ? (m.accuracy * 100).toFixed(1) + '%' : '·'}</td>
+                      <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.top3Accuracy != null ? (m.top3Accuracy * 100).toFixed(1) + '%' : '·'}</td>
                     </tr>
                   {/each}
                 </tbody>

@@ -19,6 +19,7 @@
   let saving = $state(false);
 
   let testBody = $state('');
+  let testAddress = $state('');
   let testResult = $state<any>(null);
   let testError = $state('');
 
@@ -70,7 +71,7 @@
       return;
     }
     try {
-      testResult = await api.debugSmsFilter({ address: 'ORABANK', body: testBody });
+      testResult = await api.debugSmsFilter({ address: testAddress.trim(), body: testBody });
     } catch (e: any) {
       testError = e.message;
     }
@@ -129,7 +130,7 @@
             bind:value={config.camenbertThreshold}
             class="w-full rounded-lg border border-mint-subtle bg-surface px-3 py-2 text-sm"
           />
-          <p class="text-xs text-on-surface-variant mt-1">{(config.camenbertThreshold * 100).toFixed(0)} % — au-dessus, CamenBert décide.</p>
+          <p class="text-xs text-on-surface-variant mt-1">{(config.camenbertThreshold * 100).toFixed(0)} % · au-dessus, CamenBert décide.</p>
         </div>
         <Button onclick={saveConfig} disabled={saving}>
           <Save size={16} /> {saving ? 'Enregistrement...' : 'Enregistrer'}
@@ -165,9 +166,9 @@
       <div class="mt-6">
         <h4 class="text-sm font-semibold text-on-surface mb-2">Répartition par opérateur</h4>
         <div class="flex flex-col gap-2">
-          {#each (stats?.totals?.byOperator ?? []).sort((a: any, b: any) => b._count - a._count) as op (op.operator)}
+          {#each [...(stats?.totals?.byOperator ?? [])].sort((a: any, b: any) => b._count - a._count) as op (op.operator)}
             <div class="flex items-center gap-3">
-              <span class="w-28 text-xs font-medium text-on-surface-variant truncate">{op.operator ?? '—'}</span>
+              <span class="w-28 text-xs font-medium text-on-surface-variant truncate">{op.operator ?? 'Inconnu'}</span>
               <div class="flex-1 h-2 rounded-full bg-surface-container overflow-hidden">
                 <div class="h-full rounded-full bg-primary" style="width:{total ? Math.max(4, Math.round((op._count / total) * 100)) : 0}%"></div>
               </div>
@@ -181,7 +182,12 @@
         <h4 class="text-sm font-semibold text-on-surface mb-2 flex items-center gap-2">
           <FlaskConical size={16} class="text-outline" /> Boîte de test (diagnostic complet)
         </h4>
-        <div class="flex gap-2">
+        <div class="flex flex-col gap-2 sm:flex-row">
+          <input
+            bind:value={testAddress}
+            placeholder="Expéditeur (ex. Moov, FLOOZ, 22800008558… laissez vide si inconnu)"
+            class="sm:w-56 rounded-lg border border-mint-subtle bg-surface px-3 py-2 text-sm"
+          />
           <input
             bind:value={testBody}
             placeholder="Collez le corps d'un SMS bancaire..."
@@ -193,7 +199,7 @@
           <p class="mt-3 text-sm text-error">{testError}</p>
         {:else if testResult}
           <div class="mt-3 rounded-xl bg-surface-container-low border border-mint-subtle p-3 text-sm">
-            <p class="font-semibold text-on-surface">Verdict : {testResult.verdict} — {testResult.reason}</p>
+            <p class="font-semibold text-on-surface">Verdict : {testResult.verdict} · {testResult.reason}</p>
             <pre class="mt-2 text-xs text-on-surface-variant overflow-x-auto whitespace-pre-wrap">{JSON.stringify(testResult.steps, null, 2)}</pre>
           </div>
         {/if}
@@ -205,7 +211,7 @@
     <Card class="mt-6">
       <h3 class="text-sm font-semibold text-on-surface mb-2">Modèle CamenBert</h3>
       <p class="text-sm text-on-surface-variant">
-        Prêt : {cbStatus.ready ? 'oui' : 'non'} — seuil : {(cbStatus.threshold * 100).toFixed(0)} % — inférences : {cbStatus.metrics?.totalInferences ?? 0} — latence moy. : {cbStatus.metrics?.avgLatencyMs?.toFixed?.(0) ?? 0} ms
+        Prêt : {cbStatus.ready ? 'oui' : 'non'} · seuil : {(cbStatus.threshold * 100).toFixed(0)} % · inférences : {cbStatus.metrics?.totalInferences ?? 0} · latence moy. : {cbStatus.metrics?.avgLatencyMs?.toFixed?.(0) ?? 0} ms
       </p>
     </Card>
   {/if}

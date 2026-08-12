@@ -85,7 +85,7 @@
   {#if totalPages > 1}
     <div class="flex items-center justify-between px-4 py-3 border-t border-mint-subtle bg-background">
       <span class="text-sm text-on-surface-variant">
-        {paths.length} parcours — page {page}/{totalPages}
+        {paths.length} parcours · page {page}/{totalPages}
       </span>
       <div class="flex gap-1">{@html ' '}
         <button onclick={() => page = Math.max(1, page - 1)} disabled={page <= 1}

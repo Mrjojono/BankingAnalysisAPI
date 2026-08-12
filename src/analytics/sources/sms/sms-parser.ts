@@ -84,11 +84,37 @@ const PATTERNS: SmsPattern[] = [
   { operator: 'MOOV', regex: /ENVOYE\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
   { operator: 'MOOV', regex: /PAIEMENT\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
   { operator: 'MOOV', regex: /RETRAIT\s+(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
+
+  // ===== ORABANK (WhatsApp Mobile Banking / SMS bancaire) =====
+  // Transfert entrant : "Transfert de Moov Money vers ORABANK ... Montant: X FCFA"
+  { operator: 'ORABANK', regex: /TRANSFERT\s+DE[\s\S]*?VERS\s+(?:ORABANK|VOTRE\s+COMPTE)[\s\S]*?MONTANT\s*:?\s*(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'CREDIT', amountGroup: 1 },
+  { operator: 'ORABANK', regex: /(?:VIREMENT|DEPOT)[\s\S]*?(?:RECU|REUSSI)[\s\S]*?MONTANT\s*:?\s*(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'CREDIT', amountGroup: 1 },
+  // Paiement : "Paiement de X FCFA ... VALIDATION" (débit sortant)
+  { operator: 'ORABANK', regex: /PAIEMENT[\s\S]*?MONTANT\s*:?\s*(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
+  { operator: 'ORABANK', regex: /RETRAIT[\s\S]*?MONTANT\s*:?\s*(\d[\d .,]*)\s*(?:F(?:CFA)?|CFA)\b/i, direction: 'DEBIT', amountGroup: 1 },
 ];
 
 /** Verbes financiers forts — exigés par le fallback générique. */
 const STRONG_DEBIT = /DEBIT|PAIEMENT|ENVOYE|ENVOI|RETRAIT|ACHAT|FACTURE|TRANSFERT/i;
 const STRONG_CREDIT = /CREDIT|RECU|VIREMENT|DEPOT|SALAIRE/i;
+
+/**
+ * Convertit un montant textuel en nombre entier de FCFA.
+ *
+ * Gère les séparateurs de milliers ("15.000", "12 500") et les décimales
+ * françaises ("3 000,00" → 3000). Sans virgule décimale, tous les séparateurs
+ * sont ignorés ; avec une virgule, elle est traitée comme séparateur décimal.
+ */
+function parseFcfAmount(raw: string): number | null {
+  const compact = raw.trim().replace(/\s/g, '');
+  if (!compact) return null;
+  if (/,\d{1,2}$/.test(compact)) {
+    const n = parseFloat(compact.replace(',', '.'));
+    return Number.isNaN(n) ? null : Math.round(n);
+  }
+  const n = parseInt(compact.replace(/[.,]/g, ''), 10);
+  return Number.isNaN(n) ? null : n;
+}
 
 /**
  * Parse un SMS bancaire pour en extraire les informations.
@@ -109,8 +135,7 @@ export function parseSms(address: string, body: string): ParsedSms {
     if (addressOperator && addressOperator !== p.operator) continue;
     const match = norm.match(p.regex);
     if (match) {
-      const raw = match[p.amountGroup]?.replace(/[\s.,]/g, '');
-      const amount = raw ? parseInt(raw, 10) : null;
+      const amount = parseFcfAmount(match[p.amountGroup] ?? '');
       if (amount === null || Number.isNaN(amount)) continue;
       const counterparty = extractCounterparty(upper, p.operator);
       return {
@@ -141,7 +166,7 @@ export function parseSms(address: string, body: string): ParsedSms {
     };
   }
 
-  const amount = parseInt(hasAmount[1].replace(/[\s.,]/g, ''), 10);
+  const amount = parseFcfAmount(hasAmount[1]);
   const isCredit = STRONG_CREDIT.test(norm) && !STRONG_DEBIT.test(norm);
   const isDebit = STRONG_DEBIT.test(norm) && !STRONG_CREDIT.test(norm);
 
@@ -197,16 +222,19 @@ export function guessOperatorFromAddress(address: string): string | null {
 export function extractBalance(text: string): number | null {
   const m = text.match(/SOLDE\s*[:=]?\s*(\d[\d ,.]*)\s*(?:F(?:CFA)?|CFA)\b/i);
   if (!m) return null;
-  const n = parseFloat(m[1].replace(/[\s.,]/g, ''));
-  return Number.isNaN(n) ? null : n;
+  return parseFcfAmount(m[1]);
 }
 
 /**
- * Extrait la référence de transaction (ex. "Ref: 2345", "N°: ABC123", "ID transaction: ...").
+ * Extrait la référence de transaction (ex. "Ref: 2345", "N°: ABC123",
+ * "ID transaction: ...", "Txn ID: 040785058468").
+ *
+ * Le motif exige un espace (ou un séparateur) après l'étiquette : il évite
+ * ainsi les faux positifs comme "Nouveau solde" où "NO" serait suivi de "UVEAU".
  */
 export function extractReference(text: string): string | null {
   const patterns = [
-    /(?:REF(?:ERENCE)?|N°|NO|ID TRANSACTION|TRANSACTION ID|CODE)\s*[:.]?\s*([A-Z0-9-]{4,})/i,
+    /(?:REF(?:ERENCE)?|N°|TXN\s*ID|TRANSACTION\s+ID|ID\s+TRANSACTION|CODE|NO\.?)\s*[:.\-]?\s+([A-Z0-9-]{4,})/i,
   ];
   for (const re of patterns) {
     const m = text.match(re);

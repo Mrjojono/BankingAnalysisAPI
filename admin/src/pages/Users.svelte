@@ -153,6 +153,16 @@
     }
   }
 
+  async function handleRevokeSession(userId: string, sessionId: string) {
+    try {
+      const res = await api.revokeUserSession(userId, sessionId);
+      toast.success(res.message);
+      userSessions = userSessions.filter((s) => s.id !== sessionId);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  }
+
   async function handleCreateUser() {
     if (!createEmail.trim() || !createPassword) return;
     if (createPassword !== createConfirm) {
@@ -193,7 +203,7 @@
   }
 
   function formatDate(d: string | null) {
-    if (!d) return '—';
+    if (!d) return '·';
     return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
 </script>
@@ -384,10 +394,17 @@
           <div class="space-y-2">
             {#each userSessions as s}
               <div class="p-3 rounded-xl bg-surface-container-low border border-mint-subtle text-xs">
-                <div class="flex justify-between"><span class="text-outline">IP</span><span>{s.ipAddress ?? '—'}</span></div>
-                <div class="flex justify-between"><span class="text-outline">User-Agent</span><span class="truncate max-w-[200px]">{s.userAgent ?? '—'}</span></div>
-                <div class="flex justify-between"><span class="text-outline">Créée le</span><span>{formatDate(s.createdAt)}</span></div>
-                <div class="flex justify-between"><span class="text-outline">Expire le</span><span>{formatDate(s.expiresAt)}</span></div>
+                <div class="flex justify-between items-start">
+                  <div class="space-y-1.5 flex-1 min-w-0">
+                    <div class="flex justify-between"><span class="text-outline">IP</span><span>{s.ipAddress ?? '·'}</span></div>
+                    <div class="flex justify-between"><span class="text-outline">User-Agent</span><span class="truncate max-w-[200px]">{s.userAgent ?? '·'}</span></div>
+                    <div class="flex justify-between"><span class="text-outline">Créée le</span><span>{formatDate(s.createdAt)}</span></div>
+                    <div class="flex justify-between"><span class="text-outline">Expire le</span><span>{formatDate(s.expiresAt)}</span></div>
+                  </div>
+                  <button onclick={() => handleRevokeSession(selectedUser!.id, s.id)} title="Révoquer cette session" class="p-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors cursor-pointer border-none shrink-0">
+                    <LogOut size={14} />
+                  </button>
+                </div>
               </div>
             {/each}
           </div>

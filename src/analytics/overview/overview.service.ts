@@ -16,6 +16,7 @@ import { ANALYTICS_CONSTANTS } from '../config/constants';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { RedisService } from '../../redis/redis.service';
+import Decimal from 'decimal.js';
 
 @Injectable()
 export class OverviewService {
@@ -509,6 +510,67 @@ export class OverviewService {
       from: startDate,
       to: endDate,
     });
+  }
+
+  async getSourceBreakdown(
+    customerId: string,
+    from?: Date,
+    to?: Date,
+    year?: number,
+    month?: number,
+  ) {
+    this.gateway.emit('analytics_requested', {
+      type: 'SOURCE_BREAKDOWN',
+      customerId,
+    });
+    const { startDate, endDate } = await this.resolveRange(
+      customerId,
+      from,
+      to,
+      year,
+      month,
+    );
+    const entries = await this.getCertifiedEntries(
+      customerId,
+      startDate,
+      endDate,
+    );
+
+    const summarize = (list: Entry[]) => {
+      let creditCount = 0;
+      let debitCount = 0;
+      let creditAmount = new Decimal(0);
+      let debitAmount = new Decimal(0);
+
+      for (const entry of list) {
+        const amount = new Decimal(entry.amount.toString());
+        if (entry.direction === 'CREDIT') {
+          creditCount++;
+          creditAmount = creditAmount.plus(amount);
+        } else {
+          debitCount++;
+          debitAmount = debitAmount.plus(amount);
+        }
+      }
+
+      return {
+        totalCredits: { count: creditCount, amount: creditAmount.toNumber() },
+        totalDebits: { count: debitCount, amount: debitAmount.toNumber() },
+        netFlow: creditAmount.minus(debitAmount).toNumber(),
+      };
+    };
+
+    const bankEntries = entries.filter((e) => (e.source ?? 'bank') === 'bank');
+    const smsEntries = entries.filter((e) => e.source === 'sms');
+
+    return {
+      period: {
+        from: startDate.toISOString().split('T')[0],
+        to: endDate.toISOString().split('T')[0],
+      },
+      bank: summarize(bankEntries),
+      sms: summarize(smsEntries),
+    };
   }
 
   async getRevenueAnalytics(customerId: string, year?: number, month?: number) {

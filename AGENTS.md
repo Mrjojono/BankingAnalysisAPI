@@ -34,7 +34,7 @@
 ### Intégration
 - `AdviceEngine.generate()` → notification ADVICE si WARNING/CRITICAL (max 3)
 - `ScoreEngine` → notification SCORE_CHANGE si delta ≥ 5
-- `EligibilityService` → notification ELIGIBILITY si ELIGIBLE/PARTIAL
+- `EligibilityService` → notification ELIGIBILITY si ELIGIBLE/PARTIAL **et uniquement si le produit a des règles ELIGIBILITY** (`hasEligibilityRules`), sinon aucune notification (les produits sans règles ne doivent pas déclencher « Vous êtes éligible ! »)
 
 ### Endpoints REST /notifications
 - GET `/` — historique paginé

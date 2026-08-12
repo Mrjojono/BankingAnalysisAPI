@@ -273,17 +273,17 @@
   </button>
 </div>
 
-<Drawer open={helpOpen} title="Aide — Règles" onclose={() => helpOpen = false}>
+<Drawer open={helpOpen} title="Aide · Règles" onclose={() => helpOpen = false}>
   <div class="flex flex-col gap-4 text-sm leading-relaxed text-on-surface">
     <p>Cette page gère les règles associées aux produits bancaires. Les règles sont évaluées par le moteur d'éligibilité pour déterminer si un client peut obtenir un produit.</p>
 
     <h4 class="font-bold text-base mt-2">Types de règles</h4>
     <ul class="list-disc pl-5 flex flex-col gap-1.5">
-      <li><span class="font-semibold text-blue-700">Éligibilité (ELIGIBILITY)</span> — règle scorée. L'ensemble des règles ELIGIBILITY d'un produit produit un score global. Poids (weight) de 1 à 100 : plus le poids est élevé, plus la règle est importante dans la décision.</li>
-      <li><span class="font-semibold text-red-700">Frais (FEE)</span> — définit des frais (montant fixe <code>flatAmount</code>, pourcentage <code>percentage</code>, avec min/max optionnels). Non scorée.</li>
-      <li><span class="font-semibold text-amber-700">Limite (LIMIT)</span> — plafond opérationnel (retrait DAB, paiement TPE, etc.). Non scorée.</li>
-      <li><span class="font-semibold text-purple-700">Intérêt (INTEREST)</span> — taux d'intérêt (ex: 3,5%/an). Non scorée.</li>
-      <li><span class="font-semibold text-cyan-700">Date valeur (VALUE_DATE)</span> — délai de valeur d'une opération (ex: J+1). Non scorée.</li>
+      <li><span class="font-semibold text-blue-700">Éligibilité (ELIGIBILITY)</span> : règle scorée. L'ensemble des règles ELIGIBILITY d'un produit produit un score global. Poids (weight) de 1 à 100 : plus le poids est élevé, plus la règle est importante dans la décision.</li>
+      <li><span class="font-semibold text-red-700">Frais (FEE)</span> : définit des frais (montant fixe <code>flatAmount</code>, pourcentage <code>percentage</code>, avec min/max optionnels). Non scorée.</li>
+      <li><span class="font-semibold text-amber-700">Limite (LIMIT)</span> : plafond opérationnel (retrait DAB, paiement TPE, etc.). Non scorée.</li>
+      <li><span class="font-semibold text-purple-700">Intérêt (INTEREST)</span> : taux d'intérêt (ex: 3,5%/an). Non scorée.</li>
+      <li><span class="font-semibold text-cyan-700">Date valeur (VALUE_DATE)</span> : délai de valeur d'une opération (ex: J+1). Non scorée.</li>
     </ul>
 
     <h4 class="font-bold text-base mt-2">Score d'éligibilité</h4>
@@ -321,9 +321,9 @@
     <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
       Produit
       <select bind:value={editing!.productId} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all">
-        <option value="">— Aucun —</option>
+        <option value="">Aucun</option>
         {#each products as p}
-          <option value={p.id}>{p.code} — {p.name}</option>
+          <option value={p.id}>{p.code} · {p.name}</option>
         {/each}
       </select>
     </label>
@@ -344,7 +344,7 @@
     <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
       Champ métier (field)
       <select bind:value={editing!.field} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all">
-        <option value="">— Sélectionner —</option>
+        <option value="">Sélectionner…</option>
         {#each FIELDS as f}
           <option value={f.value}>{f.label}</option>
         {/each}
@@ -408,7 +408,7 @@
       <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
         Devise
         <select bind:value={editing!.currency} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all">
-          <option value="">— Non spécifiée —</option>
+          <option value="">Non spécifiée</option>
           {#each CURRENCIES as c}
             <option value={c.value}>{c.label}</option>
           {/each}
@@ -417,7 +417,7 @@
       <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
         Période
         <select bind:value={editing!.period} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all">
-          <option value="">— Non spécifiée —</option>
+          <option value="">Non spécifiée</option>
           {#each PERIODS as p}
             <option value={p.value}>{p.label}</option>
           {/each}
@@ -546,19 +546,19 @@
             {#if r.value != null}
               <span class="font-semibold">{formatValue(r.value, r.operator, r.currency)}</span>
             {:else if r.valueMin != null && r.valueMax != null}
-              <span class="font-semibold">{r.valueMin} – {r.valueMax}</span>
+              <span class="font-semibold">{r.valueMin} à {r.valueMax}</span>
             {:else if r.percentage != null}
               <span class="font-semibold">{r.percentage}%</span>
             {:else if r.flatAmount != null}
               <span class="font-semibold">{r.flatAmount.toLocaleString('fr-FR')} {r.currency ?? 'XOF'}</span>
             {:else}
-              <span class="text-outline">—</span>
+              <span class="text-outline">·</span>
             {/if}
             {#if r.period || r.minAmount != null || r.maxAmount != null}
               <span class="block text-xs text-on-surface-variant mt-0.5">
                 {r.period ? PERIOD_LABELS[r.period] ?? r.period : ''}
                 {#if r.minAmount != null || r.maxAmount != null}
-                  {#if r.period}—{/if}
+                  {#if r.period} · {/if}
                   {#if r.minAmount != null}min {r.minAmount.toLocaleString('fr-FR')}{/if}
                   {#if r.minAmount != null && r.maxAmount != null} / {/if}
                   {#if r.maxAmount != null}max {r.maxAmount.toLocaleString('fr-FR')}{/if}
@@ -592,7 +592,7 @@
   {#if totalPages > 4}
     <div class="flex items-center justify-between px-4 py-3 border-t border-mint-subtle bg-background">
       <span class="text-sm text-on-surface-variant">
-        {filtered.length} règle{filtered.length > 1 ? 's' : ''} — page {page}/{totalPages}
+        {filtered.length} règle{filtered.length > 1 ? 's' : ''} · page {page}/{totalPages}
       </span>
       <div class="flex gap-1">
         <button onclick={() => page = Math.max(1, page - 1)} disabled={page <= 1}

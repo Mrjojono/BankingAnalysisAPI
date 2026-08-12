@@ -185,7 +185,7 @@
   </div>
 </div>
 
-<Drawer open={helpOpen} title="Aide — Produits bancaires" onclose={() => helpOpen = false}>
+<Drawer open={helpOpen} title="Aide · Produits bancaires" onclose={() => helpOpen = false}>
   <div class="flex flex-col gap-4 text-sm leading-relaxed text-on-surface">
     <p>Cette page liste tous les produits bancaires disponibles dans le système. Chaque produit peut avoir des règles d'éligibilité associées.</p>
 
@@ -200,8 +200,8 @@
 
     <h4 class="font-bold text-base mt-2">Statut</h4>
     <ul class="list-disc pl-5">
-      <li><span class="font-semibold text-primary">Actif</span> — le produit est visible et utilisable pour l'éligibilité</li>
-      <li><span class="font-semibold text-outline">Inactif</span> — le produit est désactivé, ses règles ne sont pas évaluées</li>
+      <li><span class="font-semibold text-primary">Actif</span> : le produit est visible et utilisable pour l'éligibilité</li>
+      <li><span class="font-semibold text-outline">Inactif</span> : le produit est désactivé, ses règles ne sont pas évaluées</li>
     </ul>
   </div>
 </Drawer>
@@ -227,9 +227,9 @@
     <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
       Catégorie
       <select bind:value={editing!.category} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all">
-        <option value="">— Sélectionner —</option>
+        <option value="">Sélectionner…</option>
         {#each CATEGORIES as cat}
-          <option value={cat.value}>{cat.label} — {cat.desc}</option>
+          <option value={cat.value}>{cat.label} · {cat.desc}</option>
         {/each}
       </select>
     </label>
@@ -327,12 +327,12 @@
               {p.name}
             </button>
           </td>
-          <td class="px-4 py-3 text-sm text-on-surface-variant">{p.reference ?? '—'}</td>
+          <td class="px-4 py-3 text-sm text-on-surface-variant">{p.reference ?? '·'}</td>
           <td class="px-4 py-3">
             {#if CATEGORY_MAP[p.category]}
               <span class="inline-block px-2 py-1 rounded-md text-xs font-semibold {CATEGORY_MAP[p.category].class}">{CATEGORY_MAP[p.category].label}</span>
             {:else}
-              <span class="inline-block bg-surface-container text-on-surface-variant px-2 py-1 rounded-md text-xs font-medium">{p.category ?? '—'}</span>
+              <span class="inline-block bg-surface-container text-on-surface-variant px-2 py-1 rounded-md text-xs font-medium">{p.category ?? '·'}</span>
             {/if}
           </td>
           <td class="px-4 py-3">
@@ -349,7 +349,7 @@
               <span class="text-sm text-outline">0</span>
             {/if}
           </td>
-          <td class="px-4 py-3 text-sm text-on-surface-variant max-w-[200px] truncate" title={p.description ?? ''}>{p.description ?? '—'}</td>
+          <td class="px-4 py-3 text-sm text-on-surface-variant max-w-[200px] truncate" title={p.description ?? ''}>{p.description ?? '·'}</td>
           <td class="px-4 py-3">
             <ToggleSwitch
               checked={p.isActive}
@@ -376,7 +376,7 @@
   {#if totalPages > 1}
     <div class="flex items-center justify-between px-4 py-3 border-t border-mint-subtle bg-background">
       <span class="text-sm text-on-surface-variant">
-        {filtered.length} produit{filtered.length > 1 ? 's' : ''} — page {page}/{totalPages}
+        {filtered.length} produit{filtered.length > 1 ? 's' : ''} · page {page}/{totalPages}
       </span>
       <div class="flex gap-1">
         <button onclick={() => page = Math.max(1, page - 1)} disabled={page <= 1}

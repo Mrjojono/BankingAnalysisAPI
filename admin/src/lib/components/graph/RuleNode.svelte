@@ -76,7 +76,7 @@
         {#if data.minAmount != null || data.maxAmount != null}
           <span class="value-line">
             <span class="value-label">Plafond</span>
-            <span class="value-main">{fmt(data.minAmount)} – {fmt(data.maxAmount)} {data.currency ?? 'XOF'}</span>
+            <span class="value-main">{fmt(data.minAmount)} à {fmt(data.maxAmount)} {data.currency ?? 'XOF'}</span>
           </span>
         {/if}
         {#if data.period}
@@ -87,7 +87,7 @@
       <div class="condition">
         <span class="condition-field">{FIELD_LABELS[data.field] ?? data.field}</span>
         <span class="condition-op">{OPERATOR_LABELS[data.operator] ?? data.operator}</span>
-        <span class="condition-value">{data.operator === 'BETWEEN' ? `${fmt(data.valueMin)} – ${fmt(data.valueMax)}` : fmt(data.value)}</span>
+        <span class="condition-value">{data.operator === 'BETWEEN' ? `${fmt(data.valueMin)} à ${fmt(data.valueMax)}` : fmt(data.value)}</span>
         {#if data.currency}
           <span class="condition-currency">{data.currency}</span>
         {/if}

@@ -43,6 +43,7 @@ import {
   NegativePeriodsResponseDto,
   BalanceVolatilityResponseDto,
   DebtDto,
+  SourceBreakdownResponseDto,
 } from './dto/score-response.dto';
 import { parseUtcDate } from './helper';
 
@@ -89,6 +90,29 @@ export class AnalyticsController {
     const toDate = query.to ? parseUtcDate(query.to) : undefined;
 
     return this.overviewService.getCashFlow(
+      customerId,
+      fromDate,
+      toDate,
+      query.year,
+      query.month,
+    );
+  }
+
+  @Get(':customerId/transactions/source-breakdown')
+  @ApiOperation({
+    summary:
+      'Ventiler les transactions par source (banque vs SMS/Mobile Money)',
+  })
+  @ApiParam({ name: 'customerId', description: 'ID du client' })
+  @ApiResponse({ status: 200, type: SourceBreakdownResponseDto })
+  async getSourceBreakdown(
+    @Param('customerId', ParseUUIDPipe) customerId: string,
+    @Query() query: AnalyticsQueryDto,
+  ) {
+    const fromDate = query.from ? parseUtcDate(query.from) : undefined;
+    const toDate = query.to ? parseUtcDate(query.to) : undefined;
+
+    return this.overviewService.getSourceBreakdown(
       customerId,
       fromDate,
       toDate,

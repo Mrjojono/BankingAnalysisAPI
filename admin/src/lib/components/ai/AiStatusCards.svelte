@@ -81,11 +81,11 @@
     <div class="grid grid-cols-2 gap-2 text-xs">
       <div class="p-2 rounded-lg bg-surface-container-low">
         <p class="text-outline">Modèle</p>
-        <p class="font-semibold text-on-surface font-mono text-[11px] truncate">{camenBertStatus?.modelName ?? '—'}</p>
+        <p class="font-semibold text-on-surface font-mono text-[11px] truncate">{camenBertStatus?.modelName ?? '·'}</p>
       </div>
       <div class="p-2 rounded-lg bg-surface-container-low">
         <p class="text-outline">Seuil</p>
-        <p class="font-semibold text-on-surface">{camenBertStatus?.threshold != null ? (camenBertStatus.threshold * 100) + '%' : '—'}</p>
+        <p class="font-semibold text-on-surface">{camenBertStatus?.threshold != null ? (camenBertStatus.threshold * 100) + '%' : '·'}</p>
       </div>
       <div class="p-2 rounded-lg bg-surface-container-low">
         <p class="text-outline">Mémoire</p>
@@ -93,7 +93,7 @@
       </div>
       <div class="p-2 rounded-lg bg-surface-container-low">
         <p class="text-outline">Accuracy</p>
-        <p class="font-semibold text-on-surface">—</p>
+        <p class="font-semibold text-on-surface">·</p>
       </div>
       {#if camenBertStatus?.metrics?.totalInferences > 0}
         <div class="p-2 rounded-lg bg-surface-container-low">
@@ -134,7 +134,7 @@
       </div>
       <div class="p-2 rounded-lg bg-surface-container-low col-span-2">
         <p class="text-outline">Fichier</p>
-        <p class="font-semibold text-on-surface font-mono text-[11px] truncate">{embeddingStats?.file ?? '—'}</p>
+        <p class="font-semibold text-on-surface font-mono text-[11px] truncate">{embeddingStats?.file ?? '·'}</p>
       </div>
     </div>
   </div>
@@ -161,7 +161,7 @@
       </div>
       <div class="p-2 rounded-lg bg-surface-container-low">
         <p class="text-outline">Labels</p>
-        <p class="font-semibold text-on-surface">{datasetInfo?.labels ? Object.keys(datasetInfo.labels).length : '—'}</p>
+        <p class="font-semibold text-on-surface">{datasetInfo?.labels ? Object.keys(datasetInfo.labels).length : '·'}</p>
       </div>
       <div class="p-2 rounded-lg bg-surface-container-low col-span-2">
         <p class="text-outline">Dernier entraînement</p>
@@ -169,8 +169,7 @@
           {#if datasetInfo?.lastTraining}
             {new Date(datasetInfo.lastTraining).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
           {:else}
-            —
-          {/if}
+            ·          {/if}
         </p>
       </div>
     </div>
@@ -190,19 +189,19 @@
     <div class="grid grid-cols-2 gap-2 text-xs">
       <div class="p-2 rounded-lg bg-surface-container-low">
         <p class="text-outline">Patterns</p>
-        <p class="font-semibold text-on-surface">{regexStats?.total ?? '—'}</p>
+        <p class="font-semibold text-on-surface">{regexStats?.total ?? '·'}</p>
       </div>
       <div class="p-2 rounded-lg bg-surface-container-low">
         <p class="text-outline">Opérateurs</p>
-        <p class="font-semibold text-on-surface">{regexStats?.operators?.length ?? '—'}</p>
+        <p class="font-semibold text-on-surface">{regexStats?.operators?.length ?? '·'}</p>
       </div>
       <div class="p-2 rounded-lg bg-surface-container-low">
         <p class="text-outline">Crédit</p>
-        <p class="font-semibold text-green-700">{regexStats?.creditCount ?? '—'}</p>
+        <p class="font-semibold text-green-700">{regexStats?.creditCount ?? '·'}</p>
       </div>
       <div class="p-2 rounded-lg bg-surface-container-low">
         <p class="text-outline">Débit</p>
-        <p class="font-semibold text-red-700">{regexStats?.debitCount ?? '—'}</p>
+        <p class="font-semibold text-red-700">{regexStats?.debitCount ?? '·'}</p>
       </div>
     </div>
   </div>

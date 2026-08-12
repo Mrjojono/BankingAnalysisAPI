@@ -140,77 +140,24 @@ export class SmsService {
         continue;
       }
 
-      const rawDate = msg.dateSent ?? msg.date ?? null;
-      const dateSent = normalizeDateSent(rawDate);
-      if (!dateSent) {
-        skipReasons.invalidDate++;
-        if (skipReasons.invalidDate <= 3) {
-          this.logger.warn(
-            `Date SMS invalide (${typeof rawDate}): ${JSON.stringify(rawDate)?.slice(0, 80)}`,
-          );
-        }
-        continue;
-      }
+    const analysis = await this.analyzeSms(msg, pipelineConfig);
 
-      const parsed = parseSms(msg.address, msg.body);
-
-      if (parsed.amount === null && parsed.direction === null) {
-        skipReasons.parseEmpty++;
-        continue;
-      }
-
-      if (parsed.amount === null) {
-        skipReasons.parseEmpty++;
-        continue;
-      }
-
-      // Couche 2 : CamenBert arbitre sur CHAQUE SMS si activé
-      let cbResult: CamenBertResult | null = null;
-      if (pipelineConfig.camenbertEnabled && this.camenBert.isReady()) {
-        try {
-          cbResult = await this.camenBert.classify(msg.body);
-        } catch {
-          cbResult = null;
-        }
-      }
-
-      const arbitration = arbitrate({
-        regexDirection: pipelineConfig.regexEnabled
-          ? (parsed.direction as 'DEBIT' | 'CREDIT' | null)
-          : null,
-        regexConfidence: parsed.confidence,
-        cbCategory: cbResult?.category ?? null,
-        cbDirection: cbResult?.direction ?? null,
-        cbConfidence: cbResult?.confidence ?? 0,
-        camenbertEnabled: pipelineConfig.camenbertEnabled,
-        camenbertThreshold: pipelineConfig.camenbertThreshold,
-        amountPresent: parsed.amount !== null,
-      });
-
-      parsed.direction = arbitration.direction;
-
-      let status: string = arbitration.status === 'APPROVED' ? 'APPROVED' : 'PENDING';
-
-      if (parsed.direction === null) {
-        if (pipelineConfig.regexEnabled && !arbitration.camenbertOk) {
-          // Fallback classifier existant : valide que ce n'est pas du bruit
-          try {
-            const category = await this.classifier.categorizeWithCache(msg.body);
-            if (category === ExpenseCategory.DIVERS) {
-              skipReasons.classifierDivers++;
-              continue;
-            }
-            parsed.confidence = Math.min(parsed.confidence, 0.6);
-          } catch {
-            skipReasons.classifierError++;
-            continue;
+      if (analysis.skipReason) {
+        if (analysis.skipReason === 'invalidDate') {
+          skipReasons.invalidDate++;
+          if (skipReasons.invalidDate <= 3) {
+            this.logger.warn(
+              `Date SMS invalide: ${JSON.stringify(msg.dateSent ?? msg.date ?? null)?.slice(0, 80)}`,
+            );
           }
-          status = 'PENDING';
         } else {
-          skipReasons.parseEmpty++;
-          continue;
+          skipReasons[analysis.skipReason]++;
         }
+        continue;
       }
+
+      const { parsed, dateSent } = analysis;
+      if (!dateSent) continue;
 
       const fingerprint = buildFingerprint(parsed, dateSent);
       if (existingFingerprints.has(fingerprint)) {
@@ -218,17 +165,9 @@ export class SmsService {
         continue;
       }
 
+      let status: string = analysis.arbitration.status === 'APPROVED' ? 'APPROVED' : 'PENDING';
       const matchRule = rules.find((r) => this.ruleMatches(r, msg, parsed));
       if (matchRule) status = 'IGNORED';
-
-      // Catégorie d'analyse : type mappé CamenBert, sinon classifier mots-clés
-      let category: string | null = arbitration.analysisCategory;
-      if (category === null && parsed.direction) {
-        try {
-          const cat = await this.classifier.categorizeWithCache(msg.body);
-          if (cat !== ExpenseCategory.DIVERS) category = cat;
-        } catch {}
-      }
 
       toCreate.push({
         customerId,
@@ -243,11 +182,11 @@ export class SmsService {
         balanceAfter: parsed.balanceAfter,
         referenceNo: parsed.referenceNo,
         confidence: parsed.confidence,
-        cbCategory: arbitration.cbCategory,
-        cbConfidence: cbResult?.confidence ?? null,
-        category,
-        arbitration: arbitration.arbitration,
-        disagreed: arbitration.disagreed,
+        cbCategory: analysis.arbitration.cbCategory,
+        cbConfidence: analysis.cbResult?.confidence ?? null,
+        category: analysis.category,
+        arbitration: analysis.arbitration.arbitration,
+        disagreed: analysis.arbitration.disagreed,
         fingerprint,
         status,
         matchRuleId: matchRule?.id ?? null,
@@ -311,11 +250,130 @@ export class SmsService {
     return true;
   }
 
-  async debugFilter(address: string, body: string, rawDate?: string) {
-    const parseSmsResult = parseSms(address, body);
+  /**
+   * Logique d'analyse partagée par `syncSms` et le testeur admin (`debugFilter`).
+   *
+   * Ordonnancement réel du pipeline :
+   *   1. parseSms (RegEx) — l'adresse inconnue ne force PAS l'opérateur
+   *   2. CamenBert (si activé et prêt)
+   *   3. arbitrate() : CamenBert gagne s'il est au-dessus du seuil, sinon RegEx
+   *   4. Fallback classifier mots-clés quand la direction reste inconnue
+   *
+   * @returns l'analyse complète, ou un `skipReason` si le SMS doit être ignoré.
+   */
+  private async analyzeSms(
+    msg: RawSms,
+    pipelineConfig: SmsPipelineConfig,
+    opts?: { requireDate?: boolean },
+  ): Promise<{
+    dateSent: Date | null;
+    parsed: ReturnType<typeof parseSms>;
+    cbResult: CamenBertResult | null;
+    arbitration: ReturnType<typeof arbitrate>;
+    category: string | null;
+    skipReason:
+      | 'invalidDate'
+      | 'parseEmpty'
+      | 'classifierDivers'
+      | 'classifierError'
+      | null;
+  }> {
+    const requireDate = opts?.requireDate ?? true;
+    const rawDate = msg.dateSent ?? msg.date ?? null;
+    const dateSent = normalizeDateSent(rawDate);
 
-    const dateSent = rawDate ? new Date(rawDate) : null;
-    const dateValid = dateSent ? !isNaN(dateSent.getTime()) : null;
+    const emptyParsed = {
+      dateSent: null,
+      cbResult: null,
+      arbitration: null as unknown as ReturnType<typeof arbitrate>,
+      category: null,
+    };
+
+    const parsed = parseSms(msg.address ?? '', msg.body);
+
+    if (!dateSent) {
+      if (requireDate) {
+        return { ...emptyParsed, parsed, skipReason: 'invalidDate' };
+      }
+      // Mode testeur : on poursuit l'analyse pour montrer le verdict de parsing
+      return { ...emptyParsed, parsed, skipReason: null };
+    }
+
+    if (parsed.amount === null && parsed.direction === null) {
+      return { ...emptyParsed, parsed, skipReason: 'parseEmpty' };
+    }
+    if (parsed.amount === null) {
+      return { ...emptyParsed, parsed, skipReason: 'parseEmpty' };
+    }
+
+    // Couche 2 : CamenBert arbitre sur CHAQUE SMS si activé
+    let cbResult: CamenBertResult | null = null;
+    if (pipelineConfig.camenbertEnabled && this.camenBert.isReady()) {
+      try {
+        cbResult = await this.camenBert.classify(msg.body);
+      } catch {
+        cbResult = null;
+      }
+    }
+
+    const arbitration = arbitrate({
+      regexDirection: pipelineConfig.regexEnabled
+        ? (parsed.direction as 'DEBIT' | 'CREDIT' | null)
+        : null,
+      regexConfidence: parsed.confidence,
+      cbCategory: cbResult?.category ?? null,
+      cbDirection: cbResult?.direction ?? null,
+      cbConfidence: cbResult?.confidence ?? 0,
+      camenbertEnabled: pipelineConfig.camenbertEnabled,
+      camenbertThreshold: pipelineConfig.camenbertThreshold,
+      amountPresent: parsed.amount !== null,
+    });
+
+    parsed.direction = arbitration.direction;
+
+    let skipReason: 'parseEmpty' | 'classifierDivers' | 'classifierError' | null =
+      null;
+    if (parsed.direction === null) {
+      if (pipelineConfig.regexEnabled && !arbitration.camenbertOk) {
+        // Fallback classifier existant : valide que ce n'est pas du bruit
+        try {
+          const category = await this.classifier.categorizeWithCache(msg.body);
+          if (category === ExpenseCategory.DIVERS) {
+            skipReason = 'classifierDivers';
+          } else {
+            parsed.confidence = Math.min(parsed.confidence, 0.6);
+          }
+        } catch {
+          skipReason = 'classifierError';
+        }
+      } else {
+        skipReason = 'parseEmpty';
+      }
+    }
+
+    // Catégorie d'analyse : type mappé CamenBert, sinon classifier mots-clés
+    let category: string | null = arbitration.analysisCategory;
+    if (category === null && parsed.direction) {
+      try {
+        const cat = await this.classifier.categorizeWithCache(msg.body);
+        if (cat !== ExpenseCategory.DIVERS) category = cat;
+      } catch {}
+    }
+
+    return { dateSent, parsed, cbResult, arbitration, category, skipReason };
+  }
+
+  async debugFilter(address: string | undefined, body: string, rawDate?: string) {
+    const pipelineConfig = await this.getPipelineConfig();
+    const msg: RawSms = {
+      id: -1,
+      address: address ?? '',
+      body,
+      dateSent: rawDate ?? undefined,
+    };
+    const analysis = await this.analyzeSms(msg, pipelineConfig, {
+      requireDate: false,
+    });
 
     let classifierResult: any = null;
     let classifierError: string | null = null;
@@ -325,57 +383,70 @@ export class SmsService {
       classifierError = e.message;
     }
 
-    let camenBertResult: any = null;
-    try {
-      if (this.camenBert.isReady()) {
-        camenBertResult = await this.camenBert.classify(body);
-      }
-    } catch {
-      camenBertResult = { error: 'Erreur inference' };
-    }
-
     const steps: Record<string, any> = {
+      config: {
+        regexEnabled: pipelineConfig.regexEnabled,
+        camenbertEnabled: pipelineConfig.camenbertEnabled,
+        camenbertThreshold: pipelineConfig.camenbertThreshold,
+      },
       parseSms: {
-        operator: parseSmsResult.operator,
-        direction: parseSmsResult.direction,
-        amount: parseSmsResult.amount,
-        sender: parseSmsResult.sender,
+        operator: analysis.parsed.operator,
+        direction: analysis.parsed.direction,
+        amount: analysis.parsed.amount,
+        sender: analysis.parsed.sender,
+        confidence: analysis.parsed.confidence,
       },
       dateValidation: {
         raw: rawDate ?? null,
-        valid: dateValid,
+        valid: analysis.dateSent !== null,
+        note:
+          analysis.dateSent === null
+            ? 'Date absente : analyse poursuivie (mode testeur)'
+            : undefined,
       },
-      camenBert: camenBertResult ?? { error: 'Modèle non chargé' },
+      camenBert: analysis.cbResult ?? { error: 'Modèle non chargé' },
+      arbitration: {
+        kind: analysis.arbitration?.arbitration ?? null,
+        camenbertOk: analysis.arbitration?.camenbertOk ?? false,
+        disagreed: analysis.arbitration?.disagreed ?? false,
+        status: analysis.arbitration?.status ?? null,
+        cbCategory: analysis.arbitration?.cbCategory ?? null,
+      },
+      category: analysis.category,
       classifier: classifierResult ?? { error: classifierError },
     };
 
     let verdict: string;
     let reason: string;
 
-    if (parseSmsResult.amount !== null && parseSmsResult.direction !== null) {
-      verdict = 'INSERT';
-      reason = 'parseSms OK (amount + direction)';
-    } else if (
-      parseSmsResult.amount === null &&
-      parseSmsResult.direction === null
-    ) {
-      verdict = 'SKIP';
-      reason = 'Aucune donnée financière détectée';
-    } else {
-      if (camenBertResult?.direction && camenBertResult.confidence >= 0.75) {
+    switch (analysis.skipReason) {
+      case 'invalidDate':
+        verdict = 'SKIP';
+        reason = 'Date d\u2019envoi invalide';
+        break;
+      case 'classifierDivers':
+        verdict = 'SKIP';
+        reason = 'Classifié DIVERS (pas une transaction financière)';
+        break;
+      case 'classifierError':
+        verdict = 'SKIP';
+        reason = 'Erreur du classifieur mots-clés';
+        break;
+      case 'parseEmpty':
+        verdict = 'SKIP';
+        reason = 'Aucune donnée financière détectée (émetteur inconnu et aucun pattern)';
+        break;
+      default:
         verdict = 'INSERT';
-        reason = `CamenBert a complété la direction: ${camenBertResult.direction} (${(camenBertResult.confidence * 100).toFixed(0)}%)`;
-      } else {
-        const cat =
-          classifierResult?.winner ?? classifierResult?.category ?? 'DIVERS';
-        if (cat === ExpenseCategory.DIVERS) {
-          verdict = 'SKIP';
-          reason = 'Classifié DIVERS (pas une transaction financière)';
+        const kind = analysis.arbitration?.arbitration;
+        const dir = analysis.parsed.direction ?? '?';
+        if (kind === 'CAMENBERT') {
+          reason = `CamenBert arbitre la direction ${dir}${analysis.arbitration?.disagreed ? ' (désaccord avec RegEx)' : ''}`;
+        } else if (analysis.parsed.direction !== null) {
+          reason = `parseSms OK (${dir}, ${analysis.parsed.amount} FCFA)`;
         } else {
-          verdict = 'INSERT';
-          reason = `Classifié comme ${cat}`;
+          reason = 'Classifieur mots-clés (direction inconnue, SMS conservé PENDING)';
         }
-      }
     }
 
     return { steps, verdict, reason };

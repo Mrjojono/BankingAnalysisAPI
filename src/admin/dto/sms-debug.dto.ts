@@ -2,10 +2,13 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class SmsDebugDto {
-  @ApiProperty({ example: 'ORABANK', description: 'Expéditeur du SMS' })
+  @ApiPropertyOptional({
+    example: 'ORABANK',
+    description: "Expéditeur du SMS (vide = inconnu, comportement réel de l'analyse)",
+  })
   @IsString()
-  @IsNotEmpty()
-  address: string;
+  @IsOptional()
+  address?: string;
 
   @ApiProperty({ example: 'Virement de 50000 FCFA', description: 'Corps du SMS' })
   @IsString()

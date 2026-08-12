@@ -27,7 +27,7 @@
     products: 'Produits',
     rules: 'Règles',
     catalog: 'Messages',
-    centreIA: 'Centre IA',
+    centreIA: 'Modèles',
     glossary: 'Lexique',
     docs: 'Documentation',
     notifications: 'Notifications',
@@ -37,6 +37,8 @@
     eligibility: 'Éligibilité',
     sms: 'SMS',
     pipeline: "Pipeline d'analyse",
+    clients: 'Clients',
+    monitoring: 'Monitoring',
   };
 
   async function handleLogout() {
@@ -81,7 +83,7 @@
         </div>
         <div class="flex items-center gap-2 px-3 py-1.5 text-sm text-on-surface-variant">
           <span class="w-2 h-2 rounded-full bg-green-500"></span>
-          {auth.user?.email ?? '—'}
+          {auth.user?.email ?? 'Non connecté'}
         </div>
       </div>
     </header>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Cpu, RotateCw, AlertCircle, Info, FlaskConical, Brain, Network, TrendingUp, Activity, X, CheckCircle, XCircle } from '@lucide/svelte';
+  import { Cpu, RotateCw, AlertCircle, Info, FlaskConical, Brain, Network, TrendingUp, Activity, X, CheckCircle, XCircle, ScrollText } from '@lucide/svelte';
   import { onMount, tick } from 'svelte';
   import { api } from '../lib/api';
   import Drawer from '../lib/components/Drawer.svelte';
@@ -13,6 +13,7 @@
   import AiEmbeddingPanel from '../lib/components/ai/AiEmbeddingPanel.svelte';
   import AiTrainingDrawer from '../lib/components/ai/AiTrainingDrawer.svelte';
   import AiDriftPanel from '../lib/components/ai/AiDriftPanel.svelte';
+  import AiTrainingLogsPanel from '../lib/components/ai/AiTrainingLogsPanel.svelte';
 
   let loading = $state(true);
   let error = $state('');
@@ -31,6 +32,7 @@
   let testLoading = $state(false);
   let trainingOpen = $state(false);
   let driftOpen = $state(false);
+  let logsOpen = $state(false);
   let testError = $state('');
 
   let parsedSms = $derived(smsResult?.steps?.parseSms);
@@ -80,7 +82,7 @@
       const [clsRes, camRes, smsResData] = await Promise.all([
         api.testClassifier(body).catch((e) => { console.error('CLS FAIL', e); testError += `Classifieur: ${e.message}\n`; return null; }),
         api.testCamenBert(body).catch((e) => { console.error('CB FAIL', e); testError += `CamenBert: ${e.message}\n`; return null; }),
-        api.debugSmsFilter({ address: 'ORABANK', body }).catch((e) => { console.error('SMS FAIL', e); testError += `Filtre SMS: ${e.message}\n`; return null; }),
+        api.debugSmsFilter({ address: '', body }).catch((e) => { console.error('SMS FAIL', e); testError += `Filtre SMS: ${e.message}\n`; return null; }),
       ]);
       console.log('TEST RESULTS', { clsRes, camRes, smsResData });
       classifierResult = clsRes;
@@ -94,7 +96,7 @@
   <div class="flex items-center justify-between mb-6">
     <div class="flex items-center gap-3">
       <Cpu size={24} class="text-primary" />
-      <h2 class="text-2xl font-bold text-on-surface">Centre IA</h2>
+      <h2 class="text-2xl font-bold text-on-surface">Modèles</h2>
     </div>
     <div class="flex items-center gap-2">
       <button onclick={() => { helpOpen = true; }}
@@ -150,8 +152,8 @@
               <div class="p-3 rounded-xl bg-surface-container-low">
                 <div class="font-semibold text-outline mb-1">RegEx (parseSms)</div>
                 {#if parsedSms}
-                  <div class="text-on-surface">Direction: <span class="font-bold {parsedSms.direction === 'CREDIT' ? 'text-green-600' : parsedSms.direction === 'DEBIT' ? 'text-red-600' : ''}">{parsedSms.direction ?? '—'}</span></div>
-                  <div class="text-on-surface">Montant: <span class="font-mono">{parsedSms.amount ?? '—'} FCFA</span></div>
+                  <div class="text-on-surface">Direction: <span class="font-bold {parsedSms.direction === 'CREDIT' ? 'text-green-600' : parsedSms.direction === 'DEBIT' ? 'text-red-600' : ''}">{parsedSms.direction ?? '·'}</span></div>
+                  <div class="text-on-surface">Montant: <span class="font-mono">{parsedSms.amount ?? '·'} FCFA</span></div>
                 {:else}
                   <div class="text-outline">Non parsé</div>
                 {/if}
@@ -170,7 +172,7 @@
                 {#if classifierResult}
                   <div class="text-on-surface">Catégorie: <span class="font-bold">{classifierResult.winner}</span></div>
                 {:else}
-                  <div class="text-outline">—</div>
+                  <div class="text-outline">·</div>
                 {/if}
                 {#if smsResult}
                   <div class="mt-1 flex items-center gap-1">
@@ -202,6 +204,7 @@
     </div>
     <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
       <SectionCard icon={Activity} title="Drift & Monitoring" description="Distribution, alertes, baselines des prédictions" badge={camenBertStatus?.metrics?.totalInferences ? `${camenBertStatus.metrics.totalInferences} infs` : undefined} onclick={() => driftOpen = true} />
+      <SectionCard icon={ScrollText} title="Logs d'entraînement" description="Sortie des runs passés, paginée" onclick={() => logsOpen = true} />
     </div>
     <p class="text-[10px] text-outline mt-2 text-center">Entraîne CamenBert (fine-tune du modèle neural SMS) ou le classifieur catégoriel (dépenses).</p>
   {/if}
@@ -230,6 +233,12 @@
 <Drawer open={driftOpen} title="Drift & Monitoring" widthClass="max-w-xl" onclose={() => driftOpen = false}>
   {#snippet children()}
     <AiDriftPanel />
+  {/snippet}
+</Drawer>
+
+<Drawer open={logsOpen} title="Logs d'entraînement" widthClass="max-w-2xl" onclose={() => logsOpen = false}>
+  {#snippet children()}
+    <AiTrainingLogsPanel />
   {/snippet}
 </Drawer>
 

@@ -3,7 +3,7 @@
 ## Vue d'ensemble
 
 Le module d'éligibilité évalue si un client est éligible à un produit bancaire. Deux moteurs sont disponibles :
-- **Matrix** (défaut) : scoring continu pondéré via `scoreProduct()` — satisfaction linéaire par règle
+- **Matrix** (défaut) : scoring continu pondéré via `scoreProduct()` : satisfaction linéaire par règle
 - **Rules** (legacy) : scoring binaire pass/fail via `RuleEvaluator`
 
 ## Architecture

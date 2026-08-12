@@ -62,15 +62,15 @@
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
       <div class="p-3 rounded-xl bg-surface-container-low">
         <div class="flex items-center gap-1.5 text-outline text-[11px] mb-1"><Activity size={13} /> Refus</div>
-        <p class="text-lg font-bold text-on-surface">{drift?.refusalRate != null ? (drift.refusalRate * 100).toFixed(1) + '%' : '—'}</p>
+        <p class="text-lg font-bold text-on-surface">{drift?.refusalRate != null ? (drift.refusalRate * 100).toFixed(1) + '%' : '·'}</p>
       </div>
       <div class="p-3 rounded-xl bg-surface-container-low">
         <div class="flex items-center gap-1.5 text-outline text-[11px] mb-1"><TrendingUp size={13} /> DIVERS</div>
-        <p class="text-lg font-bold text-on-surface">{drift?.diversRate != null ? (drift.diversRate * 100).toFixed(1) + '%' : '—'}</p>
+        <p class="text-lg font-bold text-on-surface">{drift?.diversRate != null ? (drift.diversRate * 100).toFixed(1) + '%' : '·'}</p>
       </div>
       <div class="p-3 rounded-xl bg-surface-container-low">
         <div class="flex items-center gap-1.5 text-outline text-[11px] mb-1"><Gauge size={13} /> Conf. moy.</div>
-        <p class="text-lg font-bold text-on-surface">{stats?.avgConfidence != null ? (stats.avgConfidence * 100).toFixed(0) + '%' : '—'}</p>
+        <p class="text-lg font-bold text-on-surface">{stats?.avgConfidence != null ? (stats.avgConfidence * 100).toFixed(0) + '%' : '·'}</p>
       </div>
       <div class="p-3 rounded-xl bg-surface-container-low">
         <div class="flex items-center gap-1.5 text-outline text-[11px] mb-1"><Hash size={13} /> Prédictions</div>

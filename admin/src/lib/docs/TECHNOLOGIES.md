@@ -1,6 +1,6 @@
-# Stack Technique — Orabank Backend App
+# Stack Technique : Orabank Backend App
 
-> **Résumé —** Cette application est un back-office bancaire développé pour **Orabank Togo**.  
+> **Résumé :** Cette application est un back-office bancaire développé pour **Orabank Togo**.  
 > Elle importe les transactions des clients, calcule leur santé financière via 6 moteurs de scoring (dépenses, revenus, dettes, épargne, soldes), génère un score global 0-100, puis déclenche des **conseils personnalisés** grâce à un moteur IA matriciel entraîné par descente de gradient.  
 > L'ensemble expose une API REST NestJS + WebSocket, consommée par un panneau d'administration **Svelte 5**.
 >
@@ -28,13 +28,13 @@ IA / NLP
 
 | Technologie | Version | Rôle |
 |---|---|---|
-| **Node.js** | — | Moteur d'exécution JavaScript du backend |
+| **Node.js** | · | Moteur d'exécution JavaScript du backend |
 | **TypeScript** | ^5.7 | Langage principal (backend + frontend admin) |
 | **ES2023** | cible | Niveau de transpilation TypeScript |
 
 ---
 
-## 2. Backend — NestJS
+## 2. Backend : NestJS
 
 | Technologie | Version | Rôle |
 |---|---|---|
@@ -50,21 +50,21 @@ IA / NLP
 | **rxjs** | ^7.8.1 | Programmation réactive (observables NestJS) |
 | **dotenv** | ^17.4.2 | Chargement des variables d'environnement (`.env`) |
 
-### Modules métier (NestJS) — Explications détaillées
+### Modules métier (NestJS) : Explications détaillées
 
-#### AuthModule — Authentification & Sécurité
+#### AuthModule : Authentification & Sécurité
 
 Gère l'authentification des administrateurs. Il utilise **JWT** (JSON Web Tokens) avec deux tokens : un **access token** (court, 15 min) et un **refresh token** (long, 7 jours) pour maintenir la session sans redemander le mot de passe. Les mots de passe sont hachés avec **bcryptjs** avant stockage.
 
 Fonctionnalités :
-- **Inscription** — création de compte admin avec mot de passe haché
-- **Connexion** — vérification du mot de passe, génération des tokens JWT
-- **Refresh token** — renouvellement silencieux du token sans déconnexion
-- **MFA** (Multi-Factor Authentication) — validation en deux étapes via OTP (email, SMS, TOTP)
-- **Rôles** — système de guards NestJS (`@Roles('ADMIN')`) pour restreindre l'accès aux endpoints sensibles
-- **Session** — suivi des connexions actives avec horodatage
+- **Inscription** : création de compte admin avec mot de passe haché
+- **Connexion** : vérification du mot de passe, génération des tokens JWT
+- **Refresh token** : renouvellement silencieux du token sans déconnexion
+- **MFA** (Multi-Factor Authentication) : validation en deux étapes via OTP (email, SMS, TOTP)
+- **Rôles** : système de guards NestJS (`@Roles('ADMIN')`) pour restreindre l'accès aux endpoints sensibles
+- **Session** : suivi des connexions actives avec horodatage
 
-#### PrismaModule — Accès à la base de données
+#### PrismaModule : Accès à la base de données
 
 Point d'accès unique à la base de données via **Prisma ORM**. Il expose un `PrismaService` (singleton) que tous les autres modules utilisent pour lire/écrire dans PostgreSQL.
 
@@ -73,50 +73,50 @@ Ce module encapsule :
 - Les migrations Prisma pour faire évoluer le schéma
 - Le client typé généré automatiquement depuis le schéma (auto-complétion TypeScript)
 
-#### RedisModule — Cache distribué
+#### RedisModule : Cache distribué
 
 Couche de cache basée sur **Redis** pour accélérer les accès fréquents et réduire la charge sur PostgreSQL.
 
 Ce qu'il cache :
-- **Règles globales** — les règles de classification et d'éligibilité sont chargées depuis Redis au lieu de la BDD à chaque requête
-- **Surcharges classifieur** — les surcharges utilisateur pour les règles de classification, stockées par `userId`
-- **Sessions** — données de session temporaires
+- **Règles globales** : les règles de classification et d'éligibilité sont chargées depuis Redis au lieu de la BDD à chaque requête
+- **Surcharges classifieur** : les surcharges utilisateur pour les règles de classification, stockées par `userId`
+- **Sessions** : données de session temporaires
 
-#### MailModule — Envoi d'emails
+#### MailModule : Envoi d'emails
 
 Envoie des emails transactionnels via **Nodemailer** avec des templates **Pug**. Utilisé pour :
-- **OTP** (One-Time Password) — envoi de codes de vérification à usage unique
-- **Confirmation d'inscription** — email de bienvenue après création de compte
+- **OTP** (One-Time Password) : envoi de codes de vérification à usage unique
+- **Confirmation d'inscription** : email de bienvenue après création de compte
 
-#### AnalyticsModule — Moteur de scoring financier
+#### AnalyticsModule : Moteur de scoring financier
 
 C'est le cœur de l'analyse financière. Il prend les transactions bancaires brutes d'un client et calcule des indicateurs de santé financière. Il est composé de plusieurs sous-moteurs qui s'enchaînent :
 
-1. **RevenueEngine** — analyse les revenus (flux de trésorerie mensuels, régularité, volatilité)
-2. **ExpenseEngine** — catégorise les dépenses (logement, alimentation, transport…), distingue le récurrent du variable
-3. **BalanceEngine** — examine les soldes (solde moyen, jours à découvert, volatilité)
-4. **DebtEngine** — calcule le ratio d'endettement (norme BCEAO : max 33%), historique de remboursement
-5. **SavingsEngine** — mesure l'épargne (taux d'épargne, couverture du fonds d'urgence)
-6. **ScoreEngine** — agrège tout ça en un **score global 0-100** (4 composantes C1-C4, 11 sous-scores)
-7. **RecommendationEngine** — génère des recommandations personnalisées à partir des scores
-8. **AdviceEngine / MatrixInterpreterEngine** — utilise le moteur matriciel pour transformer les features en conseils concrets (parmi 17 intentions)
+1. **RevenueEngine** : analyse les revenus (flux de trésorerie mensuels, régularité, volatilité)
+2. **ExpenseEngine** : catégorise les dépenses (logement, alimentation, transport…), distingue le récurrent du variable
+3. **BalanceEngine** : examine les soldes (solde moyen, jours à découvert, volatilité)
+4. **DebtEngine** : calcule le ratio d'endettement (norme BCEAO : max 33%), historique de remboursement
+5. **SavingsEngine** : mesure l'épargne (taux d'épargne, couverture du fonds d'urgence)
+6. **ScoreEngine** : agrège tout ça en un **score global 0-100** (4 composantes C1-C4, 11 sous-scores)
+7. **RecommendationEngine** : génère des recommandations personnalisées à partir des scores
+8. **AdviceEngine / MatrixInterpreterEngine** : utilise le moteur matriciel pour transformer les features en conseils concrets (parmi 17 intentions)
 
-#### GatewayModule — WebSocket temps réel
+#### GatewayModule : WebSocket temps réel
 
 Configure **Socket.IO** côté serveur pour pousser des mises à jour en temps réel vers l'interface admin. Utilisé notamment pour le tableau de bord (dashboard) qui doit refléter les changements sans rechargement manuel.
 
-#### AdminModule — API REST d'administration
+#### AdminModule : API REST d'administration
 
 Expose les endpoints CRUD pour l'interface admin (le panneau Svelte). Contient les contrôleurs et services pour :
-- **Produits bancaires** — créer, lire, modifier, supprimer les produits (Compte, Carte, Crédit…)
-- **Règles métier** — gérer les règles d'éligibilité, frais, limites, intérêts
-- **Classifieur** — API pour tester le classifieur de transactions et gérer les surcharges
-- **Embeddings** — consulter les stats des plongements, rechercher des voisins sémantiques
-- **Entraînement** — lancer l'entraînement du modèle matriciel et gérer les données d'entraînement
-- **Catalogue messages** — éditer les templates de messages (conseils, scores, éligibilité)
-- **Lexique** — API pour le glossaire des termes bancaires
+- **Produits bancaires** : créer, lire, modifier, supprimer les produits (Compte, Carte, Crédit…)
+- **Règles métier** : gérer les règles d'éligibilité, frais, limites, intérêts
+- **Classifieur** : API pour tester le classifieur de transactions et gérer les surcharges
+- **Embeddings** : consulter les stats des plongements, rechercher des voisins sémantiques
+- **Entraînement** : lancer l'entraînement du modèle matriciel et gérer les données d'entraînement
+- **Catalogue messages** : éditer les templates de messages (conseils, scores, éligibilité)
+- **Lexique** : API pour le glossaire des termes bancaires
 
-#### EligibilityModule — Moteur d'éligibilité matriciel
+#### EligibilityModule : Moteur d'éligibilité matriciel
 
 Détermine si un client est éligible à un produit bancaire. Remplace l'ancien système de règles `if/else` par un **calcul matriciel vectorisé** :
 
@@ -127,27 +127,27 @@ Détermine si un client est éligible à un produit bancaire. Remplace l'ancien 
 
 Sous-module **EligibilityMatrixModule** : construit et charge la matrice d'éligibilité depuis la BDD (avec cache Redis).
 
-#### SmsModule — Parsing SMS Mobile Money
+#### SmsModule : Parsing SMS Mobile Money
 
 Analyse les SMS reçus des opérateurs de mobile money (T-Money, Flooz…) pour en extraire des transactions structurées. Utile dans les pays où les notifications bancaires passent par SMS plutôt que par des APIs.
 
-#### MatrixModule — Moteur d'interprétation matriciel
+#### MatrixModule : Moteur d'interprétation matriciel
 
 C'est le **cerveau de l'AdviceEngine**. Il prend les 21 features financières calculées par l'AnalyticsModule et détermine **la meilleure intention de conseil** parmi 17 possibles.
 
 Comment ça marche concrètement :
 1. Le `RuleContext` (catégorie, pourcentages, montants…) est transformé en **vecteur de 21 nombres** (features)
 2. Ce vecteur est passé au moteur matriciel qui le multiplie par une **matrice de poids** (21 × 17)
-3. Le résultat donne **17 scores** — un pour chaque intention possible (LOGEMENT_CRITICAL, GOOD_HABIT, etc.)
+3. Le résultat donne **17 scores** : un pour chaque intention possible (LOGEMENT_CRITICAL, GOOD_HABIT, etc.)
 4. L'intention avec le **score le plus élevé** est sélectionnée comme conseil à donner au client
 
 Le module propose deux architectures :
 - **1 couche** : simple multiplication vecteur × matrice (21 → 17)
-- **2 couches** (deep) : passage par une couche cachée de 32 neurones avec ReLU avant la sortie (321 → 32 → 17) — utilisé quand les embeddings fastText sont activés
+- **2 couches** (deep) : passage par une couche cachée de 32 neurones avec ReLU avant la sortie (321 → 32 → 17) : utilisé quand les embeddings fastText sont activés
 
 Les poids de la matrice ne sont pas codés en dur : ils sont **appris par entraînement** (voir TrainingModule).
 
-#### EmbeddingsModule — Plongements NLP fastText
+#### EmbeddingsModule : Plongements NLP fastText
 
 Enrichit l'analyse financière avec la **compréhension du sens des mots**. Quand une transaction a une description texte (ex: « VIR SEPA FR76 30002… »), ce module la transforme en un vecteur de 300 nombres qui représente son sens.
 
@@ -157,7 +157,7 @@ Enrichit l'analyse financière avec la **compréhension du sens des mots**. Quan
 - Le vecteur de 300 dimensions est **concaténé aux 21 features financières** → vecteur final de 321 dimensions
 - Permet au moteur matriciel de « comprendre » ce que le client achète, pas seulement combien il dépense
 
-#### TrainingModule — Entraînement par descente de gradient
+#### TrainingModule : Entraînement par descente de gradient
 
 Module d'**apprentissage supervisé** qui ajuste les poids de la matrice du MatrixModule. Il prend des exemples étiquetés (situation financière → intention attendue) et optimise les poids pour que les prédictions du moteur matriciel correspondent aux attentes.
 
@@ -169,7 +169,7 @@ Points clés :
 - Lancement : `npx ts-node src/scripts/train.ts --epochs 100`
 - Le résultat est une matrice de poids optimisée qui remplace l'ancienne matrice
 
-#### TransactionSourcesModule — Abstraction des sources
+#### TransactionSourcesModule : Abstraction des sources
 
 Couche d'abstraction qui permet de traiter les transactions bancaires **quelle que soit leur provenance** :
 - **Source BDD** : transactions directement en base (via Prisma)
@@ -243,37 +243,37 @@ Cette section explique **ce que fait** chaque brique IA, sans détailler les for
 |---|---|---|
 | **natural** | ^8.1.1 | BayesClassifier pour la catégorisation de transactions |
 | **Fuse.js** | ^7.4.1 | Recherche floue sur descriptions vs mots-clés (seuil 0.35) |
-| **fastText** (cc.fr.300.vec) | — | Plongements word2vec français (300 dimensions, 50 000 mots) |
-| **Moteur matriciel** (custom) | — | Vecteur 21 features × matrice 21×17 → 17 intentions scorées |
-| **Réseau profond** (custom) | — | Architecture 2 couches (321→32→17) avec ReLU + Softmax |
-| **Descente de gradient** (custom) | — | Optimisation par perte margin (epochs, learning rate configurables) |
+| **fastText** (cc.fr.300.vec) | · | Plongements word2vec français (300 dimensions, 50 000 mots) |
+| **Moteur matriciel** (custom) | · | Vecteur 21 features × matrice 21×17 → 17 intentions scorées |
+| **Réseau profond** (custom) | · | Architecture 2 couches (321→32→17) avec ReLU + Softmax |
+| **Descente de gradient** (custom) | · | Optimisation par perte margin (epochs, learning rate configurables) |
 | **decimal.js** | ^10.6.0 | Précision arithmétique pour les calculs financiers |
 
 ### natural (BayesClassifier)
 
-**Sigle :** — (nom de la librairie)
+**Sigle :** · (nom de la librairie)
 
 - **C'est quoi ?** Un classifieur naïf bayésien. Il apprend à classer des textes dans des catégories en se basant sur des exemples déjà étiquetés.
 - **Ce qu'on en fait ici :** On l'utilise pour catégoriser les **descriptions de transactions bancaires** (ex: « VIR SEPA FR76 30002… ») dans des catégories prédéfinies (logement, alimentation, transport, etc.). Le modèle est entraîné avec des exemples de transactions déjà classées, puis il prédit la catégorie des nouvelles transactions.
 
 ### Fuse.js
 
-**Sigle :** — (nom de la librairie)
+**Sigle :** · (nom de la librairie)
 
 - **C'est quoi ?** Une bibliothèque de **recherche floue** (fuzzy search). Elle permet de trouver des correspondances approximatives entre une chaîne de caractères et une liste de mots-clés, même en cas de fautes d'orthographe ou de variations.
 - **Ce qu'on en fait ici :** Quand une description de transaction ne correspond pas exactement aux mots-clés connus, Fuse.js calcule un score de similarité (seuil à 0.35) pour trouver la catégorie la plus proche. Exemple : « VIR SEPA » pourrait correspondre à « virement » même si le libellé exact n'est pas dans la liste.
 
 ### fastText (Embeddings / Plongements vectoriels)
 
-**Sigle :** — (nom de la librairie Meta)
+**Sigle :** · (nom de la librairie Meta)
 
 - **C'est quoi ?** fastText est une bibliothèque de Meta (Facebook) pour créer des **plongements de mots** (word embeddings). Un plongement transforme un mot en un **vecteur de nombres** (ici 300 dimensions) qui représente son sens. Les mots ayant un sens proche (ex: « logement » et « appartement ») ont des vecteurs similaires.
-- **Modèle utilisé :** `cc.fr.300.vec` — un modèle pré-entraîné sur des textes français, capable de représenter plus de 2 millions de mots. On charge les 50 000 mots les plus fréquents (pour des raisons de mémoire).
+- **Modèle utilisé :** `cc.fr.300.vec` : un modèle pré-entraîné sur des textes français, capable de représenter plus de 2 millions de mots. On charge les 50 000 mots les plus fréquents (pour des raisons de mémoire).
 - **Ce qu'on en fait ici :** On enrichit le **vecteur de contexte** (21 features financières de base) avec les embeddings de la description de la transaction. Le vecteur passe de 21 à 321 dimensions (21 features financières + 300 dimensions du plongement). Cela permet au moteur matriciel de « comprendre » le sens de la description texte, pas seulement les chiffres.
 
 ### Moteur matriciel (Matrix Engine)
 
-**Sigle :** — (moteur custom)
+**Sigle :** · (moteur custom)
 
 - **C'est quoi ?** Un système qui remplace des `if/else` par un calcul matriciel. Au lieu d'écrire des règles du type « si le taux d'endettement > 50% ET la catégorie = LOGEMENT → ALERTE », on représente ces connaissances sous forme de **poids dans une matrice**.
 - **Principe général :** On transforme la situation financière du client en un **vecteur de 21 nombres** (features). Ce vecteur est multiplié par une **matrice de poids** (21 colonnes × 17 lignes). Le résultat donne un **score pour chacune des 17 intentions** possibles. L'intention qui obtient le score le plus haut est sélectionnée.
@@ -281,21 +281,21 @@ Cette section explique **ce que fait** chaque brique IA, sans détailler les for
 
 ### Réseau profond (Deep Network)
 
-**Sigle :** — (architecture custom)
+**Sigle :** · (architecture custom)
 
 - **C'est quoi ?** Une version améliorée du moteur matriciel avec **une couche cachée supplémentaire**. Le vecteur de 321 dimensions (features financières + embeddings) passe d'abord par une couche de 32 neurones (avec fonction d'activation ReLU), puis donne les 17 scores finaux.
 - **Ce qu'on en fait ici :** Le mode « 2 couches » du moteur d'interprétation, qui permet de capturer des relations plus complexes entre les features financières et le texte des descriptions.
 
 ### Descente de gradient (Training)
 
-**Sigle :** — (algorithme custom)
+**Sigle :** · (algorithme custom)
 
 - **C'est quoi ?** Un algorithme d'**apprentissage supervisé** qui ajuste automatiquement les poids de la matrice pour qu'elle donne les bonnes réponses. On lui fournit des exemples (situation → intention attendue), et il modifie petit à petit les poids pour minimiser les erreurs.
 - **Ce qu'on en fait ici :** Le fichier `training-data.json` contient 36 exemples étiquetés. La CLI `npx ts-node src/scripts/train.ts --epochs 100` lance l'entraînement. On peut configurer le nombre d'époques, le taux d'apprentissage, le nombre de couches (1 ou 2) et la marge de tolérance.
 
 ### decimal.js
 
-**Sigle :** — (nom de la librairie)
+**Sigle :** · (nom de la librairie)
 
 - **C'est quoi ?** Une bibliothèque de calcul avec **précision arbitraire**. JavaScript gère mal les décimales (ex: `0.1 + 0.2 = 0.30000000000000004`). decimal.js garantit que les calculs financiers sont exacts au centime près.
 - **Ce qu'on en fait ici :** Tous les calculs de scores financiers (ScoreEngine, ExpenseEngine, etc.) utilisent decimal.js pour éviter les erreurs d'arrondi.
@@ -339,7 +339,7 @@ Quand le moteur matriciel analyse la situation du client, il choisit **une inten
 
 ---
 
-## 9. Frontend — Admin (Svelte)
+## 9. Frontend : Admin (Svelte)
 
 | Technologie | Version | Rôle |
 |---|---|---|
@@ -374,7 +374,7 @@ Quand le moteur matriciel analyse la situation du client, il choisit **une inten
 
 | Technologie | Version | Rôle |
 |---|---|---|
-| **Docker Compose** | — | Orchestration des conteneurs (3 services) |
+| **Docker Compose** | · | Orchestration des conteneurs (3 services) |
 | **PostgreSQL 15-alpine** | 15-alpine | Base de données (image Docker légère) |
 | **Redis 7-alpine** | 7-alpine | Cache (image Docker légère avec persistance) |
 | **Portainer CE** | latest | Interface web de gestion Docker (ports 9000, 9443) |
@@ -440,4 +440,4 @@ services:
 
 
 
-*Document généré le 20 juin 2026 — 70+ technologies identifiées.*
+*Document généré le 20 juin 2026 : 70+ technologies identifiées.*

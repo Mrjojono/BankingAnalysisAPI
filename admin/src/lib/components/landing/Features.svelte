@@ -1,101 +1,59 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import ScrollReveal from './ScrollReveal.svelte';
+  import { Gauge, ShieldCheck, Lightbulb, GraduationCap, PiggyBank, Smartphone } from '@lucide/svelte';
 
-  let ref = $state<HTMLElement | null>(null);
-  let scorePct = $state(0);
-  let eligPct = $state(0);
-  let intRef = $state<HTMLElement | null>(null);
-  let intVisible = $state(false);
-
-  onMount(() => {
-    if (!ref) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting) return;
-        const duration = 1500;
-        const start = performance.now();
-        function tick(now: number) {
-          const t = Math.min((now - start) / duration, 1);
-          scorePct = Math.round(78 * (1 - Math.pow(1 - t, 3)));
-          eligPct = Math.round(92 * (1 - Math.pow(1 - t, 3)));
-          if (t < 1) requestAnimationFrame(tick);
-        }
-        requestAnimationFrame(tick);
-        observer.disconnect();
-      },
-      { threshold: 0.3 },
-    );
-    observer.observe(ref);
-    return () => observer.disconnect();
-  });
+  const features = [
+    {
+      icon: Gauge,
+      title: 'Score financier 360°',
+      desc: 'Une évaluation objective de votre situation, calculée à partir de vos revenus, dépenses, dettes et épargne.',
+    },
+    {
+      icon: ShieldCheck,
+      title: 'Éligibilité instantanée',
+      desc: 'Découvrez en un clic les produits bancaires auxquels vous pouvez prétendre, et ce qu\'il faut améliorer.',
+    },
+    {
+      icon: Lightbulb,
+      title: 'Conseils personnalisés',
+      desc: 'Des recommandations concrètes pour épargner, réduire vos dépenses et progresser en toute autonomie.',
+    },
+    {
+      icon: GraduationCap,
+      title: 'Éducation financière',
+      desc: 'Des leçons courtes et des quiz pour maîtriser les fondamentaux : épargne, crédit, budget, dettes.',
+    },
+    {
+      icon: PiggyBank,
+      title: 'Objectifs d\'épargne',
+      desc: 'Fixez un objectif, suivez votre progression mois par mois et restez motivé avec des rappels.',
+    },
+    {
+      icon: Smartphone,
+      title: 'Analyse SMS & Mobile Money',
+      desc: 'Vos transactions T-Money et Flooz sont analysées automatiquement pour un profil complet, même sans relevé.',
+    },
+  ];
 </script>
 
-<section class="py-24 bg-[#f9fafb]">
+<section id="fonctionnalites" class="py-24 bg-surface-container-low scroll-mt-20">
   <div class="max-w-6xl mx-auto px-6">
-    <ScrollReveal>
-      <div class="text-center mb-16">
-        <p class="text-sm font-medium text-primary uppercase tracking-widest mb-3">Fonctionnalités</p>
-        <h2 class="text-3xl md:text-4xl font-bold text-[#181d16]">
-          Tout ce qu'il vous faut
-        </h2>
-      </div>
-    </ScrollReveal>
+    <div class="text-center mb-16 max-w-2xl mx-auto">
+      <p class="text-xs font-semibold text-primary uppercase tracking-[0.3em] mb-4">Fonctionnalités</p>
+      <h2 class="text-3xl md:text-4xl font-medium text-on-surface tracking-tight" style="font-family: 'Playfair Display', serif">
+        Tout ce qu'il faut pour comprendre<br />et améliorer votre crédit
+      </h2>
+    </div>
 
-    <div bind:this={ref} class="grid md:grid-cols-3 gap-5">
-      <ScrollReveal>
-        <div class="bg-white rounded-2xl border border-gray-100 p-8 hover:shadow-md transition-shadow">
-          <div class="flex justify-center mb-6 relative">
-            <svg class="w-24 h-24 -rotate-90" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="42" fill="none" stroke="#E2EBD6" stroke-width="6"/>
-              <circle cx="50" cy="50" r="42" fill="none" stroke="#3a6a00" stroke-width="6"
-                stroke-linecap="round" stroke-dasharray={`${2 * Math.PI * 42}`}
-                stroke-dashoffset={`${2 * Math.PI * 42 * (1 - scorePct / 100)}`}
-                class="transition-all duration-300"/>
-            </svg>
-            <span class="absolute mt-6 text-2xl font-bold text-[#181d16]">{scorePct}%</span>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {#each features as feature}
+        <div class="bg-white rounded-2xl border border-mint-subtle p-8 transition-all duration-300 hover:shadow-[0_20px_45px_-25px_rgba(58,106,0,0.35)] hover:-translate-y-0.5">
+          <div class="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center mb-6">
+            <feature.icon size={22} class="text-primary" />
           </div>
-          <h3 class="text-lg font-bold text-[#181d16] text-center">Score de crédit</h3>
-          <p class="text-sm text-[#6b7280] text-center mt-2 leading-relaxed">
-            Évaluation objective basée sur vos transactions et comportements.
-          </p>
+          <h3 class="text-lg font-bold text-on-surface mb-2">{feature.title}</h3>
+          <p class="text-sm text-on-surface-variant leading-relaxed">{feature.desc}</p>
         </div>
-      </ScrollReveal>
-
-      <ScrollReveal>
-        <div class="bg-white rounded-2xl border border-gray-100 p-8 hover:shadow-md transition-shadow md:mt-8">
-          <div class="mb-6">
-            <div class="flex items-end justify-between mb-2">
-              <span class="text-sm text-[#6b7280]">Éligibilité</span>
-              <span class="text-2xl font-bold text-primary">{eligPct}%</span>
-            </div>
-            <div class="h-2.5 bg-[#E2EBD6] rounded-full overflow-hidden">
-              <div class="h-full bg-primary rounded-full transition-all duration-500" style="width: {eligPct}%"></div>
-            </div>
-          </div>
-          <h3 class="text-lg font-bold text-[#181d16]">Éligibilité instantanée</h3>
-          <p class="text-sm text-[#6b7280] mt-2 leading-relaxed">
-            Découvrez votre éligibilité aux produits financiers en un clic.
-          </p>
-        </div>
-      </ScrollReveal>
-
-      <ScrollReveal>
-        <div class="bg-white rounded-2xl border border-gray-100 p-8 hover:shadow-md transition-shadow">
-          <div class="space-y-3 mb-6">
-            {#each ['Analyse de vos dépenses', 'Recommandations personnalisées', 'Alertes intelligentes'] as item, i}
-              <div class="flex items-center gap-3">
-                <div class="w-2 h-2 rounded-full" class:bg-primary={scorePct > i * 33} class:bg-[#E2EBD6]={scorePct <= i * 33}></div>
-                <span class="text-sm text-[#6b7280]">{item}</span>
-              </div>
-            {/each}
-          </div>
-          <h3 class="text-lg font-bold text-[#181d16]">Conseils IA</h3>
-          <p class="text-sm text-[#6b7280] mt-2 leading-relaxed">
-            Recommandations personnalisées pour optimiser votre santé financière.
-          </p>
-        </div>
-      </ScrollReveal>
+      {/each}
     </div>
   </div>
 </section>

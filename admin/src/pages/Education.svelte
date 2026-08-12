@@ -427,7 +427,7 @@
     </div>
   </div>
 
-  <Drawer open={helpOpen} title="Aide — Éducation financière" onclose={() => helpOpen = false}>
+  <Drawer open={helpOpen} title="Aide · Éducation financière" onclose={() => helpOpen = false}>
     <div class="flex flex-col gap-4 text-sm leading-relaxed text-on-surface">
       <p>Gérez les parcours pédagogiques et les leçons d'éducation financière.</p>
       <h4 class="font-bold text-base mt-2">Parcours</h4>
@@ -581,7 +581,7 @@
       <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
         Parcours
         <select bind:value={editingLesson!.learningPathId} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all">
-          <option value="">— Sélectionner —</option>
+          <option value="">Sélectionner…</option>
           {#each paths as p}
             <option value={p.id}>{p.title}</option>
           {/each}
@@ -689,7 +689,7 @@
     <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
       Type de conseil
       <select bind:value={editingAdvice!.adviceType} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all">
-        <option value="">— Sélectionner —</option>
+        <option value="">Sélectionner…</option>
         {#each ADVICE_TYPES as at}
           <option value={at}>{at}</option>
         {/each}

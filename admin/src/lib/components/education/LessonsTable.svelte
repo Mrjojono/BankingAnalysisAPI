@@ -77,11 +77,11 @@
               title={l.status === 'PUBLISHED' ? 'Cliquer pour archiver' : 'Cliquer pour publier'}
             />
           </td>
-          <td class="px-4 py-3 text-sm text-on-surface-variant">{l.estimatedMinutes ?? '—'} min</td>
+          <td class="px-4 py-3 text-sm text-on-surface-variant">{l.estimatedMinutes ?? '·'} min</td>
           <td class="px-4 py-3 text-sm text-on-surface-variant">
             {#if l.minScore != null || l.maxScore != null}
-              {l.minScore ?? 0} – {l.maxScore ?? 100}
-            {:else}—{/if}
+              {l.minScore ?? 0} à {l.maxScore ?? 100}
+            {:else}·{/if}
           </td>
           <td class="px-4 py-3">
             <div class="flex gap-1">
@@ -97,7 +97,7 @@
   {#if totalPages > 1}
     <div class="flex items-center justify-between px-4 py-3 border-t border-mint-subtle bg-background">
       <span class="text-sm text-on-surface-variant">
-        {lessons.length} leçons — page {page}/{totalPages}
+        {lessons.length} leçons · page {page}/{totalPages}
       </span>
       <div class="flex gap-1">{@html ' '}
         <button onclick={() => page = Math.max(1, page - 1)} disabled={page <= 1}

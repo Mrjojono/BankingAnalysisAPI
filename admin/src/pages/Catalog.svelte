@@ -165,7 +165,7 @@
   </button>
 </div>
 
-<Drawer open={helpOpen} title="Aide — Messages" onclose={() => helpOpen = false}>
+<Drawer open={helpOpen} title="Aide · Messages" onclose={() => helpOpen = false}>
   <div class="flex flex-col gap-4 text-sm leading-relaxed text-on-surface">
     <h4 class="font-bold text-base">NLG v2 (nouveau système)</h4>
     <p>Édite <code>src/messages/catalog-fragments.json</code>. Fragments atomiques composés par le nouveau NLG Engine.
@@ -180,7 +180,7 @@
     <p>La <strong>Preview NLG</strong> permet de tester un intent + sévérité et voir le message généré.</p>
 
     <h4 class="font-bold text-base mt-4">Ancien système</h4>
-    <p>Édite <code>src/messages/catalog.json</code> — templates hashés utilisés par <code>realizer.ts</code> en fallback.</p>
+    <p>Édite <code>src/messages/catalog.json</code> : templates hashés utilisés par <code>realizer.ts</code> en fallback.</p>
     <p>Contient 6 sections : Éligibilité, Conseils, Interpréteur, Libellés, Étiquettes de score, Interprétations du score.</p>
   </div>
 </Drawer>
@@ -206,7 +206,7 @@
             {#each PLACEHOLDER_HINTS as h}
               <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-surface-container rounded text-xs font-mono text-on-surface-variant" title={h.desc}>
                 <span class="font-bold">{h.token}</span>
-                <span class="text-[10px] text-outline">— {h.desc}</span>
+                <span class="text-[10px] text-outline">· {h.desc}</span>
               </span>
             {/each}
           </div>

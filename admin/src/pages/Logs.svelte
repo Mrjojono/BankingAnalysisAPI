@@ -220,12 +220,12 @@
                     <span class="inline-flex items-center gap-1 text-red-600 text-xs"><X size={14} /> Échec</span>
                   {/if}
                 </td>
-                <td class="py-2.5 pr-4 text-outline text-xs">{(log as LogRow).email ?? '—'}</td>
+                <td class="py-2.5 pr-4 text-outline text-xs">{(log as LogRow).email ?? '·'}</td>
               {:else}
                 <td class="py-2.5 pr-4 text-outline text-xs">{(log as AuditRow).entityType}</td>
-                <td class="py-2.5 pr-4 text-outline text-xs">{(log as AuditRow).actorRole ?? '—'}</td>
+                <td class="py-2.5 pr-4 text-outline text-xs">{(log as AuditRow).actorRole ?? '·'}</td>
               {/if}
-              <td class="py-2.5 pr-4 text-outline text-xs font-mono">{log.ipAddress ?? '—'}</td>
+              <td class="py-2.5 pr-4 text-outline text-xs font-mono">{log.ipAddress ?? '·'}</td>
               <td class="py-2.5">
                 <button onclick={() => openDetail(log)} class="p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer border-none text-outline hover:text-primary" title="Détails">
                   <Eye size={16} />
@@ -280,7 +280,7 @@
                   {:else if typeof val === 'object' && val !== null}
                   <span class="font-mono text-xs">{JSON.stringify(val)}</span>
                 {:else}
-                  {String(val ?? '—')}
+                  {String(val ?? '·')}
                 {/if}
               </span>
             </div>

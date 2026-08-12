@@ -315,6 +315,10 @@ export const api = {
   getUserSessions: (id: string) => request<any[]>(`/users/${id}/sessions`),
   revokeUserSessions: (id: string) =>
     request<any>(`/users/${id}/sessions`, { method: 'DELETE' }),
+  revokeUserSession: (id: string, sessionId: string) =>
+    request<any>(`/users/${id}/sessions/${sessionId}`, { method: 'DELETE' }),
+
+  getCustomerDetail: (id: string) => request<any>(`/customers/${id}`),
 
   dashboardAnalytics: () => request<any>('/analytics/dashboard'),
 
@@ -364,6 +368,7 @@ export const api = {
   monitoringStats: () => request<any>('/monitoring/stats'),
   driftReport: () => request<any>('/monitoring/drift'),
   saveBaseline: () => request<any>('/monitoring/baseline', { method: 'POST' }),
+  getMonitoringHealth: () => request<any>('/monitoring/health'),
 
   // ========== SMS (contrôle admin) ==========
   smsStats: (params: {

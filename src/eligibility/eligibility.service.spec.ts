@@ -85,4 +85,107 @@ describe('EligibilityService', () => {
     expect(rulesResult.status).toBe('ELIGIBLE');
     expect(matrixResult.status).toBe('ELIGIBLE');
   });
+
+  describe('notifications éligibilité cohérentes', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockPrisma.bankCustomer.findUnique.mockResolvedValue({
+        id: 'test-customer-id',
+        userConnection: { userId: 'test-user-id' },
+      });
+      mockPrisma.bankProduct.findUnique.mockResolvedValue({
+        id: 'prod-1',
+        code: 'CREDIT_CONSO_PART',
+        name: 'Crédit à la Consommation — Particuliers',
+      });
+      mockPrisma.lesson.findFirst.mockResolvedValue(null);
+    });
+
+    it('ne crée aucune notification pour un produit sans règle ELIGIBILITY', async () => {
+      mockMatrixEngine.evaluate.mockResolvedValue({
+        status: 'ELIGIBLE',
+        globalScore: 0,
+        maxScore: 0,
+        scorePercent: 100,
+        hasEligibilityRules: false,
+        ruleResults: [],
+        infoRules: [],
+        passedRules: [],
+        failedRules: [],
+        partialRules: [],
+      });
+
+      await service.evaluateEligibility(
+        'test-customer-id',
+        'CREDIT_CONSO_PART',
+        {},
+        'matrix',
+      );
+
+      expect(mockNotificationsService.create).not.toHaveBeenCalled();
+    });
+
+    it('crée une notification « Vous êtes éligible ! » pour un produit réellement évalué', async () => {
+      mockMatrixEngine.evaluate.mockResolvedValue({
+        status: 'ELIGIBLE',
+        globalScore: 80,
+        maxScore: 100,
+        scorePercent: 80,
+        hasEligibilityRules: true,
+        ruleResults: [],
+        infoRules: [],
+        passedRules: [],
+        failedRules: [],
+        partialRules: [],
+      });
+
+      await service.evaluateEligibility(
+        'test-customer-id',
+        'COMPTES_PART',
+        {},
+        'matrix',
+      );
+
+      expect(mockNotificationsService.create).toHaveBeenCalledWith(
+        'test-user-id',
+        expect.objectContaining({
+          type: 'ELIGIBILITY',
+          title: 'Vous êtes éligible !',
+        }),
+      );
+    });
+
+    it('crée une notification PARTIAL au corps honnête, sans « vous est accessible »', async () => {
+      mockMatrixEngine.evaluate.mockResolvedValue({
+        status: 'PARTIAL',
+        globalScore: 55,
+        maxScore: 100,
+        scorePercent: 55,
+        hasEligibilityRules: true,
+        ruleResults: [],
+        infoRules: [],
+        passedRules: [],
+        failedRules: [],
+        partialRules: [],
+      });
+
+      await service.evaluateEligibility(
+        'test-customer-id',
+        'COMPTES_PART',
+        {},
+        'matrix',
+      );
+
+      expect(mockNotificationsService.create).toHaveBeenCalledWith(
+        'test-user-id',
+        expect.objectContaining({
+          type: 'ELIGIBILITY',
+          title: 'Éligibilité partielle',
+        }),
+      );
+      const [, notification] =
+        mockNotificationsService.create.mock.calls[0];
+      expect(notification.body).not.toContain('vous est accessible');
+    });
+  });
 });

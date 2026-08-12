@@ -46,7 +46,10 @@ export class EligibilityService {
         : await this.matrixEngine.evaluate(customerId, productCode, inputs ?? {});
 
     try {
-      if (result.status === 'ELIGIBLE' || result.status === 'PARTIAL') {
+      if (
+        result.hasEligibilityRules &&
+        (result.status === 'ELIGIBLE' || result.status === 'PARTIAL')
+      ) {
         const bankCustomer = await this.prisma.bankCustomer.findUnique({
           where: { id: customerId },
           include: { userConnection: true },
@@ -57,13 +60,22 @@ export class EligibilityService {
           const product = await this.prisma.bankProduct.findUnique({
             where: { code: productCode },
           });
+          const productName = product?.name ?? productCode;
 
           await this.notificationsService.create(userId, {
             type: 'ELIGIBILITY',
             title: result.status === 'ELIGIBLE' ? 'Vous êtes éligible !' : 'Éligibilité partielle',
-            body: `Le produit "${product?.name ?? productCode}" vous est accessible.`,
+            body:
+              result.status === 'ELIGIBLE'
+                ? `Le produit "${productName}" vous est accessible (score ${result.scorePercent}%).`
+                : `Votre profil atteint ${result.scorePercent}% des critères pour le produit "${productName}". Consultez le plan d'amélioration.`,
             severity: result.status === 'ELIGIBLE' ? 'INFO' : 'WARNING',
-            data: { productCode, status: result.status, score: result.globalScore },
+            data: {
+              productCode,
+              status: result.status,
+              score: result.globalScore,
+              scorePercent: result.scorePercent,
+            },
             link: '/eligibility',
           });
 

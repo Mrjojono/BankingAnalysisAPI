@@ -20,7 +20,7 @@
 <div class="space-y-4">
   {#if camenBertStatus?.metrics?.totalInferences > 0}
     <div>
-      <p class="text-xs font-bold text-on-surface mb-2 flex items-center gap-1"><Gauge size={14} /> CamenBert — Métriques en temps réel</p>
+      <p class="text-xs font-bold text-on-surface mb-2 flex items-center gap-1"><Gauge size={14} /> CamenBert · Métriques en temps réel</p>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
         <div class="p-2 rounded-lg bg-surface-container-low">
           <div class="flex items-center gap-1 text-outline"><Hash size={12} /> Inférences</div>
@@ -65,7 +65,7 @@
               <div class="flex justify-between"><span>Type</span><span class="font-mono text-on-surface">{model.type}</span></div>
               <div class="flex justify-between"><span>Taille</span><span class="font-mono text-on-surface">{model.sizeMB?.toFixed(1) ?? '?'} MB</span></div>
               <div class="flex justify-between"><span>Mémoire</span><span class="font-mono text-on-surface">{model.memoryMB} MB</span></div>
-              <div class="flex justify-between"><span>Dernière util.</span><span class="text-on-surface">{model.lastUsed !== 'jamais' ? new Date(model.lastUsed).toLocaleString('fr-FR') : '—'}</span></div>
+              <div class="flex justify-between"><span>Dernière util.</span><span class="text-on-surface">{model.lastUsed !== 'jamais' ? new Date(model.lastUsed).toLocaleString('fr-FR') : '·'}</span></div>
             </div>
           </div>
         {/each}

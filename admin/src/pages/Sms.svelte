@@ -20,7 +20,7 @@
   let statusFilter = $state('');
   let directionFilter = $state('');
   let customerFilter = $state('');
-  let daysFilter = $state('14');
+  let daysFilter = $state('30');
 
   let pipeConfig = $state<{ regexEnabled: boolean; camenbertEnabled: boolean; camenbertThreshold: number } | null>(null);
   let pipeReady = $state(false);
@@ -71,7 +71,7 @@
     statusFilter = '';
     directionFilter = '';
     customerFilter = '';
-    daysFilter = '14';
+    daysFilter = '30';
     loadStats();
   }
 
@@ -81,7 +81,7 @@
   }
 
   function groupRows(rows: any[]) {
-    return (rows ?? []).sort((a, b) => b._count - a._count);
+    return [...(rows ?? [])].sort((a, b) => b._count - a._count);
   }
 
   function pct(n: number) {
@@ -346,7 +346,7 @@
       {:else if stats}
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 p-4">
           <div class="rounded-xl border border-mint-subtle bg-white p-4">
-            <p class="text-xs font-semibold text-on-surface-variant uppercase tracking-wide">Total</p>
+            <p class="text-xs font-semibold text-on-surface-variant uppercase tracking-wide">Total ({daysFilter} jours)</p>
             <p class="mt-1 text-3xl font-extrabold text-on-surface">{stats.totals.total}</p>
           </div>
           <div class="rounded-xl border border-mint-subtle bg-green-50 p-4">

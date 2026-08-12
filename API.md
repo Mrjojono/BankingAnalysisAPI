@@ -317,6 +317,24 @@ export interface CashFlowAnalyticsDto {
   netFlow: number;
 }
 
+// GET .../transactions/source-breakdown
+// Ventile les écritures par source : 'bank' (transactions POSTED des comptes
+// bancaires) vs 'sms' (sms_transactions APPROVED, Mobile Money).
+// Paramètres : AnalyticsQueryDto (from/to/year/month).
+// ⚠️ Contrairement à /revenues/cashflow, ce endpoint ne filtre PAS par
+// accountType CHECKING : il agrège toutes les écritures certifiées du client.
+export interface SourceBreakdownResponseDto {
+  period: { from: string; to: string };
+  bank: SourceBreakdownItemDto;
+  sms: SourceBreakdownItemDto;
+}
+
+export interface SourceBreakdownItemDto {
+  totalCredits: { count: number; amount: number };
+  totalDebits: { count: number; amount: number };
+  netFlow: number; // crédits - débits
+}
+
 // GET .../revenues/monthly
 // GET .../revenues/summary
 export interface RevenueAnalyticsDto {
@@ -352,7 +370,8 @@ export interface RevenueSourcesResponseDto {
 }
 
 export interface RevenueSourceDto {
-  category: string;    // "SALARY" | "MOBILE_MONEY" | etc.
+  category: string;    // valeur de l'enum ExpenseCategory (SALAIRE, VIREMENTS, DEPOTS,
+                       // MOBILE_MONEY, INTERETS, CREDIT, LOGEMENT, ALIMENTATION, ...)
   amount: number;
   percent: number;
   count: number;

@@ -103,7 +103,7 @@
             cF1 = data.f1 ?? cF1;
             cResult = data;
             cTraining = false;
-            cLogs = [...cLogs, `Terminé — Acc: ${(data.accuracy * 100).toFixed(1)}% | F1: ${(data.f1 * 100).toFixed(1)}%`];
+            cLogs = [...cLogs, `Terminé · Acc: ${(data.accuracy * 100).toFixed(1)}% | F1: ${(data.f1 * 100).toFixed(1)}%`];
             es.close();
             eventSource = null;
             break;
@@ -373,9 +373,9 @@
                   {#each cMetrics as m}
                     <tr class="border-t border-mint-subtle/50">
                       <td class="px-3 py-1.5 font-mono text-on-surface">{m.epoch}</td>
-                      <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.loss?.toFixed(4) ?? '—'}</td>
-                      <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.accuracy != null ? (m.accuracy * 100).toFixed(1) + '%' : '—'}</td>
-                      <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.f1 != null ? (m.f1 * 100).toFixed(1) + '%' : '—'}</td>
+                      <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.loss?.toFixed(4) ?? '·'}</td>
+                      <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.accuracy != null ? (m.accuracy * 100).toFixed(1) + '%' : '·'}</td>
+                      <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.f1 != null ? (m.f1 * 100).toFixed(1) + '%' : '·'}</td>
                     </tr>
                   {/each}
                 </tbody>
@@ -504,8 +504,8 @@
               <label for="clf-layers" class="block text-xs font-semibold text-outline mb-1">Couches</label>
               <select id="clf-layers" bind:value={clLayers}
                 class="w-full px-3 py-2 rounded-xl border border-mint-subtle bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                <option value={1}>1 couche (linéaire — 21 features vers 17 intentions)</option>
-                <option value={2}>2 couches (profond — nécessite embeddings)</option>
+                <option value={1}>1 couche (linéaire · 21 features vers 17 intentions)</option>
+                <option value={2}>2 couches (profond · nécessite embeddings)</option>
               </select>
             </div>
             <div>
@@ -624,9 +624,9 @@
                     {#each clResult.metrics as m}
                       <tr class="border-t border-mint-subtle/50">
                         <td class="px-3 py-1.5 font-mono text-on-surface">{m.epoch}</td>
-                        <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.loss?.toFixed(4) ?? '—'}</td>
-                        <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.accuracy != null ? (m.accuracy * 100).toFixed(1) + '%' : '—'}</td>
-                        <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.top3Accuracy != null ? (m.top3Accuracy * 100).toFixed(1) + '%' : '—'}</td>
+                        <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.loss?.toFixed(4) ?? '·'}</td>
+                        <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.accuracy != null ? (m.accuracy * 100).toFixed(1) + '%' : '·'}</td>
+                        <td class="px-3 py-1.5 text-right font-mono text-on-surface">{m.top3Accuracy != null ? (m.top3Accuracy * 100).toFixed(1) + '%' : '·'}</td>
                       </tr>
                     {/each}
                   </tbody>

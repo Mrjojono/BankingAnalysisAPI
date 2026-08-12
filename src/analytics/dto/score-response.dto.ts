@@ -464,3 +464,43 @@ export class RepaymentHistoryResponseDto {
   @ApiProperty({ type: [RepaymentHistoryItemDto] })
   history: RepaymentHistoryItemDto[];
 }
+
+export class SourceBreakdownItemDto {
+  @ApiProperty({
+    description: 'Crédits (entrées)',
+    example: { count: 36, amount: 67504120 },
+  })
+  totalCredits: { count: number; amount: number };
+
+  @ApiProperty({
+    description: 'Débits (sorties)',
+    example: { count: 17, amount: 78740800 },
+  })
+  totalDebits: { count: number; amount: number };
+
+  @ApiProperty({
+    description: 'Solde net (crédits - débits)',
+    example: -11236680,
+  })
+  netFlow: number;
+}
+
+export class SourceBreakdownResponseDto {
+  @ApiProperty({
+    description: 'Période analysée',
+    example: { from: '2026-07-01', to: '2026-07-31' },
+  })
+  period: { from: string; to: string };
+
+  @ApiProperty({
+    description: 'Transactions issues des comptes bancaires',
+    type: SourceBreakdownItemDto,
+  })
+  bank: SourceBreakdownItemDto;
+
+  @ApiProperty({
+    description: 'Transactions issues des SMS (Mobile Money)',
+    type: SourceBreakdownItemDto,
+  })
+  sms: SourceBreakdownItemDto;
+}

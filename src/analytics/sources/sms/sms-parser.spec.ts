@@ -67,6 +67,36 @@ describe('parseSms', () => {
     });
   });
 
+  describe('ORABANK WhatsApp Mobile Banking', () => {
+    const body =
+      'Transfert de Moov Money vers ORABANK WHATSAPP Mobile Banking reussi / ' +
+      'Expéditeur: 22800008558 / Montant: 3 000,00 FCFA / Date: 03/08/2026 10:38:16. ' +
+      '/ Nouveau solde: 3 004,00 FCFA / Txn ID: 040785058468';
+
+    it('classifie un transfert entrant "vers ORABANK" en CREDIT', () => {
+      const result = parseSms('ORABANK', body);
+      expect(result.operator).toBe('ORABANK');
+      expect(result.direction).toBe('CREDIT');
+      expect(result.amount).toBe(3000);
+      expect(result.balanceAfter).toBe(3004);
+      expect(result.referenceNo).toBe('040785058468');
+      expect(result.confidence).toBe(1);
+    });
+
+    it('traite le transfert entrant même avec une adresse inconnue (short code)', () => {
+      const result = parseSms('22800008558', body);
+      expect(result.operator).toBe('ORABANK');
+      expect(result.direction).toBe('CREDIT');
+      expect(result.amount).toBe(3000);
+    });
+
+    it('gère les décimales françaises "3 000,00" → 3000', () => {
+      const result = parseSms('ORABANK', body);
+      expect(result.amount).toBe(3000);
+      expect(result.balanceAfter).toBe(3004);
+    });
+  });
+
   describe('Fallback générique', () => {
     it('accepte un SMS promo inconnu sans adresse connue', () => {
       const result = parseSms(
@@ -159,6 +189,14 @@ describe('extractReference', () => {
   it('extrait une référence courte', () => {
     expect(extractReference('Ref: 8812')).toBe('8812');
     expect(extractReference('N°: AB12345')).toBe('AB12345');
+  });
+
+  it('extrait "Txn ID: ..."', () => {
+    expect(extractReference('Txn ID: 040785058468')).toBe('040785058468');
+  });
+
+  it('ne crée pas de faux positif sur "Nouveau solde"', () => {
+    expect(extractReference('Nouveau solde: 3 004,00 FCFA')).toBeNull();
   });
 
   it('renvoie null sans référence', () => {

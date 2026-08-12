@@ -774,6 +774,76 @@ export class AdminController {
     return { data, total, page: Math.floor(skip / take) + 1, limit: take };
   }
 
+  @Get('customers/:id')
+  @ApiOperation({ summary: 'Détail d\'un client bancaire (profil, comptes, transactions, scores)' })
+  async getCustomerDetail(@Param('id', ParseUUIDPipe) id: string) {
+    const customer = await this.prisma.bankCustomer.findUnique({
+      where: { id },
+      include: {
+        accounts: true,
+        beneficiaries: true,
+        userConnection: { include: { user: { select: { id: true, email: true, role: true, status: true, createdAt: true } } } },
+        _count: {
+          select: {
+            smsTransactions: true,
+            sentTransactions: true,
+            receivedTransactions: true,
+            accounts: true,
+          },
+        },
+      },
+    });
+    if (!customer) throw new NotFoundException('Client introuvable');
+
+    const [smsByStatus, sent, received] = await Promise.all([
+      this.prisma.smsTransaction.groupBy({
+        by: ['status'],
+        where: { customerId: id },
+        _count: true,
+      }),
+      this.prisma.transaction.findMany({
+        where: { senderCustomerId: id },
+        orderBy: { transactionDate: 'desc' },
+        take: 15,
+      }),
+      this.prisma.transaction.findMany({
+        where: { receiverCustomerId: id },
+        orderBy: { transactionDate: 'desc' },
+        take: 15,
+      }),
+    ]);
+
+    const recent = [...sent, ...received]
+      .sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime())
+      .slice(0, 15)
+      .map((t) => ({ ...t, amount: Number(t.amount) }));
+
+    let eligibility: { averageScore: number; bestStatus: string | null } | null = null;
+    try {
+      const dash = await this.eligibilityService.dashboard(id);
+      eligibility = {
+        averageScore: dash.overview.averageScore,
+        bestStatus: dash.overview.bestScore?.status ?? null,
+      };
+    } catch {
+      eligibility = null;
+    }
+
+    return {
+      customer: {
+        ...customer,
+        accounts: customer.accounts.map((a) => ({
+          ...a,
+          dailyLimit: Number(a.dailyLimit),
+          monthlyLimit: Number(a.monthlyLimit),
+        })),
+      },
+      smsByStatus,
+      recent,
+      eligibility,
+    };
+  }
+
   @Post('notifications/broadcast')
   @ApiOperation({ summary: 'Diffuser une notification (all, userIds, ou customerTargets)' })
   async broadcast(@Body() dto: BroadcastDto) {
@@ -1283,6 +1353,39 @@ export class AdminController {
     });
 
     return { message: `${result.count} session(s) révoquée(s)` };
+  }
+
+  @Delete('users/:id/sessions/:sessionId')
+  @ApiOperation({ summary: 'Révoquer une session individuelle' })
+  async revokeUserSession(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('sessionId') sessionId: string,
+    @Req() req: Request,
+  ) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
+
+    const session = await this.prisma.session.findFirst({
+      where: { id: sessionId, userId: id, isRevoked: false },
+    });
+    if (!session) throw new NotFoundException('Session introuvable');
+
+    await this.prisma.session.update({
+      where: { id: sessionId },
+      data: { isRevoked: true },
+    });
+
+    await this.auditService.log({
+      entityType: 'User',
+      entityId: id,
+      action: 'session_revoked',
+      actorId: (req as any).user?.id,
+      actorRole: (req as any).user?.role,
+      before: { sessionId },
+      ipAddress: req?.headers?.['x-forwarded-for'] as string ?? (req as any)?.socket?.remoteAddress as string,
+    });
+
+    return { message: 'Session révoquée' };
   }
 
   // ──────────── Logs ────────────

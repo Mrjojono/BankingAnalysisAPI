@@ -172,7 +172,7 @@
                 {:else if step.error}
                   <span class="text-red-600">{step.error}</span>
                 {:else}
-                  <span class="text-outline">—</span>
+                  <span class="text-outline">·</span>
                 {/if}
               </div>
             {/each}

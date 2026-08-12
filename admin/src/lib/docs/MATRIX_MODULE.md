@@ -1,4 +1,4 @@
-# Module Matriciel — Guide Complet
+# Module Matriciel : Guide Complet
 
 ## Introduction
 
@@ -28,7 +28,7 @@ On remplace les seuils par des **poids** dans un tableau. Et la condition `if` d
 
 ---
 
-## 2. Le Feature Vector — transformer le contexte en nombres
+## 2. Le Feature Vector : transformer le contexte en nombres
 
 Le `RuleContext` (ce que le système reçoit) ressemble à ça :
 
@@ -112,7 +112,7 @@ Les features numériques (percent, change, amount...) n'ont pas les mêmes unit�
 
 ---
 
-## 3. La Weight Matrix — le cerveau du système
+## 3. La Weight Matrix : le cerveau du système
 
 La matrice des poids est un **tableau à 2 dimensions** :
 - **21 lignes** : une par feature (chaque case du vecteur)
@@ -153,7 +153,7 @@ Ligne "change"             → 0.1    (un tout petit effet)
 Toutes les autres lignes   → 0      (pas d'effet)
 ```
 
-C'est l'équivalent de la règle `if (category === 'LOGEMENT' && percent > 50)` — mais écrit en chiffres au lieu de code.
+C'est l'équivalent de la règle `if (category === 'LOGEMENT' && percent > 50)` : mais écrit en chiffres au lieu de code.
 
 ### Pourquoi des poids NÉGATIFS ?
 
@@ -332,7 +332,7 @@ Pour que le système comprenne les **descriptions de transactions** (texte), on 
 3. La matrice passerait de `21×17` à `321×17`
 4. Le système pourrait détecter : "Cette description ressemble à des frais bancaires, même si la catégorie est AUTRE"
 
-L'interface `interpret(ctx) → AdviceIntent[]` ne changerait pas — juste la construction du vecteur et la taille de la matrice.
+L'interface `interpret(ctx) → AdviceIntent[]` ne changerait pas : juste la construction du vecteur et la taille de la matrice.
 
 ### Comment faire apprendre la matrice
 
@@ -346,7 +346,7 @@ Si on collecte des données : `(RuleContext, intention_validée_par_conseiller)`
 5. Recommencer 1000 fois
 ```
 
-C'est exactement la **descente de gradient** (gradient descent). Le code ne change pas — seuls les poids dans la matrice changent.
+C'est exactement la **descente de gradient** (gradient descent). Le code ne change pas : seuls les poids dans la matrice changent.
 
 ---
 
@@ -431,7 +431,7 @@ C'est exactement la **descente de gradient** (gradient descent). Le code ne chan
 | **Matrice** | Un tableau de tableaux, une grille de nombres |
 | **Feature** | Une propriété du contexte mise en chiffre (percent, category...) |
 | **Poids** | Un nombre dans la matrice qui dit "à quel point cette feature compte pour cette intention" |
-| **Produit scalaire** | `somme_de(a[i] × b[i])` — la façon de multiplier un vecteur par un autre |
+| **Produit scalaire** | `somme_de(a[i] × b[i])` : la façon de multiplier un vecteur par un autre |
 | **One-hot encoding** | Représenter une catégorie en mettant 1 à sa position, 0 ailleurs |
 | **Normalisation** | Mettre tous les nombres à la même échelle (entre -1 et 1) |
 | **Score** | Le résultat du calcul pour une intention. Plus c'est haut, plus l'intention est pertinente |

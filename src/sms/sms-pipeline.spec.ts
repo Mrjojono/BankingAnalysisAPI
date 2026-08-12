@@ -150,4 +150,43 @@ describe('SmsService pipeline v2', () => {
     expect(saved.camenbertThreshold).toBe(0.8);
     expect(saved.regexEnabled).toBe(true);
   });
+
+  it('debugFilter : émetteur inconnu → PAS de fallback ORABANK (conservé PENDING via classifieur)', async () => {
+    camenBertMock.classify.mockResolvedValue({
+      category: 'UNKNOWN',
+      direction: null,
+      confidence: 0.1,
+      rawScores: {},
+    });
+    const service = makeService();
+    const res = await service.debugFilter('', 'Votre paiement de 3000 FCFA est validé chez un commerçant');
+    expect(res.steps.parseSms.operator).toBe('UNKNOWN');
+    expect(res.steps.parseSms.direction).toBeNull();
+    expect(res.verdict).toBe('INSERT');
+    expect(res.reason).toContain('Classifieur mots-clés');
+    expect(res.steps.config.regexEnabled).toBe(true);
+  });
+
+  it('debugFilter : adresse Moov reconnue → opérateur MOOV (pas ORABANK)', async () => {
+    const service = makeService();
+    const res = await service.debugFilter(
+      'Moov',
+      'Moov Money: Paiement de 5000 F CFA chez EDINET',
+    );
+    expect(res.steps.parseSms.operator).toBe('MOOV');
+    expect(res.steps.parseSms.direction).toBe('DEBIT');
+    expect(res.steps.parseSms.amount).toBe(5000);
+    expect(res.verdict).toBe('INSERT');
+  });
+
+  it('debugFilter : corps mentionnant ORABANK → opérateur ORABANK (détecté par contenu, pas un fallback)', async () => {
+    const service = makeService();
+    const res = await service.debugFilter(
+      '',
+      'Transfert de Moov Money vers ORABANK WHATSAPP Mobile Banking reussi / Montant: 3 000,00 FCFA / Txn ID: 040785058468',
+    );
+    expect(res.steps.parseSms.operator).toBe('ORABANK');
+    expect(res.steps.parseSms.direction).toBe('CREDIT');
+    expect(res.steps.parseSms.amount).toBe(3000);
+  });
 });

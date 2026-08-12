@@ -1,4 +1,4 @@
-# Référence Technique — Diagramme de Classes UML
+# Référence Technique : Diagramme de Classes UML
 
 Document dédié à la construction des diagrammes de classes UML.  
 Contient tous les modèles Prisma, DTOs, services, contrôleurs, guards et décorateurs avec leurs attributs, types et relations.
@@ -455,7 +455,7 @@ enum RuleOperator {
 
 ---
 
-## 2. Architecture NestJS — Modules, Contrôleurs, Services
+## 2. Architecture NestJS : Modules, Contrôleurs, Services
 
 ### 2.1 Structure des Modules
 
@@ -563,9 +563,9 @@ src/
     └── redis.service.ts
 ```
 
-### 2.2 Contrôleurs API — Endpoints par Module
+### 2.2 Contrôleurs API : Endpoints par Module
 
-#### AuthController — `/auth`
+#### AuthController : `/auth`
 | Méthode | Route | Guard | Description |
 |---------|-------|-------|-------------|
 | POST | /auth/register | - | Créer un compte |
@@ -574,13 +574,13 @@ src/
 | POST | /auth/enable-mfa | JWT | Activer MFA |
 | POST | /auth/refresh | - | Rafraîchir le JWT |
 
-#### AnalyticsController — `/analytics`
+#### AnalyticsController : `/analytics`
 | Méthode | Route | Guard | Description |
 |---------|-------|-------|-------------|
 | GET | /analytics/overview | JWT | Métriques financières + score |
 | GET | /analytics/score/history | JWT | Historique des scores |
 
-#### EducationController — `/education` (utilisateur, JWT requis)
+#### EducationController : `/education` (utilisateur, JWT requis)
 | Méthode | Route | Description |
 |---------|-------|-------------|
 | GET | /education/paths | Lister les parcours avec progression |
@@ -589,7 +589,7 @@ src/
 | PATCH | /education/lessons/:id/complete | Marquer une leçon terminée |
 | GET | /education/recommendations | Leçons recommandées |
 
-#### EducationAdminController — `/api/admin/education`
+#### EducationAdminController : `/api/admin/education`
 | Méthode | Route | Description |
 |---------|-------|-------------|
 | GET | /api/admin/education/paths | Lister tous les parcours |
@@ -607,7 +607,7 @@ src/
 | GET | /api/admin/education/stats/paths | Stats parcours |
 | GET | /api/admin/education/stats/lessons | Stats leçons |
 
-#### QuizController — `/quiz` (utilisateur, JWT requis)
+#### QuizController : `/quiz` (utilisateur, JWT requis)
 | Méthode | Route | Description |
 |---------|-------|-------------|
 | GET | /quiz/by-lesson/:lessonId | Quiz d'une leçon (questions sans réponses) |
@@ -616,7 +616,7 @@ src/
 | GET | /quiz/attempts | Historique des tentatives |
 | GET | /quiz/attempts/:attemptId | Détail d'une tentative |
 
-#### QuizAdminController — `/api/admin/quiz`
+#### QuizAdminController : `/api/admin/quiz`
 | Méthode | Route | Description |
 |---------|-------|-------------|
 | GET | /api/admin/quiz | Lister tous les quiz |
@@ -633,7 +633,7 @@ src/
 | POST | /api/admin/quiz/:id/lessons/:lessonId | Lier un quiz à une leçon |
 | DELETE | /api/admin/quiz/:id/lessons/:lessonId | Délier un quiz d'une leçon |
 
-#### NotificationsController — `/notifications`
+#### NotificationsController : `/notifications`
 | Méthode | Route | Guard | Description |
 |---------|-------|-------|-------------|
 | GET | /notifications | JWT | Historique paginé |
@@ -646,7 +646,7 @@ src/
 | POST | /notifications/push/unregister | JWT | Désenregistrer token |
 | POST | /notifications/broadcast | JWT+Roles(ADMIN) | Diffusion admin |
 
-### 2.3 Services — Méthodes et Responsabilités
+### 2.3 Services : Méthodes et Responsabilités
 
 #### QuizService
 ```typescript
@@ -1007,7 +1007,7 @@ export const api = {
 
 ### 5.1 Quiz
 
-- **PassingScore** : défaut 70% — configurable par quiz
+- **PassingScore** : défaut 70% : configurable par quiz
 - **Une tentative par quiz à la fois** : pas de soumission sans `startAttempt`
 - **Choix unique correct** : une seule `isCorrect = true` par question (validé côté serveur)
 - **isCorrect jamais exposé** : dans les réponses GET, `QuizChoice` ne contient pas `isCorrect`
@@ -1065,7 +1065,7 @@ Lesson (0..*) ─── (0..1) BankProduct (relatedProduct)
 
 ---
 
-## 7. Moteur Matriciel — Recommandation Éducative
+## 7. Moteur Matriciel : Recommandation Éducative
 
 ### 7.1 Matrice de Pondération
 

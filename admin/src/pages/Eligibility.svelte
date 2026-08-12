@@ -1,8 +1,11 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { ShieldCheck, AlertTriangle, Play } from '@lucide/svelte';
   import CustomerSearch from '../lib/components/CustomerSearch.svelte';
   import { api } from '../lib/api';
   import { toast } from '../lib/stores/toast.svelte';
+
+  let { initialCustomer }: { initialCustomer?: any } = $props();
 
   let loading = $state(false);
   let customerId = $state('');
@@ -52,6 +55,10 @@
     PASS: 'Respecté',
     FAIL: 'Non respecté',
   };
+
+  onMount(() => {
+    if (initialCustomer?.id) loadCustomer(initialCustomer);
+  });
 
   async function loadCustomer(customer: any) {
     loading = true; searched = false;
@@ -154,7 +161,7 @@
       <ShieldCheck size={18} class="text-primary shrink-0" />
       <span class="font-semibold">{selectedCustomer.firstName}{selectedCustomer.lastName ? ` ${selectedCustomer.lastName}` : ''}</span>
       {#if selectedCustomer.email}
-        <span class="text-on-surface-variant">— {selectedCustomer.email}</span>
+        <span class="text-on-surface-variant">· {selectedCustomer.email}</span>
       {/if}
       {#if selectedCustomer.accountNumber}
         <code class="bg-surface-container px-1.5 py-0.5 rounded text-xs font-mono text-on-surface-variant">{selectedCustomer.accountNumber}</code>
@@ -186,18 +193,18 @@
         <span class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Meilleur produit</span>
         {#if dashboard.overview.bestScore}
           <span class="text-lg font-bold text-primary">{dashboard.overview.bestScore.productName}</span>
-          <span class="text-sm {scoreColor(dashboard.overview.bestScore.scorePercent)}">{dashboard.overview.bestScore.scorePercent}% — {STATUS_LABELS[dashboard.overview.bestScore.status] ?? dashboard.overview.bestScore.status}</span>
+          <span class="text-sm {scoreColor(dashboard.overview.bestScore.scorePercent)}">{dashboard.overview.bestScore.scorePercent}% · {STATUS_LABELS[dashboard.overview.bestScore.status] ?? dashboard.overview.bestScore.status}</span>
         {:else}
-          <span class="text-on-surface-variant text-sm">—</span>
+          <span class="text-on-surface-variant text-sm">·</span>
         {/if}
       </div>
       <div class="bg-surface rounded-2xl border border-mint-subtle p-5 flex flex-col gap-1">
         <span class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Pire produit</span>
         {#if dashboard.overview.worstScore}
           <span class="text-lg font-bold text-red-600">{dashboard.overview.worstScore.productName}</span>
-          <span class="text-sm {scoreColor(dashboard.overview.worstScore.scorePercent)}">{dashboard.overview.worstScore.scorePercent}% — {STATUS_LABELS[dashboard.overview.worstScore.status] ?? dashboard.overview.worstScore.status}</span>
+          <span class="text-sm {scoreColor(dashboard.overview.worstScore.scorePercent)}">{dashboard.overview.worstScore.scorePercent}% · {STATUS_LABELS[dashboard.overview.worstScore.status] ?? dashboard.overview.worstScore.status}</span>
         {:else}
-          <span class="text-on-surface-variant text-sm">—</span>
+          <span class="text-on-surface-variant text-sm">·</span>
         {/if}
       </div>
       <div class="bg-surface rounded-2xl border border-mint-subtle p-5 flex flex-col gap-1">
@@ -271,7 +278,7 @@
         <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant mb-3">
           Produit
           <select bind:value={selectedProduct} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all">
-            <option value="">— Sélectionner —</option>
+            <option value="">Sélectionner…</option>
             {#each products as p}
               <option value={p.code}>{p.name}</option>
             {/each}
@@ -413,8 +420,8 @@
               <tr class="hover:bg-[#fafcfa] transition-all border-t border-mint-subtle/50">
                 <td class="px-4 py-3 text-sm font-semibold">{item.label}</td>
                 <td class="px-4 py-3"><code class="bg-surface-container px-1.5 py-0.5 rounded text-xs font-mono">{item.field}</code></td>
-                <td class="px-4 py-3 text-sm">{item.clientValue != null ? Number(item.clientValue).toLocaleString('fr-FR') : '—'}</td>
-                <td class="px-4 py-3 text-sm">{item.threshold != null ? Number(item.threshold).toLocaleString('fr-FR') : '—'}</td>
+                <td class="px-4 py-3 text-sm">{item.clientValue != null ? Number(item.clientValue).toLocaleString('fr-FR') : '·'}</td>
+                <td class="px-4 py-3 text-sm">{item.threshold != null ? Number(item.threshold).toLocaleString('fr-FR') : '·'}</td>
                 <td class="px-4 py-3">
                   <span class="inline-block px-1.5 py-0.5 rounded text-xs font-semibold {STATUS_COLORS[item.status] ?? ''}">
                     {STATUS_LABELS[item.status] ?? item.status}
@@ -425,7 +432,7 @@
                   {#if item.advice}
                     <span class="text-primary">{item.advice}</span>
                   {:else}
-                    <span class="text-outline">—</span>
+                    <span class="text-outline">·</span>
                   {/if}
                 </td>
               </tr>

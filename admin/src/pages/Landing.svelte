@@ -1,17 +1,17 @@
 <script lang="ts">
   import Hero from '../lib/components/landing/Hero.svelte';
   import Features from '../lib/components/landing/Features.svelte';
-  import AppPreview from '../lib/components/landing/AppPreview.svelte';
   import WhySection from '../lib/components/landing/WhySection.svelte';
-  import CTASection from '../lib/components/landing/CTASection.svelte';
+  import DownloadSection from '../lib/components/landing/DownloadSection.svelte';
+  import Footer from '../lib/components/landing/Footer.svelte';
 
   let { onlogin }: { onlogin: () => void } = $props();
 </script>
 
-<div class="min-h-screen bg-white overflow-x-hidden">
-  <Hero {onlogin} />
+<div class="min-h-screen bg-white">
+  <Hero />
   <Features />
-  <AppPreview />
   <WhySection />
-  <CTASection {onlogin} />
+  <DownloadSection />
+  <Footer {onlogin} />
 </div>

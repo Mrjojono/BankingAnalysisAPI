@@ -284,7 +284,7 @@
   }
 
   function formatDate(d: string) {
-    if (!d) return '—';
+    if (!d) return '·';
     return new Date(d).toLocaleDateString('fr-FR', {
       day: 'numeric', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
@@ -489,7 +489,7 @@
                     <p class="text-xs text-on-surface-variant truncate max-w-xs">{item.body}</p>
                   </td>
                   <td class="py-3 pr-4 whitespace-nowrap text-on-surface-variant">{formatDate(item.scheduledAt)}</td>
-                  <td class="py-3 pr-4 whitespace-nowrap text-on-surface-variant">{recurrenceLabels[item.recurrence] ?? '—'}</td>
+                  <td class="py-3 pr-4 whitespace-nowrap text-on-surface-variant">{recurrenceLabels[item.recurrence] ?? '·'}</td>
                   <td class="py-3 pr-4 whitespace-nowrap text-on-surface-variant">{targetLabels[item.targetType] ?? item.targetType}</td>
                   <td class="py-3 pr-4 whitespace-nowrap">
                     <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-primary-container/30 text-primary">{item.type}</span>
