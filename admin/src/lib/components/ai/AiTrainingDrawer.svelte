@@ -3,6 +3,7 @@
   import { Play, Activity, CheckCircle2, AlertCircle, StopCircle, BarChart3, FileText, Download, Cog, List, TrendingUp, Target, Hash, Plus, Trash2, Pencil, Brain } from '@lucide/svelte';
   import Drawer from '../Drawer.svelte';
   import { api } from '../../api';
+  import { getAuth } from '../../stores/auth.svelte';
 
   let {
     open = $bindable(false),

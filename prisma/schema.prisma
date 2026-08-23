@@ -701,7 +701,9 @@ model BankProduct {
   description String?
   reference   String?
 
-  category String? // ex: ACCOUNT, CARD, LOAN
+  category String? // ex: ACCOUNT, CARD, LOAN, PAYMENT, BANKING, DIGITAL, INTERNATIONAL, LOAN, MISC, FOREX, INCIDENT
+
+  conditions Json? // variantes / métadonnées (ex: paliers de cartes Visa)
 
   isActive Boolean @default(true)
 
