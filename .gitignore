@@ -67,3 +67,10 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Checkpoints d'entraînement CamenBert
 /models/camenbert/training_output/
+
+# Poids du modèle CamenBert (trop lourd pour GitHub, > 100 Mo)
+*.onnx.data
+/models/camenbert/*.data
+
+# Archives volumineuses
+/data/*.zip
