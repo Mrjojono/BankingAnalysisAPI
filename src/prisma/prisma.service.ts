@@ -1,9 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnApplicationShutdown } from '@nestjs/common';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 @Injectable()
-export class PrismaService extends PrismaClient {
+export class PrismaService extends PrismaClient implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
@@ -20,5 +20,13 @@ export class PrismaService extends PrismaClient {
     super({ adapter });
 
     this.logger.log('Prisma initialized successfully');
+  }
+
+  async onModuleInit() {
+    await this.$connect();
+  }
+
+  async onApplicationShutdown() {
+    await this.$disconnect();
   }
 }

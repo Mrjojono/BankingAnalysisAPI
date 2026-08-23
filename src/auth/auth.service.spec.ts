@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { MailerService } from '@nestjs-modules/mailer';
 import { UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -25,6 +24,12 @@ describe('AuthService', () => {
     authLog: {
       create: jest.fn(),
     },
+    session: {
+      create: jest.fn(),
+      update: jest.fn(),
+      findUnique: jest.fn(),
+      updateMany: jest.fn(),
+    },
   };
 
   const mockRedis = {
@@ -45,7 +50,6 @@ describe('AuthService', () => {
         AuthService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: RedisService, useValue: mockRedis },
-        { provide: MailerService, useValue: mockMailer },
       ],
     }).compile();
 
@@ -64,7 +68,7 @@ describe('AuthService', () => {
   });
 
   describe('login', () => {
-    it('should return a JWT token on successful login', async () => {
+    it('should return accessToken + refreshToken + user on successful login', async () => {
       const loginDto: LoginDto = {
         contact: 'test@example.com',
         password: 'password123',
@@ -72,12 +76,15 @@ describe('AuthService', () => {
 
       const mockUser = {
         id: '123e4567-e89b-12d3-a456-426614174000',
-        contact: 'test@example.com',
+        email: 'test@example.com',
         password: 'hashed-password',
+        role: 'CLIENT',
         bankConnections: [
           {
             bankCustomer: {
               accountNumber: '4443185208',
+              firstName: 'Joan',
+              lastName: 'Doe',
             },
           },
         ],
@@ -86,15 +93,36 @@ describe('AuthService', () => {
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
       (authUtils.comparePassword as jest.Mock).mockResolvedValue(true);
 
+      const fakeSession = {
+        id: 'session-id-123',
+        userId: mockUser.id,
+        token: 'pending',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      };
+      mockPrisma.session.create.mockResolvedValue(fakeSession);
+      mockPrisma.session.update.mockResolvedValue({
+        ...fakeSession,
+        token: 'refreshed-token-jwt',
+      });
+
       const result = await service.login(loginDto);
 
       expect(result).toBeDefined();
-      expect(typeof result).toBe('string');
-      expect(result.split('.').length).toBe(3); // JWT a 3 parties
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+      expect(result).toHaveProperty('user');
+      expect(result.user).toEqual({
+        id: mockUser.id,
+        email: mockUser.email,
+        role: 'CLIENT',
+        username: 'Joan Doe',
+      });
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
         where: { email: 'test@example.com' },
         include: { bankConnections: { include: { bankCustomer: true } } },
       });
+      expect(mockPrisma.session.create).toHaveBeenCalled();
+      expect(mockPrisma.session.update).toHaveBeenCalled();
     });
 
     it('should throw UnauthorizedException if user not found', async () => {
@@ -118,7 +146,7 @@ describe('AuthService', () => {
 
       const mockUser = {
         id: '123e4567-e89b-12d3-a456-426614174000',
-        contact: 'test@example.com',
+        email: 'test@example.com',
         password: 'hashed-password',
         bankConnections: [],
       };
@@ -193,7 +221,7 @@ describe('AuthService', () => {
 
       const mockBankCustomer = {
         id: '123e4567-e89b-12d3-a456-426614174000',
-        contact: 'bank@example.com',
+        email: 'bank@example.com',
         accountNumber: '4443185208',
         userConnection: { userId: 'existing-user-id' },
       };

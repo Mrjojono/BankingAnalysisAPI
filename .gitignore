@@ -56,3 +56,21 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+/admin/node_modules
+
+# Embeddings NLP (téléchargé via scripts/download-embeddings.sh)
+/data/embeddings/
+
+# Poids entraînés (généré via src/scripts/train.ts)
+/src/analytics/matrix/trained-weights.ts
+
+# Checkpoints d'entraînement CamenBert
+/models/camenbert/training_output/
+
+# Poids du modèle CamenBert (trop lourd pour GitHub, > 100 Mo)
+*.onnx.data
+/models/camenbert/*.data
+
+# Archives volumineuses
+/data/*.zip

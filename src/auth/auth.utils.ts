@@ -1,7 +1,11 @@
 import bcrypt from 'bcryptjs';
 import otpGenerator from 'otp-generator';
-import { UnauthorizedException } from '@nestjs/common';
+import {
+  UnauthorizedException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
+import { createHash } from 'crypto';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { Logger } from '@nestjs/common';
@@ -9,12 +13,30 @@ import { Logger } from '@nestjs/common';
 const logger = new Logger('AuthUtils');
 
 export interface RegisterState {
-  otp: string;
   step: string;
   customerId: string;
+  accountNumber: string;
   contact: string;
   contactType: 'email' | 'phone';
   userId?: string;
+}
+
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new InternalServerErrorException('JWT_SECRET is not configured');
+  }
+  return secret;
+}
+
+function getJwtRefreshSecret(): string {
+  const secret = process.env.JWT_REFRESH_SECRET;
+  if (!secret) {
+    throw new InternalServerErrorException(
+      'JWT_REFRESH_SECRET is not configured',
+    );
+  }
+  return secret;
 }
 
 /**
@@ -23,7 +45,7 @@ export interface RegisterState {
  * @returns Le mot de passe haché
  */
 export async function hashPassword(password: string): Promise<string> {
-  const salt = await bcrypt.genSalt();
+  const salt = await bcrypt.genSalt(12);
   return bcrypt.hash(password, salt);
 }
 
@@ -50,6 +72,10 @@ export function generateOtp(): string {
     lowerCaseAlphabets: false,
     specialChars: false,
   });
+}
+
+export function hashOtp(otp: string): string {
+  return createHash('sha256').update(otp).digest('hex');
 }
 
 /**
@@ -83,26 +109,59 @@ export const forgotPasswordKey = (contact: string) => `forgot:${contact}`;
 export const forgotPasswordOtpKey = (contact: string) =>
   `forgot:${contact}:otp`;
 /**
- * Signe un token JWT avec un payload donné
- * @param payload - Les données à inclure dans le token
- * @returns Le token JWT signé
+ * Signe un access token JWT (court, 15min)
  */
-export const signToken = (payload: object): string => {
-  return jwt.sign(payload, process.env.JWT_SECRET ?? '', { expiresIn: '1h' });
+export const signAccessToken = (payload: object): string => {
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '15m' });
 };
 
-/**
- *
- * @param token
- * @returns le payload du token
- */
+export const signRefreshToken = (payload: object): string => {
+  return jwt.sign(payload, getJwtRefreshSecret(), { expiresIn: '7d' });
+};
+
+export const signToken = signAccessToken;
+
+export const signMfaToken = (payload: object): string => {
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '3m' });
+};
+
+export const validateMfaToken = (token: string): jwt.JwtPayload => {
+  try {
+    return jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] }) as jwt.JwtPayload;
+  } catch {
+    throw new UnauthorizedException('Session MFA expirée. Reconnectez-vous.');
+  }
+};
+
 export const validateToken = (token: string): jwt.JwtPayload => {
   try {
-    return jwt.verify(token, process.env.JWT_SECRET ?? '') as jwt.JwtPayload;
+    return jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] }) as jwt.JwtPayload;
   } catch {
     throw new UnauthorizedException('Invalid or expired token');
   }
 };
+
+export const validateRefreshToken = (token: string): jwt.JwtPayload => {
+  try {
+    return jwt.verify(token, getJwtRefreshSecret(), { algorithms: ['HS256'] }) as jwt.JwtPayload;
+  } catch {
+    throw new UnauthorizedException('Invalid or expired refresh token');
+  }
+};
+
+export const signSetPasswordToken = (payload: object): string => {
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '24h' });
+};
+
+export const validateSetPasswordToken = (token: string): jwt.JwtPayload => {
+  try {
+    return jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] }) as jwt.JwtPayload;
+  } catch {
+    throw new UnauthorizedException('Lien invalide ou expiré.');
+  }
+};
+
+export const setPasswordKey = (userId: string) => `set-password:${userId}`;
 
 /**
  * @param prisma - Service Prisma
@@ -116,7 +175,7 @@ export const validateToken = (token: string): jwt.JwtPayload => {
  */
 // auth.utils.ts
 
-export async function logAuth(
+export function logAuth(
   prisma: PrismaService,
   action: string,
   success: boolean,
@@ -125,9 +184,9 @@ export async function logAuth(
   ipAddress: any,
   userAgent: any,
   metadata: any = null,
-): Promise<void> {
-  try {
-    await prisma.authLog.create({
+): void {
+  prisma.authLog
+    .create({
       data: {
         action,
         success,
@@ -137,8 +196,8 @@ export async function logAuth(
         userAgent: userAgent ?? null,
         metadata: metadata ?? null,
       },
+    })
+    .catch((error) => {
+      logger.error(`Erreur log auth (${action}):`, error);
     });
-  } catch (error) {
-    logger.error(`Erreur log auth (${action}):`, error);
-  }
 }

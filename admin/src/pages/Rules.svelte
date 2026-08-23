@@ -1,0 +1,634 @@
+<script lang="ts">
+  import { Plus, Pencil, Trash2, Search, Info, GitGraph } from '@lucide/svelte';
+  import { onMount } from 'svelte';
+  import { api } from '../lib/api';
+  import { toast } from '../lib/stores/toast.svelte';
+  import Drawer from '../lib/components/Drawer.svelte';
+  import ConfirmDialog from '../lib/components/ConfirmDialog.svelte';
+  import ToggleSwitch from '../lib/components/ToggleSwitch.svelte';
+
+  let {
+    onNavigate = undefined as ((p: string, id?: string | null) => void) | undefined,
+  } = $props();
+
+  let rules = $state<any[]>([]);
+  let products = $state<any[]>([]);
+  let editing = $state<any | null>(null);
+  let saving = $state(false);
+  let error = $state('');
+  let drawerOpen = $state(false);
+  let helpOpen = $state(false);
+  let search = $state('');
+  let statusFilter = $state<'all' | 'active' | 'inactive'>('all');
+  let confirmDel = $state<any | null>(null);
+
+  const RULE_TYPES = [
+    { value: 'ELIGIBILITY', label: 'Éligibilité (scorée)', desc: 'Détermine le score du client' },
+    { value: 'FEE', label: 'Frais', desc: 'Frais fixes ou proportionnels' },
+    { value: 'LIMIT', label: 'Limite', desc: 'Plafond opérationnel' },
+    { value: 'INTEREST', label: 'Intérêt', desc: "Taux d'intérêt" },
+  ];
+
+  const TYPE_STYLES: Record<string, string> = {
+    ELIGIBILITY: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
+    FEE: 'bg-red-50 text-red-700 ring-1 ring-red-200',
+    LIMIT: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+    INTEREST: 'bg-purple-50 text-purple-700 ring-1 ring-purple-200',
+  };
+
+  let stats = $derived.by(() => {
+    const total = rules.length;
+    const active = rules.filter(r => r.isActive).length;
+    const byType: Record<string, number> = {};
+    for (const r of rules) {
+      byType[r.type] = (byType[r.type] ?? 0) + 1;
+    }
+    const productsCount = new Set(rules.map(r => r.productId).filter(Boolean)).size;
+    return { total, active, byType, productsCount };
+  });
+
+  const FIELDS = [
+    { value: 'monthlyIncome', label: 'Revenus mensuels (monthlyIncome)' },
+    { value: 'debtRatio', label: "Taux d'endettement (debtRatio)" },
+    { value: 'expenseRatio', label: 'Ratio dépenses/revenus (expenseRatio)' },
+    { value: 'repaymentRegularity', label: 'Régularité remboursement (repaymentRegularity)' },
+    { value: 'savingsRate', label: "Taux d'épargne (savingsRate)" },
+    { value: 'overdraftDays', label: 'Jours de découvert (overdraftDays)' },
+    { value: 'revenueVolatility', label: 'Volatilité revenus (revenueVolatility)' },
+    { value: 'savingsRegularity', label: "Régularité épargne (savingsRegularity)" },
+    { value: 'emergencyFundScore', label: "Fonds d'urgence (emergencyFundScore)" },
+    { value: 'balanceVolatility', label: 'Volatilité solde (balanceVolatility)' },
+  ];
+
+  const OPERATORS = [
+    { value: 'GREATER_THAN', label: '> (supérieur)' },
+    { value: 'LESS_THAN', label: '< (inférieur)' },
+    { value: 'GREATER_OR_EQUAL', label: '≥ (supérieur ou égal)' },
+    { value: 'LESS_OR_EQUAL', label: '≤ (inférieur ou égal)' },
+    { value: 'EQUALS', label: '= (égal)' },
+    { value: 'NOT_EQUALS', label: '≠ (différent)' },
+    { value: 'IN', label: '∈ (dans la liste)' },
+    { value: 'NOT_IN', label: '∉ (pas dans la liste)' },
+    { value: 'BETWEEN', label: 'Entre deux valeurs' },
+  ];
+
+  const PERIODS = [
+    { value: 'DAILY', label: 'Quotidien' },
+    { value: 'WEEKLY', label: 'Hebdomadaire' },
+    { value: 'MONTHLY', label: 'Mensuel' },
+    { value: 'YEARLY', label: 'Annuel' },
+    { value: 'PER_TRANSACTION', label: 'Par opération' },
+  ];
+
+  const CURRENCIES = [
+    { value: 'XOF', label: 'Franc CFA (XOF)' },
+    { value: 'EUR', label: 'Euro (EUR)' },
+    { value: 'USD', label: 'Dollar (USD)' },
+    { value: 'GBP', label: 'Livre Sterling (GBP)' },
+  ];
+
+  const OPERATOR_LABELS = Object.fromEntries(OPERATORS.map(o => [o.value, o.label]));
+  const TYPE_LABELS = Object.fromEntries(RULE_TYPES.map(t => [t.value, t.label]));
+
+  const PERIOD_LABELS: Record<string, string> = {
+    DAILY: 'Quotidien',
+    WEEKLY: 'Hebdomadaire',
+    MONTHLY: 'Mensuel',
+    YEARLY: 'Annuel',
+    PER_TRANSACTION: 'Par opération',
+  };
+
+  const OP_SYMBOLS: Record<string, string> = {
+    GREATER_THAN: '>',
+    LESS_THAN: '<',
+    GREATER_OR_EQUAL: '≥',
+    LESS_OR_EQUAL: '≤',
+    EQUALS: '=',
+    NOT_EQUALS: '≠',
+    IN: '∈',
+    NOT_IN: '∉',
+    BETWEEN: '↔',
+  };
+
+  function formatValue(val: number, operator?: string, currency?: string) {
+    const sym = operator ? OP_SYMBOLS[operator] ?? '' : '';
+    const cur = currency ?? 'XOF';
+    return `${sym} ${val.toLocaleString('fr-FR')} ${cur}`;
+  }
+
+  onMount(async () => {
+    try {
+      [rules, products] = await Promise.all([api.listRules(), api.listProducts()]);
+      console.log(`[Rules] ${rules.length} règles, ${products.length} produits chargés`);
+    } catch (e: any) {
+      error = 'Erreur chargement des règles';
+      console.error(`[Rules] chargement échoué:`, e.message);
+    }
+  });
+
+
+  let page = $state(1);
+  const PER_PAGE = 15;
+
+  let filtered = $derived.by(() => {
+    let list = rules;
+    if (statusFilter === 'active') list = list.filter(r => r.isActive);
+    else if (statusFilter === 'inactive') list = list.filter(r => !r.isActive);
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(r =>
+        r.type?.toLowerCase().includes(q) ||
+        r.code?.toLowerCase().includes(q) ||
+        r.label?.toLowerCase().includes(q) ||
+        r.field?.toLowerCase().includes(q) ||
+        r.operator?.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  });
+
+  let totalPages = $derived(Math.max(1, Math.ceil(filtered.length / PER_PAGE)));
+  let paged = $derived(filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE));
+
+  let pages = $derived.by(() => {
+    const maxVisible = 5;
+    if (totalPages <= maxVisible) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const half = Math.floor(maxVisible / 2);
+    let start = page - half;
+    let end = page + half;
+    if (start < 1) { start = 1; end = maxVisible; }
+    if (end > totalPages) { end = totalPages; start = totalPages - maxVisible + 1; }
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  });
+
+  $effect(() => { if (page > totalPages) page = totalPages; });
+
+  let isBetween = $derived(editing?.operator === 'BETWEEN');
+  let isScoreType = $derived(editing?.type === 'ELIGIBILITY');
+  let isFeeType = $derived(editing?.type === 'FEE');
+
+  function productName(prodId: string) {
+    return products.find(p => p.id === prodId)?.code ?? prodId;
+  }
+
+  function emptyRule() {
+    return {
+      productId: '', code: '', type: 'ELIGIBILITY', label: '', description: '',
+      field: '', operator: 'GREATER_THAN', value: null, valueMin: null, valueMax: null,
+      percentage: null, flatAmount: null, minAmount: null, maxAmount: null,
+      currency: null, period: null, conditions: null,
+      weight: 0, priority: 0, isActive: true,
+    };
+  }
+
+  function openForm(r?: any) {
+    if (r) {
+      editing = { ...r, conditions: r.conditions ? JSON.parse(JSON.stringify(r.conditions)) : null };
+    } else {
+      editing = emptyRule();
+    }
+    drawerOpen = true;
+  }
+
+  function toNumber(v: any): number | null {
+    if (v === '' || v === null || v === undefined) return null;
+    const n = Number(v);
+    return isNaN(n) ? null : n;
+  }
+
+  async function save() {
+    if (!editing) return;
+    saving = true; error = '';
+    try {
+      const payload = {
+        productId: editing.productId,
+        code: editing.code,
+        type: editing.type,
+        label: editing.label,
+        description: editing.description,
+        field: editing.field,
+        operator: editing.operator,
+        value: toNumber(editing.value),
+        valueMin: toNumber(editing.valueMin),
+        valueMax: toNumber(editing.valueMax),
+        percentage: toNumber(editing.percentage),
+        flatAmount: toNumber(editing.flatAmount),
+        minAmount: toNumber(editing.minAmount),
+        maxAmount: toNumber(editing.maxAmount),
+        currency: editing.currency || null,
+        period: editing.period || null,
+        conditions: editing.conditions,
+        weight: toNumber(editing.weight) ?? 0,
+        priority: toNumber(editing.priority) ?? 0,
+        isActive: editing.isActive,
+      };
+      if (editing.id) {
+        const updated = await api.updateRule(editing.id, payload);
+        rules = rules.map(r => r.id === updated.id ? { ...r, ...updated } : r);
+      } else {
+        const created = await api.createRule(payload);
+        rules = [...rules, created];
+      }
+      drawerOpen = false; editing = null;
+    } catch (e: any) { error = e.message; }
+    finally { saving = false; }
+  }
+
+  async function toggleActive(r: any, next: boolean) {
+    try {
+      await api.toggleRuleStatus(r.id, next);
+      r.isActive = next;
+      toast.success(next ? 'Règle activée' : 'Règle désactivée');
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  }
+
+  function askDelete(r: any) {
+    confirmDel = r;
+  }
+
+  async function execDelete() {
+    if (!confirmDel) return;
+    try {
+      await api.deleteRule(confirmDel.id);
+      rules = rules.filter(r => r.id !== confirmDel.id);
+      toast.success('Règle supprimée définitivement');
+      drawerOpen = false;
+      editing = null;
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      confirmDel = null;
+    }
+  }
+</script>
+
+<div class="flex items-center justify-between mb-6">
+  <h2 class="text-[22px] font-bold">Règles</h2>
+  <button onclick={() => helpOpen = true}
+    class="inline-flex items-center gap-2 px-4 py-2.5 bg-surface border border-mint-subtle rounded-xl text-sm font-semibold text-on-surface-variant hover:bg-surface-container transition-all cursor-pointer">
+    <Info size={18} />
+    Aide
+  </button>
+</div>
+
+<Drawer open={helpOpen} title="Aide · Règles" onclose={() => helpOpen = false}>
+  <div class="flex flex-col gap-4 text-sm leading-relaxed text-on-surface">
+    <p>Cette page gère les règles associées aux produits bancaires. Les règles sont évaluées par le moteur d'éligibilité pour déterminer si un client peut obtenir un produit.</p>
+
+    <h4 class="font-bold text-base mt-2">Types de règles</h4>
+    <ul class="list-disc pl-5 flex flex-col gap-1.5">
+      <li><span class="font-semibold text-blue-700">Éligibilité (ELIGIBILITY)</span> : règle scorée. L'ensemble des règles ELIGIBILITY d'un produit produit un score global. Poids (weight) de 1 à 100 : plus le poids est élevé, plus la règle est importante dans la décision.</li>
+      <li><span class="font-semibold text-red-700">Frais (FEE)</span> : définit des frais (montant fixe <code>flatAmount</code>, pourcentage <code>percentage</code>, avec min/max optionnels). Non scorée.</li>
+      <li><span class="font-semibold text-amber-700">Limite (LIMIT)</span> : plafond opérationnel (retrait DAB, paiement TPE, etc.). Non scorée.</li>
+      <li><span class="font-semibold text-purple-700">Intérêt (INTEREST)</span> : taux d'intérêt (ex: 3,5%/an). Non scorée.</li>
+      <li><span class="font-semibold text-cyan-700">Date valeur (VALUE_DATE)</span> : délai de valeur d'une opération (ex: J+1). Non scorée.</li>
+    </ul>
+
+    <h4 class="font-bold text-base mt-2">Score d'éligibilité</h4>
+    <p>Le score est calculé ainsi : <code>∑scoreEarned / ∑weight × 100</code>, arrondi à l'entier.</p>
+    <ul class="list-disc pl-5">
+      <li>Règle <strong>PASS</strong> → la valeur client respecte le seuil → rapporte 100% du poids</li>
+      <li>Règle <strong>PARTIAL</strong> → la valeur est proche du seuil (écart ≤ 20%) → rapporte 40% du poids</li>
+      <li>Règle <strong>FAIL</strong> → la valeur dépasse le seuil → rapporte 0</li>
+    </ul>
+    <p>Seuils de décision : <span class="font-semibold text-primary">≥ 70% → Éligible</span>, <span class="font-semibold text-amber-600">≥ 40% → Partiel</span>, <span class="font-semibold text-red-600">&lt; 40% → Inéligible</span>.</p>
+
+    <h4 class="font-bold text-base mt-2">Champs métier (field)</h4>
+    <p>Le champ <code class="font-mono">field</code> de la règle est mappé automatiquement aux métriques calculées par le moteur analytics via <code>ANALYTICS_FIELD_MAP</code>. Exemples : <code class="font-mono">monthlyIncome</code> → revenus mensuels, <code class="font-mono">debtRatio</code> → taux d'endettement.</p>
+
+    <h4 class="font-bold text-base mt-2">Exemple concret</h4>
+    <p class="bg-surface-container-low p-3 rounded-xl text-xs leading-relaxed">
+      <strong>Règle :</strong> ELIGIBILITY, field=<code>monthlyIncome</code>, operator=<code>GREATER_OR_EQUAL</code>, value=200000, weight=5<br />
+      <strong>Client :</strong> revenus = 180 000 FCFA<br />
+      <strong>Évaluation :</strong> 180 000 &lt; 200 000 → FAIL → 0/5 points<br />
+      <strong>Mais :</strong> écart = (200000 - 180000) / 200000 = 10% ≤ 20% → PARTIAL → 2/5 points (40%)
+    </p>
+  </div>
+</Drawer>
+
+<Drawer open={drawerOpen} title={editing?.id ? 'Modifier la règle' : 'Nouvelle règle'} onclose={() => { drawerOpen = false; editing = null; }}>
+  <div class="flex flex-col gap-4">
+    <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+      Type
+      <select bind:value={editing!.type} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all">
+        {#each RULE_TYPES as t}
+          <option value={t.value}>{t.label}</option>
+        {/each}
+      </select>
+    </label>
+    <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+      Produit
+      <select bind:value={editing!.productId} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all">
+        <option value="">Aucun</option>
+        {#each products as p}
+          <option value={p.id}>{p.code} · {p.name}</option>
+        {/each}
+      </select>
+    </label>
+    <div class="grid grid-cols-2 gap-4">
+      <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+        Code
+        <input bind:value={editing!.code} placeholder="ex: REVENUS_MIN" class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+      </label>
+      <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+        Label
+        <input bind:value={editing!.label} placeholder="ex: Revenus minimum" class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+      </label>
+    </div>
+    <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+      Description
+      <textarea bind:value={editing!.description} rows="2" placeholder="Description optionnelle…" class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all resize-vertical"></textarea>
+    </label>
+    <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+      Champ métier (field)
+      <select bind:value={editing!.field} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all">
+        <option value="">Sélectionner…</option>
+        {#each FIELDS as f}
+          <option value={f.value}>{f.label}</option>
+        {/each}
+      </select>
+    </label>
+    <div class="grid grid-cols-2 gap-4">
+      <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+        Opérateur
+        <select bind:value={editing!.operator} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all">
+          {#each OPERATORS as op}
+            <option value={op.value}>{op.label}</option>
+          {/each}
+        </select>
+      </label>
+      <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+        Valeur seuil (value)
+        <input type="number" bind:value={editing!.value} placeholder="ex: 200000" class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+      </label>
+    </div>
+    {#if isBetween}
+      <div class="grid grid-cols-2 gap-4">
+        <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+          Valeur min (valueMin)
+          <input type="number" bind:value={editing!.valueMin} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+        </label>
+        <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+          Valeur max (valueMax)
+          <input type="number" bind:value={editing!.valueMax} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+        </label>
+      </div>
+    {/if}
+    {#if isScoreType}
+      <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+        Poids (weight)
+        <input type="number" bind:value={editing!.weight} min="1" max="100" class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+      </label>
+    {/if}
+    {#if isFeeType}
+      <div class="grid grid-cols-2 gap-4">
+        <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+          Montant fixe (flatAmount)
+          <input type="number" bind:value={editing!.flatAmount} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+        </label>
+        <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+          Pourcentage (%)
+          <input type="number" bind:value={editing!.percentage} step="0.01" placeholder="ex: 0.5" class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+        </label>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+          Montant min (minAmount)
+          <input type="number" bind:value={editing!.minAmount} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+        </label>
+        <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+          Montant max (maxAmount)
+          <input type="number" bind:value={editing!.maxAmount} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+        </label>
+      </div>
+    {/if}
+    <div class="grid grid-cols-2 gap-4">
+      <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+        Devise
+        <select bind:value={editing!.currency} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all">
+          <option value="">Non spécifiée</option>
+          {#each CURRENCIES as c}
+            <option value={c.value}>{c.label}</option>
+          {/each}
+        </select>
+      </label>
+      <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+        Période
+        <select bind:value={editing!.period} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all">
+          <option value="">Non spécifiée</option>
+          {#each PERIODS as p}
+            <option value={p.value}>{p.label}</option>
+          {/each}
+        </select>
+      </label>
+    </div>
+    <details class="group">
+      <summary class="text-sm font-semibold text-on-surface-variant cursor-pointer list-none flex items-center gap-2 select-none">
+        <span class="transition-transform group-open:rotate-90">▸</span>
+        Conditions avancées (JSON)
+      </summary>
+      <textarea bind:value={editing!.conditions} rows="4" placeholder="null" class="w-full mt-2 px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all resize-vertical font-mono"></textarea>
+    </details>
+    <div class="grid grid-cols-2 gap-4">
+      <label class="flex flex-col gap-1 text-sm font-semibold text-on-surface-variant">
+        Priorité
+        <input type="number" bind:value={editing!.priority} class="w-full px-3 py-2.5 border border-mint-subtle rounded-xl text-sm bg-[#fafcfa] focus:border-primary focus:bg-white focus:outline-none transition-all" />
+      </label>
+      <label class="flex items-center gap-2 text-sm font-semibold text-on-surface-variant pt-6">
+        <input type="checkbox" bind:checked={editing!.isActive} class="w-4 h-4 rounded border-mint-subtle text-primary focus:ring-primary" />
+        Active
+      </label>
+    </div>
+    {#if editing!.id}
+      <div class="mt-4 pt-4 border-t border-red-200">
+        <h4 class="text-sm font-bold text-error mb-1">Zone dangereuse</h4>
+        <p class="text-xs text-on-surface-variant mb-3">La suppression est définitive : la règle sera retirée de la base.</p>
+        <button onclick={() => askDelete(editing)}
+          class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-red-50 text-error border border-red-200 hover:bg-red-100 transition-all cursor-pointer">
+          <Trash2 size={16} />
+          Supprimer définitivement
+        </button>
+      </div>
+    {/if}
+    <div class="flex gap-3 justify-end mt-4 pt-4 border-t border-mint-subtle">
+      <button onclick={() => { drawerOpen = false; editing = null; }} class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white border border-mint-subtle hover:bg-surface-container transition-all cursor-pointer">
+        Annuler
+      </button>
+      <button onclick={save} disabled={saving} class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-[#2d5200] transition-all cursor-pointer border-none disabled:opacity-50 disabled:cursor-not-allowed">
+        {saving ? 'Enregistrement...' : 'Enregistrer'}
+      </button>
+    </div>
+  </div>
+</Drawer>
+
+{#if error}
+  <div class="bg-red-50 text-error px-4 py-3 rounded-xl text-sm font-medium mb-4">{error}</div>
+{/if}
+
+<div class="grid grid-cols-4 gap-4 mb-6">
+  <div class="bg-surface rounded-2xl border border-mint-subtle p-5 flex flex-col gap-1">
+    <span class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Total règles</span>
+    <span class="text-3xl font-bold">{stats.total}</span>
+  </div>
+  <div class="bg-surface rounded-2xl border border-mint-subtle p-5 flex flex-col gap-1">
+    <span class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Actives</span>
+    <span class="text-3xl font-bold text-primary">{stats.active}</span>
+  </div>
+  <div class="bg-surface rounded-2xl border border-mint-subtle p-5 flex flex-col gap-1">
+    <span class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Éligibilité</span>
+    <span class="text-3xl font-bold">{stats.byType['ELIGIBILITY'] ?? 0}</span>
+  </div>
+  <div class="bg-surface rounded-2xl border border-mint-subtle p-5 flex flex-col gap-1">
+    <span class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Frais</span>
+    <span class="text-3xl font-bold">{stats.byType['FEE'] ?? 0}</span>
+  </div>
+</div>
+
+<div class="flex items-center gap-3 mb-4">
+  <button onclick={() => openForm()} class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-[#2d5200] transition-all cursor-pointer border-none">
+    <Plus size={18} />
+    Nouvelle règle
+  </button>
+  <div class="relative flex-1">
+    <Search size={18} class="absolute left-3.5 top-1/2 -translate-y-1/2 text-outline" />
+    <input bind:value={search} placeholder="Rechercher une règle (type, code, label, champ, opérateur)…"
+      class="w-full pl-10 pr-4 py-2.5 border border-mint-subtle rounded-xl text-sm bg-white focus:border-primary focus:outline-none transition-all" />
+  </div>
+</div>
+
+<div class="flex gap-1 mb-4 w-fit">
+  <button onclick={() => statusFilter = 'all'}
+    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer border-none {statusFilter === 'all' ? 'bg-primary text-white' : 'bg-surface border border-mint-subtle text-on-surface-variant hover:bg-surface-container'}">
+    Toutes ({rules.length})
+  </button>
+  <button onclick={() => statusFilter = 'active'}
+    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer border-none {statusFilter === 'active' ? 'bg-primary text-white' : 'bg-surface border border-mint-subtle text-on-surface-variant hover:bg-surface-container'}">
+    Actives ({rules.filter(r => r.isActive).length})
+  </button>
+  <button onclick={() => statusFilter = 'inactive'}
+    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer border-none {statusFilter === 'inactive' ? 'bg-primary text-white' : 'bg-surface border border-mint-subtle text-on-surface-variant hover:bg-surface-container'}">
+    Inactives ({rules.filter(r => !r.isActive).length})
+  </button>
+</div>
+
+<div class="bg-surface rounded-2xl overflow-x-auto border border-mint-subtle">
+  <table class="w-full border-collapse min-w-[900px]">
+    <thead>
+      <tr class="bg-background">
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Type</th>
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Produit</th>
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Code</th>
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Label</th>
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Valeur</th>
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant">Statut</th>
+        <th class="text-left px-4 py-3 text-sm font-semibold text-on-surface-variant"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {#each paged as r}
+        <tr class="hover:bg-[#fafcfa] transition-all border-t border-mint-subtle/50">
+          <td class="px-4 py-3">
+            <span class="inline-block px-2 py-1 rounded-md text-xs font-semibold {TYPE_STYLES[r.type] ?? 'bg-surface-container text-on-surface-variant'}">
+              {TYPE_LABELS[r.type] ?? r.type}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-sm font-semibold">{r.product?.code ?? productName(r.productId)}</td>
+          <td class="px-4 py-3 text-sm"><code class="bg-surface-container px-1.5 py-0.5 rounded text-xs font-mono font-semibold">{r.code}</code></td>
+          <td class="px-4 py-3 text-sm max-w-[220px] truncate" title={r.description ?? r.label}>
+            <button onclick={() => onNavigate?.('graph', r.productId, r.id)}
+              class="bg-transparent border-none p-0 text-inherit font-inherit cursor-pointer hover:underline text-left">
+              {r.label}
+            </button>
+          </td>
+          <td class="px-4 py-3 text-sm leading-relaxed">
+            {#if r.value != null}
+              <span class="font-semibold">{formatValue(r.value, r.operator, r.currency)}</span>
+            {:else if r.valueMin != null && r.valueMax != null}
+              <span class="font-semibold">{r.valueMin} à {r.valueMax}</span>
+            {:else if r.percentage != null}
+              <span class="font-semibold">{r.percentage}%</span>
+            {:else if r.flatAmount != null}
+              <span class="font-semibold">{r.flatAmount.toLocaleString('fr-FR')} {r.currency ?? 'XOF'}</span>
+            {:else}
+              <span class="text-outline">·</span>
+            {/if}
+            {#if r.period || r.minAmount != null || r.maxAmount != null}
+              <span class="block text-xs text-on-surface-variant mt-0.5">
+                {r.period ? PERIOD_LABELS[r.period] ?? r.period : ''}
+                {#if r.minAmount != null || r.maxAmount != null}
+                  {#if r.period} · {/if}
+                  {#if r.minAmount != null}min {r.minAmount.toLocaleString('fr-FR')}{/if}
+                  {#if r.minAmount != null && r.maxAmount != null} / {/if}
+                  {#if r.maxAmount != null}max {r.maxAmount.toLocaleString('fr-FR')}{/if}
+                {/if}
+              </span>
+            {/if}
+          </td>
+          <td class="px-4 py-3">
+            <ToggleSwitch
+              checked={r.isActive}
+              onchange={(next) => toggleActive(r, next)}
+              activeLabel="Active"
+              inactiveLabel="Inactive"
+              title={r.isActive ? 'Cliquer pour désactiver' : 'Cliquer pour activer'}
+            />
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex gap-1">
+              <button onclick={() => onNavigate?.('graph', r.productId, r.id)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-primary-container hover:text-primary transition-all cursor-pointer border-none text-on-surface-variant" title="Voir dans le graphe">
+                <GitGraph size={18} />
+              </button>
+              <button onclick={() => openForm(r)} class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container transition-all cursor-pointer border-none text-on-surface-variant">
+                <Pencil size={18} />
+              </button>
+            </div>
+          </td>
+        </tr>
+      {/each}
+    </tbody>
+  </table>
+  {#if totalPages > 4}
+    <div class="flex items-center justify-between px-4 py-3 border-t border-mint-subtle bg-background">
+      <span class="text-sm text-on-surface-variant">
+        {filtered.length} règle{filtered.length > 1 ? 's' : ''} · page {page}/{totalPages}
+      </span>
+      <div class="flex gap-1">
+        <button onclick={() => page = Math.max(1, page - 1)} disabled={page <= 1}
+          class="px-3 py-1.5 rounded-lg text-sm font-semibold border border-mint-subtle bg-white hover:bg-surface-container transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+          ←
+        </button>
+        {#if pages[0] > 1}
+          <button onclick={() => page = 1} class="px-3 py-1.5 rounded-lg text-sm font-semibold border border-mint-subtle bg-white hover:bg-surface-container transition-all cursor-pointer">1</button>
+          {#if pages[0] > 2}<span class="px-2 py-1.5 text-sm text-on-surface-variant">…</span>{/if}
+        {/if}
+        {#each pages as p}
+          <button onclick={() => page = p}
+            class="px-3 py-1.5 rounded-lg text-sm font-semibold border transition-all cursor-pointer {page === p ? 'bg-primary text-white border-primary' : 'border-mint-subtle bg-white hover:bg-surface-container'}">
+            {p}
+          </button>
+        {/each}
+        {#if pages[pages.length - 1] < totalPages}
+          {#if pages[pages.length - 1] < totalPages - 1}<span class="px-2 py-1.5 text-sm text-on-surface-variant">…</span>{/if}
+          <button onclick={() => page = totalPages} class="px-3 py-1.5 rounded-lg text-sm font-semibold border border-mint-subtle bg-white hover:bg-surface-container transition-all cursor-pointer">{totalPages}</button>
+        {/if}
+        <button onclick={() => page = Math.min(totalPages, page + 1)} disabled={page >= totalPages}
+          class="px-3 py-1.5 rounded-lg text-sm font-semibold border border-mint-subtle bg-white hover:bg-surface-container transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+          →
+        </button>
+      </div>
+    </div>
+  {/if}
+</div>
+
+{#if confirmDel}
+  <ConfirmDialog
+    open={true}
+    title="Supprimer cette règle ?"
+    message={`La règle "${confirmDel.code ?? confirmDel.label}" sera supprimée définitivement de la base. Cette action est irréversible.`}
+    confirmText="Supprimer"
+    onconfirm={execDelete}
+    oncancel={() => confirmDel = null}
+  />
+{/if}

@@ -1,0 +1,123 @@
+<!-- src/public/dashboard.html -->
+<!DOCTYPE html>
+<html class="light" lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Orabank - Financial Health Monitor</title>
+    
+    <!-- Tailwind & Fonts -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1" rel="stylesheet" />
+    
+    <!-- Custom Theme Configuration -->
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3a6a00",
+                        "on-primary": "#ffffff",
+                        "primary-container": "#9fe35d",
+                        "on-primary-container": "#376400",
+                        "secondary": "#47672d",
+                        "background": "#f6fbef",
+                        "surface": "#ffffff",
+                        "surface-container-low": "#f0f5e9",
+                        "surface-container": "#ebf0e4",
+                        "on-surface": "#181d16",
+                        "on-surface-variant": "#424939",
+                        "outline": "#727a67",
+                        "mint-subtle": "#E2EBD6",
+                        "error": "#ba1a1a"
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-background text-on-surface antialiased flex h-screen overflow-hidden">
+
+    <!-- SIDEBAR (Layout Fixe) -->
+    <aside class="w-64 border-r border-mint-subtle bg-surface-container-low flex flex-col shrink-0">
+        <div class="h-16 flex items-center px-6 border-b border-mint-subtle">
+            <h1 class="text-[20px] font-extrabold text-primary tracking-tight">ORABANK <span class="font-light">OPS</span></h1>
+        </div>
+        
+        <nav class="flex-grow p-4 space-y-2">
+            <button onclick="navigate('live', this)" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-primary-container text-on-primary-container font-semibold transition-all">
+                <span class="material-symbols-outlined text-[22px]">hub</span>
+                Flux en Direct
+            </button>
+            <button onclick="navigate('classifier', this)" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:bg-surface-container transition-all">
+                <span class="material-symbols-outlined text-[22px]">psychology</span>
+                Intelligence IA
+            </button>
+            <div class="h-4"></div>
+            <p class="px-4 text-[10px] font-bold text-outline uppercase tracking-widest">Analyses</p>
+            <button onclick="navigate('analytics', this)" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:bg-surface-container transition-all">
+                <span class="material-symbols-outlined text-[22px]">analytics</span>
+                Statistiques
+            </button>
+            <button onclick="navigate('savings', this)" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:bg-surface-container transition-all">
+                <span class="material-symbols-outlined text-[22px]">savings</span>
+                Épargne
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-mint-subtle">
+            <div class="flex items-center gap-3 p-2 rounded-xl bg-white border border-mint-subtle">
+                <div class="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center overflow-hidden border border-mint-subtle">
+                    <img alt="User" src="https://ui-avatars.com/api/?name=Admin+Orabank&background=3a6a00&color=fff" />
+                </div>
+                <div class="flex-grow overflow-hidden">
+                    <p class="text-[14px] font-bold text-on-surface truncate">Admin Ops</p>
+                    <p class="text-[12px] text-on-surface-variant truncate">Niveau 3</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- CONTENU PRINCIPAL -->
+    <div class="flex-grow flex flex-col overflow-hidden">
+        
+        <!-- HEADER (Layout Fixe) -->
+        <header class="h-16 bg-white border-b border-mint-subtle flex items-center justify-between px-8 shrink-0">
+            <div class="flex items-center gap-2">
+                <span class="text-on-surface-variant text-[14px]">Monitoring</span>
+                <span class="material-symbols-outlined text-outline text-[16px]">chevron_right</span>
+                <span id="breadcrumb-active" class="text-on-surface text-[14px] font-semibold">Flux en Direct</span>
+            </div>
+            
+            <div class="flex items-center gap-6">
+                <div class="flex items-center gap-2 px-3 py-1.5 bg-surface-container-low border border-mint-subtle rounded-full">
+                    <span class="relative flex h-2 w-2">
+                        <span id="status-ping"></span>
+                        <span id="status-dot" class="relative inline-flex rounded-full h-2 w-2 bg-error"></span>
+                    </span>
+                    <span id="status-text" class="font-bold uppercase text-[10px] tracking-wider text-error">Synchronisation...</span>
+                </div>
+                <div class="h-8 w-px bg-mint-subtle"></div>
+                <div class="flex items-center gap-2 text-[14px] font-medium text-on-surface">
+                    <span class="material-symbols-outlined text-outline text-[20px]">calendar_today</span>
+                    <span id="current-date">-- ---, ----</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ZONE DE PAGES DYNAMIQUES -->
+        <main id="main-content-area" class="flex-grow overflow-y-auto p-8 bg-background custom-scrollbar">
+            <!-- Le contenu sera injecté ici par app.js -->
+            <div class="flex items-center justify-center h-full text-outline italic">Chargement...</div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

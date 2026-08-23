@@ -1,0 +1,88 @@
+/* src/public/css/style.css */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+    /* Earthen Digital Refined Palette */
+    --primary: #3a6a00;
+    --on-primary: #ffffff;
+    --primary-container: #9fe35d;
+    --on-primary-container: #376400;
+    
+    --secondary: #47672d;
+    --on-secondary: #ffffff;
+    --secondary-container: #c5eba3;
+    
+    --background: #f6fbef;
+    --surface: #ffffff;
+    --surface-variant: #dfe4d8;
+    --surface-container-low: #f0f5e9;
+    --surface-container: #ebf0e4;
+    
+    --on-surface: #181d16;
+    --on-surface-variant: #424939;
+    
+    --outline: #727a67;
+    --mint-subtle: #E2EBD6;
+    
+    --error: #ba1a1a;
+    --success: #3a6a00;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background-color: var(--background);
+    color: var(--on-surface);
+    height: 100vh;
+    overflow: hidden;
+}
+
+.mono-data {
+    font-family: 'DM Mono', monospace;
+}
+
+/* Material Symbols Adjustments */
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--surface-variant);
+    border-radius: 10px;
+}
+
+/* Transitions & Animations */
+.transition-all {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.page-animate {
+    animation: slideIn 0.4s ease-out forwards;
+}
+
+/* Layout Specifics */
+.sidebar-item-active {
+    background-color: var(--primary-container) !important;
+    color: var(--on-primary-container) !important;
+}
+
+.sidebar-item-active span {
+    font-variation-settings: 'FILL' 1 !important;
+}

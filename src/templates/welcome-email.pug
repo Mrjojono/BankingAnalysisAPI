@@ -1,0 +1,37 @@
+doctype html
+html(lang="fr")
+  head
+    meta(charset="UTF-8")
+    meta(name="viewport" content="width=device-width, initial-scale=1.0")
+    title Confirmation de création de compte
+  body(style="margin:0;padding:0;font-family:Arial,sans-serif;background:#fff;color:#333")
+    div(style="max-width:600px;margin:0 auto;padding:20px")
+      h2(style="color:#16a34a;margin-bottom:4px") ✔ Orabank — Admin
+      p(style="color:#555;margin-top:0") Compte créé avec succès
+      hr(style="border:none;border-top:1px solid #eee")
+
+      p Bonjour,
+      p
+        | Vous avez créé un nouvel utilisateur sur Orabank. Voici le récapitulatif :
+
+      table(style="width:100%;margin:16px 0;border-collapse:collapse")
+        tr
+          td(style="padding:8px 12px;background:#f0fdf4;border-radius:6px 0 0 6px;font-weight:bold;color:#555") Email
+          td(style="padding:8px 12px;background:#f0fdf4;border-radius:0 6px 6px 0;color:#16a34a")= email
+        tr
+          td(style="padding:8px 12px;background:#f0fdf4;border-radius:6px 0 0 6px;font-weight:bold;color:#555") Mot de passe
+          td(style="padding:8px 12px;background:#f0fdf4;border-radius:0 6px 6px 0;color:#16a34a;font-family:monospace")= password
+        tr
+          td(style="padding:8px 12px;background:#f0fdf4;border-radius:6px 0 0 6px;font-weight:bold;color:#555") Rôle
+          td(style="padding:8px 12px;background:#f0fdf4;border-radius:0 6px 6px 0;color:#16a34a")= role
+
+      p(style="margin-top:20px")
+        a(href=appUrl style="display:inline-block;padding:10px 20px;background:#16a34a;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold") Accéder à l'application
+
+      p(style="font-size:13px;color:#555;margin-top:20px")
+        | Transmettez ces identifiants à l'utilisateur de manière sécurisée.
+        | L'utilisateur pourra modifier son mot de passe après sa première connexion.
+
+      hr(style="border:none;border-top:1px solid #eee")
+      p(style="font-size:12px;color:#999")
+        | Email de confirmation envoyé automatiquement par Orabank Admin.

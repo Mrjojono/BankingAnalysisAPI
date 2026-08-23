@@ -3,7 +3,6 @@ import {
   IsString,
   IsNotEmpty,
   IsOptional,
-  MinLength,
   Matches,
   IsIn,
 } from 'class-validator';
@@ -42,14 +41,4 @@ export class RegisterDto {
   @IsString()
   @IsOptional()
   readonly otp?: string;
-
-  @ApiPropertyOptional({
-    example: 'motdepasse123',
-    description: 'Mot de passe (min 8 caractères)',
-    minLength: 8,
-  })
-  @IsString()
-  @IsOptional()
-  @MinLength(8)
-  readonly password?: string;
 }

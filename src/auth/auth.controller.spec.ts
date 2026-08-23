@@ -3,6 +3,8 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { RefreshTokenDto } from './dto/auth-response.dto';
+import * as jwt from 'jsonwebtoken';
 import type { Request } from 'express';
 
 jest.mock('./auth.service');
@@ -10,11 +12,18 @@ jest.mock('./auth.service');
 const mockAuthService = {
   register: jest.fn(),
   login: jest.fn(),
+  me: jest.fn(),
+  refreshToken: jest.fn(),
+  logout: jest.fn(),
 };
 
 describe('AuthController', () => {
   let controller: AuthController;
   let mockRequest: any;
+
+  beforeAll(() => {
+    process.env.JWT_SECRET = 'test-secret-key-for-controller';
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -59,7 +68,7 @@ describe('AuthController', () => {
 
       const result = await controller.register(dto);
 
-      expect(mockAuthService.register).toHaveBeenCalledWith(dto, undefined);
+      expect(mockAuthService.register).toHaveBeenCalledWith(dto);
       expect(result).toBe(expectedResponse);
     });
 
@@ -83,20 +92,26 @@ describe('AuthController', () => {
   });
 
   describe('login', () => {
-    it('should call AuthService.login with the correct dto and return token', async () => {
+    it('should call AuthService.login with the correct dto and return tokens', async () => {
       const dto: LoginDto = {
         contact: 'joan@test.com',
         password: 'password123',
       };
 
-      const fakeToken =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjEyMzQ1Njc4In0.fake';
-      mockAuthService.login.mockResolvedValue(fakeToken);
+      const fakeResponse = {
+        accessToken: 'eyJhbGciOiJIUzI1NiIs...access',
+        refreshToken: 'eyJhbGciOiJIUzI1NiIs...refresh',
+        user: { id: '123', email: 'joan@test.com', role: 'ADMIN' },
+      };
+      mockAuthService.login.mockResolvedValue(fakeResponse);
 
       const result = await controller.login(dto, mockRequest as Request);
 
       expect(mockAuthService.login).toHaveBeenCalledWith(dto, mockRequest);
-      expect(result).toBe(fakeToken);
+      expect(result).toEqual(fakeResponse);
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+      expect(result).toHaveProperty('user');
     });
 
     it('should throw if authService.login throws', async () => {
@@ -111,18 +126,65 @@ describe('AuthController', () => {
         controller.login(dto, mockRequest as Request),
       ).rejects.toThrow('Invalid credentials');
     });
+  });
 
-    it('should handle user not found error', async () => {
-      const dto: LoginDto = {
-        contact: 'nonexistent@test.com',
-        password: 'password123',
+  describe('me', () => {
+    it('should return user from valid Bearer token', async () => {
+      const fakeUser = { id: '123', email: 'joan@test.com', role: 'ADMIN' };
+      mockAuthService.me.mockResolvedValue(fakeUser);
+
+      const validToken = jwt.sign(
+        { id: '123', email: 'joan@test.com' },
+        process.env.JWT_SECRET!,
+        { expiresIn: '5m' },
+      );
+
+      const result = await controller.me(`Bearer ${validToken}`);
+
+      expect(result).toEqual(fakeUser);
+      expect(mockAuthService.me).toHaveBeenCalledWith(fakeUser.id);
+    });
+
+    it('should throw if no auth header', async () => {
+      await expect(controller.me(undefined)).rejects.toThrow(
+        'Authorization header missing',
+      );
+    });
+
+    it('should throw if malformed auth header', async () => {
+      await expect(controller.me('Invalid')).rejects.toThrow(
+        'Invalid authorization header',
+      );
+    });
+  });
+
+  describe('refresh', () => {
+    it('should return new tokens from valid refresh token', async () => {
+      const dto: RefreshTokenDto = { refreshToken: 'valid-refresh-token' };
+      const fakeResponse = {
+        accessToken: 'new-access',
+        refreshToken: 'new-refresh',
       };
+      mockAuthService.refreshToken.mockResolvedValue(fakeResponse);
 
-      mockAuthService.login.mockRejectedValue(new Error('Invalid credentials'));
+      const result = await controller.refresh(dto, mockRequest as Request);
 
-      await expect(
-        controller.login(dto, mockRequest as Request),
-      ).rejects.toThrow('Invalid credentials');
+      expect(mockAuthService.refreshToken).toHaveBeenCalledWith(
+        dto,
+        mockRequest,
+      );
+      expect(result).toEqual(fakeResponse);
+    });
+  });
+
+  describe('logout', () => {
+    it('should revoke session and return success message', async () => {
+      const dto: RefreshTokenDto = { refreshToken: 'valid-refresh-token' };
+
+      const result = await controller.logout(dto);
+
+      expect(mockAuthService.logout).toHaveBeenCalledWith(dto);
+      expect(result).toEqual({ message: 'Déconnecté avec succès' });
     });
   });
 });
